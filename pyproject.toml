@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "datacontract-flow"
+version = "0.1.0"
+description = "ContractHub importers for generating ODCS contracts from Delta, SQL folders, and Unity Catalog"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+  "pydantic>=2.8.0",
+  "PyYAML>=6.0.0",
+  "SQLAlchemy>=2.0.0",
+  "datacontract-cli>=0.11.5",
+  "deltalake>=0.18.0",
+  "sqlglot>=26.0.0",
+  "requests>=2.32.0",
+  "great_expectations>=1.0.0",
+  "pyodbc>=5.1.0",
+  "oracledb>=2.2.0",
+]
+
+[project.scripts]
+contracthub = "contracthub.interfaces.cli:main"
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.setuptools.packages.find]
+include = ["contracthub*"]

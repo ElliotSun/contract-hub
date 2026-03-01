@@ -1,0 +1,419 @@
+from __future__ import annotations
+
+import json
+import logging
+import re
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
+
+from deltalake import DeltaTable
+from open_data_contract_standard.model import (
+    CustomProperty,
+    Description,
+    OpenDataContractStandard,
+    SchemaObject,
+    SchemaProperty,
+)
+import sqlglot
+from sqlglot import expressions as exp
+
+from contracthub.importers.base import BaseImporter
+
+
+class DeltaTableImporter(BaseImporter):
+    def __init__(self, table_uri: str, logger: Optional[logging.Logger] = None) -> None:
+        super().__init__(logger=logger)
+        self.table_uri = table_uri
+
+    def _build_imported_contract(self) -> Dict[str, Any]:
+        self.logger.info("Importing Delta table from uri=%s", self.table_uri)
+        table = DeltaTable(self.table_uri)
+        dataset_name = _derive_dataset_name(self.table_uri)
+        contract_id = _to_contract_id(dataset_name)
+        delta_version = str(table.version())
+
+        metadata = table.metadata()
+        description = _extract_table_description(metadata)
+        partition_positions = _extract_partition_positions(metadata)
+
+        fields = _extract_delta_fields(table, partition_positions)
+        schema_object = SchemaObject(
+            id=contract_id,
+            name=dataset_name,
+            physicalName=dataset_name,
+            logicalType="object",
+            physicalType="table",
+            properties=fields,
+            description=description,
+        )
+
+        contract_model = OpenDataContractStandard(
+            apiVersion="v3.1.0",
+            kind="DataContract",
+            id=contract_id,
+            name=dataset_name,
+            version=delta_version,
+            status="draft",
+            schema=[schema_object],
+            description=Description(usage=description) if description else None,
+            customProperties=[
+                CustomProperty(property="contracthub.source", value="delta"),
+                CustomProperty(property="contracthub.delta.uri", value=self.table_uri),
+                CustomProperty(property="contracthub.delta.version", value=delta_version),
+                CustomProperty(
+                    property="contracthub.delta.partitionColumns",
+                    value=[col for col, _ in sorted(partition_positions.items(), key=lambda item: item[1])],
+                ),
+            ],
+        )
+        return contract_model.model_dump(by_alias=True, exclude_none=True)
+
+    def _set_source(self, source: str) -> None:
+        self.table_uri = source
+
+
+def _derive_dataset_name(table_uri: str) -> str:
+    parsed = urlparse(table_uri)
+    if parsed.scheme and parsed.path:
+        name = Path(parsed.path.rstrip("/")).name
+    else:
+        name = Path(table_uri.rstrip("/")).name
+    return name or "delta_dataset"
+
+
+def _to_contract_id(dataset_name: str) -> str:
+    cleaned = re.sub(r"[^a-zA-Z0-9._-]+", "-", dataset_name).strip("-")
+    return cleaned.lower() or "delta-dataset"
+
+
+def _extract_table_description(metadata: Any) -> Optional[str]:
+    if metadata is None:
+        return None
+
+    if isinstance(metadata, dict):
+        raw_description = metadata.get("description")
+        configuration = metadata.get("configuration", {})
+    else:
+        raw_description = getattr(metadata, "description", None)
+        configuration = getattr(metadata, "configuration", {}) or {}
+
+    if raw_description:
+        return str(raw_description)
+
+    if isinstance(configuration, dict):
+        for key in ("description", "comment", "delta.table.description"):
+            value = configuration.get(key)
+            if value:
+                return str(value)
+    return None
+
+
+def _extract_partition_positions(metadata: Any) -> Dict[str, int]:
+    if metadata is None:
+        return {}
+
+    partition_columns: Any = None
+    if isinstance(metadata, dict):
+        partition_columns = metadata.get("partition_columns") or metadata.get("partitionColumns")
+    else:
+        partition_columns = (
+            getattr(metadata, "partition_columns", None)
+            or getattr(metadata, "partitionColumns", None)
+            or getattr(metadata, "partitionColumns", None)
+        )
+
+    if not isinstance(partition_columns, list):
+        return {}
+
+    positions: Dict[str, int] = {}
+    for idx, column in enumerate(partition_columns, start=1):
+        if isinstance(column, str) and column.strip():
+            positions[column.strip().lower()] = idx
+    return positions
+
+
+def _extract_delta_fields(table: DeltaTable, partition_positions: Dict[str, int]) -> List[SchemaProperty]:
+    schema_obj = table.schema()
+    schema_json = schema_obj.json() if hasattr(schema_obj, "json") else None
+
+    if isinstance(schema_json, str):
+        schema_payload = json.loads(schema_json)
+    elif isinstance(schema_json, dict):
+        schema_payload = schema_json
+    else:
+        schema_payload = {}
+
+    fields_payload = schema_payload.get("fields", [])
+    fields: List[SchemaProperty] = []
+    for field in fields_payload:
+        if not isinstance(field, dict):
+            continue
+        property_obj = _schema_property_from_delta_field(field, partition_positions=partition_positions)
+        if property_obj is not None:
+            fields.append(property_obj)
+
+    return fields
+
+
+def _delta_type_to_string(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        if value.get("type") == "decimal":
+            precision = value.get("precision", 38)
+            scale = value.get("scale", 0)
+            return f"decimal({precision},{scale})"
+        return json.dumps(value, separators=(",", ":"), sort_keys=True)
+    return str(value)
+
+
+def _schema_property_from_delta_field(
+    field: Dict[str, Any],
+    *,
+    partition_positions: Dict[str, int],
+) -> Optional[SchemaProperty]:
+    name = str(field.get("name") or "").strip()
+    if not name:
+        return None
+
+    type_value = field.get("type")
+    physical_type = _delta_type_to_string(type_value)
+    nullable = bool(field.get("nullable", True))
+    metadata = field.get("metadata")
+
+    description = None
+    if isinstance(metadata, dict):
+        comment = metadata.get("comment") or metadata.get("description")
+        if comment:
+            description = str(comment)
+
+    logical_type_options = _extract_logical_type_options(type_value, physical_type)
+    nested_properties = _extract_nested_properties(type_value)
+    items = _extract_items(type_value)
+    partition_key_position = partition_positions.get(name.lower())
+
+    return SchemaProperty(
+        id=_to_contract_id(name),
+        name=name,
+        physicalName=name,
+        logicalType=_map_delta_type_to_odcs(physical_type),
+        physicalType=physical_type,
+        logicalTypeOptions=logical_type_options,
+        required=not nullable,
+        description=description,
+        partitioned=partition_key_position is not None,
+        partitionKeyPosition=partition_key_position,
+        properties=nested_properties,
+        items=items,
+    )
+
+
+def _extract_logical_type_options(type_value: Any, physical_type: str) -> Optional[Dict[str, Any]]:
+    options: Dict[str, Any] = {}
+
+    decimal_match = re.match(r"decimal\((\d+),\s*(\d+)\)", physical_type.lower())
+    if decimal_match:
+        options["precision"] = int(decimal_match.group(1))
+        options["scale"] = int(decimal_match.group(2))
+
+    if isinstance(type_value, dict) and str(type_value.get("type")).lower() == "map":
+        key_type = type_value.get("keyType")
+        if key_type is not None:
+            options["keyType"] = _delta_type_to_string(key_type)
+
+    parsed_data_type = _parse_sql_data_type(physical_type)
+    if parsed_data_type is not None:
+        sql_options = _extract_logical_type_options_from_data_type(parsed_data_type)
+        options.update({k: v for k, v in sql_options.items() if k not in options})
+
+    return options or None
+
+
+def _extract_logical_type_options_from_data_type(data_type: exp.DataType) -> Dict[str, Any]:
+    options: Dict[str, Any] = {}
+    type_name = _data_type_name(data_type)
+    if type_name == "DECIMAL":
+        params = [p.this for p in data_type.expressions if isinstance(p, exp.DataTypeParam)]
+        if len(params) >= 1 and isinstance(params[0], exp.Literal):
+            options["precision"] = int(str(params[0]))
+        if len(params) >= 2 and isinstance(params[1], exp.Literal):
+            options["scale"] = int(str(params[1]))
+    if type_name == "MAP" and data_type.expressions:
+        options["keyType"] = data_type.expressions[0].sql(dialect="spark")
+    return options
+
+
+def _extract_nested_properties(type_value: Any) -> Optional[List[SchemaProperty]]:
+    if isinstance(type_value, dict) and str(type_value.get("type")).lower() == "struct":
+        nested_fields = type_value.get("fields")
+        if not isinstance(nested_fields, list):
+            return None
+
+        properties: List[SchemaProperty] = []
+        for nested_field in nested_fields:
+            if not isinstance(nested_field, dict):
+                continue
+            property_obj = _schema_property_from_delta_field(nested_field, partition_positions={})
+            if property_obj is not None:
+                properties.append(property_obj)
+        return properties or None
+
+    parsed_data_type = _parse_sql_data_type(_delta_type_to_string(type_value))
+    if parsed_data_type is None or _data_type_name(parsed_data_type) != "STRUCT":
+        return None
+
+    properties: List[SchemaProperty] = []
+    for child in parsed_data_type.expressions or []:
+        if not isinstance(child, exp.ColumnDef):
+            continue
+        child_name = child.this.name if child.this is not None else None
+        if not child_name:
+            continue
+        child_kind = child.args.get("kind")
+        child_required = not _column_def_nullable(child)
+        properties.append(
+            _schema_property_from_sql_data_type(
+                name=child_name,
+                data_type=child_kind if isinstance(child_kind, exp.DataType) else None,
+                required=child_required,
+                description=None,
+            )
+        )
+    return properties or None
+
+
+def _extract_items(type_value: Any) -> Optional[SchemaProperty]:
+    if isinstance(type_value, dict):
+        type_name = str(type_value.get("type")).lower()
+        if type_name == "array":
+            element_type = type_value.get("elementType")
+            contains_null = bool(type_value.get("containsNull", True))
+            return _schema_property_from_any_type(
+                element_type,
+                required=not contains_null,
+            )
+        if type_name == "map":
+            value_type = type_value.get("valueType")
+            value_contains_null = bool(type_value.get("valueContainsNull", True))
+            return _schema_property_from_any_type(
+                value_type,
+                required=not value_contains_null,
+            )
+
+    parsed_data_type = _parse_sql_data_type(_delta_type_to_string(type_value))
+    if parsed_data_type is None:
+        return None
+
+    type_name = _data_type_name(parsed_data_type)
+    if type_name == "ARRAY" and parsed_data_type.expressions:
+        element_type = parsed_data_type.expressions[0]
+        if isinstance(element_type, exp.DataType):
+            return _schema_property_from_sql_data_type(
+                name=None,
+                data_type=element_type,
+                required=False,
+                description=None,
+            )
+    if type_name == "MAP" and len(parsed_data_type.expressions) >= 2:
+        value_type = parsed_data_type.expressions[1]
+        if isinstance(value_type, exp.DataType):
+            return _schema_property_from_sql_data_type(
+                name=None,
+                data_type=value_type,
+                required=False,
+                description=None,
+            )
+
+    return None
+
+
+def _schema_property_from_any_type(type_value: Any, *, required: bool) -> Optional[SchemaProperty]:
+    if type_value is None:
+        return None
+    if isinstance(type_value, dict) and "name" in type_value:
+        return _schema_property_from_delta_field(type_value, partition_positions={})
+
+    physical_type = _delta_type_to_string(type_value)
+    data_type = _parse_sql_data_type(physical_type)
+    if data_type is not None:
+        return _schema_property_from_sql_data_type(
+            name=None,
+            data_type=data_type,
+            required=required,
+            description=None,
+        )
+
+    return SchemaProperty(
+        logicalType=_map_delta_type_to_odcs(physical_type),
+        physicalType=physical_type,
+        required=required,
+    )
+
+
+def _schema_property_from_sql_data_type(
+    *,
+    name: Optional[str],
+    data_type: Optional[exp.DataType],
+    required: bool,
+    description: Optional[str],
+) -> SchemaProperty:
+    physical_type = data_type.sql(dialect="spark") if data_type is not None else "string"
+    return SchemaProperty(
+        id=_to_contract_id(name or physical_type),
+        name=name,
+        physicalName=name,
+        logicalType=_map_delta_type_to_odcs(physical_type),
+        physicalType=physical_type,
+        logicalTypeOptions=_extract_logical_type_options_from_data_type(data_type) if data_type is not None else None,
+        required=required,
+        description=description,
+        properties=_extract_nested_properties(data_type) if data_type is not None else None,
+        items=_extract_items(data_type) if data_type is not None else None,
+    )
+
+
+def _column_def_nullable(column: exp.ColumnDef) -> bool:
+    if column.find(exp.NotNullColumnConstraint) is not None:
+        return False
+    if column.find(exp.PrimaryKeyColumnConstraint) is not None:
+        return False
+    return True
+
+
+def _parse_sql_data_type(type_str: str) -> Optional[exp.DataType]:
+    try:
+        parsed = sqlglot.parse_one(type_str, read="spark", into=exp.DataType)
+    except Exception:
+        return None
+    return parsed if isinstance(parsed, exp.DataType) else None
+
+
+def _data_type_name(data_type: exp.DataType) -> str:
+    token = data_type.this
+    if hasattr(token, "name"):
+        return str(token.name).upper()
+    return str(token).replace("Type.", "").upper()
+
+
+def _map_delta_type_to_odcs(delta_type: str) -> str:
+    normalized = delta_type.lower()
+    if normalized.startswith(("string", "varchar", "char")):
+        return "string"
+    if normalized.startswith(("int", "bigint", "smallint", "tinyint", "long", "short")):
+        return "integer"
+    if normalized.startswith(("decimal", "double", "float", "numeric")):
+        return "number"
+    if normalized.startswith(("bool", "boolean")):
+        return "boolean"
+    if normalized.startswith("date"):
+        return "date"
+    if normalized.startswith(("timestamp", "datetime")):
+        return "timestamp"
+    if normalized.startswith(("binary", "varbinary", "bytes")):
+        return "binary"
+    if normalized.startswith("array"):
+        return "array"
+    if normalized.startswith(("map", "struct", "{")):
+        return "object"
+    return "string"
