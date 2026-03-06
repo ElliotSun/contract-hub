@@ -164,12 +164,22 @@ class ContractPipeline:
             uc_token=uc_token,
         )
         business_contract = self.loader.load(business_contract_path)
+        if self._resolve_lifecycle(business_contract) == "retired":
+            raise ValueError("Cannot run pipeline on retired contract")
 
         merge_result = self.merge_contract_updates(
             imported_contract,
             business_contract,
             fail_on_conflict=fail_on_conflict,
         )
+        if merge_result.conflicts and fail_on_conflict:
+            message = "; ".join(
+                f"{c.schema_id}.{c.property_name}: {c.message}"
+                for c in merge_result.conflicts
+            )
+            raise ValueError(f"Merge conflicts detected: {message}")
+        if merge_result.contract is None:
+            raise ValueError("Merge did not produce a contract")
 
         validation = self.validate_contract(merge_result.contract)
         if not validation.valid:
@@ -177,7 +187,12 @@ class ContractPipeline:
             raise ValueError(f"Merged contract validation failed: {message}")
 
         policy_evaluation = self.evaluate_policy(business_contract, merge_result.contract)
-        if not policy_evaluation.valid:
+        version_violation = getattr(policy_evaluation, "version_violation", None)
+        if version_violation is None:
+            version_violation = any(
+                getattr(change, "requires_version_bump", False) for change in policy_evaluation.breaking_changes
+            )
+        if not policy_evaluation.valid and version_violation:
             message = "; ".join(f"{item.path}: {item.message}" for item in policy_evaluation.breaking_changes)
             raise ValueError(f"Lifecycle policy validation failed: {message}")
 
@@ -193,3 +208,15 @@ class ContractPipeline:
             ge_suite_name=ge_suite_name,
             audit_metadata=audit_metadata,
         )
+
+    def _resolve_lifecycle(self, contract: OpenDataContractStandard) -> str:
+        value = (contract.status or "").strip().lower()
+        if value:
+            return value
+        for item in contract.customProperties or []:
+            key = (item.property or "").strip().lower()
+            if key != "lifecyclestatus":
+                continue
+            resolved = (str(item.value) if item.value is not None else "").strip().lower()
+            return resolved or "draft"
+        return "draft"

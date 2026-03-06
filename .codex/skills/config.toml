@@ -1,0 +1,3 @@
+[[skills.config]]
+path = "docs/ai"
+enabled = true

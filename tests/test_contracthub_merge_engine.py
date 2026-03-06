@@ -1,85 +1,94 @@
+import pytest
+from open_data_contract_standard.model import (
+    CustomProperty,
+    Description,
+    OpenDataContractStandard,
+    SchemaObject,
+    SchemaProperty,
+    DataQuality,
+)
+
 import contracthub.lifecycle.merge_engine as merge_engine
-from contracthub.lifecycle.merge_engine import merge_contract
+from contracthub.lifecycle.merge_engine import ContractMergeEngine
+
+
+def _cp(key: str, value: str) -> CustomProperty:
+    return CustomProperty(property=key, value=value)
+
+
+def _active_property(name: str, *, physical_type: str | None = None, logical_type: str | None = None) -> SchemaProperty:
+    return SchemaProperty(
+        name=name,
+        physicalType=physical_type,
+        logicalType=logical_type,
+        customProperties=[_cp("lifecycleStatus", "active")],
+    )
 
 
 def test_merge_engine_preserves_business_metadata_and_flags_removed_columns():
-    existing = {
-        "id": "orders",
-        "name": "orders",
-        "schema": [
-            {
-                "name": "orders",
-                "description": "Business curated order table",
-                "quality": [{"type": "row_count", "mustBeGreaterThan": 0}],
-                "properties": [
-                    {
-                        "name": "id",
-                        "physicalType": "BIGINT",
-                        "logicalType": "integer",
-                        "description": "Business order id",
-                        "quality": [{"type": "uniqueness"}],
-                    },
-                    {
-                        "name": "legacy_col",
-                        "physicalType": "STRING",
-                        "logicalType": "string",
-                    },
+    existing = OpenDataContractStandard(
+        apiVersion="v3.1.0",
+        kind="DataContract",
+        version="1.0.0",
+        id="orders",
+        name="orders",
+        status="active",
+        schema=[
+            SchemaObject(
+                name="orders",
+                description="Business curated order table",
+                customProperties=[_cp("lifecycleStatus", "active")],
+                quality=[DataQuality(name="row_count", metric="rowCount", mustBeGreaterThan=0)],
+                properties=[
+                    SchemaProperty(
+                        name="id",
+                        physicalType="BIGINT",
+                        logicalType="integer",
+                        description="Business order id",
+                        customProperties=[_cp("lifecycleStatus", "active")],
+                        quality=[DataQuality(name="id_unique", metric="uniqueValues", mustBe="100%")],
+                    ),
+                    _active_property("legacy_col", physical_type="STRING", logical_type="string"),
                 ],
-            }
+            )
         ],
-    }
+    )
 
-    imported = {
-        "id": "orders",
-        "name": "orders",
-        "schema": [
-            {
-                "name": "orders",
-                "properties": [
-                    {"name": "id", "physicalType": "INT", "logicalType": "integer"},
-                    {"name": "amount", "physicalType": "DECIMAL(10,2)", "logicalType": "number"},
+    source = OpenDataContractStandard(
+        apiVersion="v3.1.0",
+        kind="DataContract",
+        version="1.0.0",
+        id="orders",
+        name="orders",
+        status="active",
+        schema=[
+            SchemaObject(
+                name="orders",
+                customProperties=[_cp("lifecycleStatus", "active")],
+                properties=[
+                    _active_property("id", physical_type="INT", logical_type="integer"),
+                    SchemaProperty(name="amount", physicalType="DECIMAL(10,2)", logicalType="number"),
                 ],
-            }
+            )
         ],
-    }
+    )
 
-    merged = merge_contract(existing=existing, imported=imported)
-    merged_schema = merged["schema"][0]
-    assert merged_schema["description"] == "Business curated order table"
-    assert merged_schema["quality"] == [{"type": "row_count", "mustBeGreaterThan": 0}]
+    merged = ContractMergeEngine().merge(base_contract=source, business_contract=existing).contract
+    merged_schema = next(item for item in (merged.schema_ or []) if item.name == "orders")
+    assert merged_schema.description == "Business curated order table"
+    assert merged_schema.quality is not None and len(merged_schema.quality) == 1
 
-    merged_id = next(col for col in merged_schema["properties"] if col["name"] == "id")
-    assert merged_id["physicalType"] == "INT"
-    assert merged_id["description"] == "Business order id"
-    assert merged_id["quality"] == [{"type": "uniqueness"}]
+    merged_id = next(col for col in (merged_schema.properties or []) if col.name == "id")
+    assert merged_id.physicalType == "INT"
+    assert merged_id.description == "Business order id"
+    assert merged_id.quality is not None and len(merged_id.quality) == 1
 
-    merged_amount = next(col for col in merged_schema["properties"] if col["name"] == "amount")
-    assert merged_amount["physicalType"] == "DECIMAL(10,2)"
+    merged_amount = next(col for col in (merged_schema.properties or []) if col.name == "amount")
+    assert merged_amount.physicalType == "DECIMAL(10,2)"
 
-    removed_col = next(col for col in merged_schema["properties"] if col["name"] == "legacy_col")
-    assert removed_col["deprecated"] is True
-    assert {"property": "contracthub.removed", "value": "true"} in removed_col["customProperties"]
-
-
-def test_merge_engine_handles_schema_alias_and_existing_removed_flag():
-    existing = {
-        "schema_": [
-            {
-                "name": "tbl",
-                "properties": [
-                    {
-                        "name": "obsolete",
-                        "customProperties": [{"property": "contracthub.removed", "value": "true"}],
-                    }
-                ],
-            }
-        ]
-    }
-    imported = {"schema_": [{"name": "tbl", "properties": []}]}
-    merged = merge_contract(existing, imported)
-    removed = merged["schema_"][0]["properties"][0]
-    assert removed["deprecated"] is True
-    assert removed["customProperties"].count({"property": "contracthub.removed", "value": "true"}) == 1
+    removed_col = next(col for col in (merged_schema.properties or []) if col.name == "legacy_col")
+    removed_props = removed_col.customProperties or []
+    assert any(item.property == "contracthub.removed" and str(item.value).lower() == "true" for item in removed_props)
 
 
 def test_merge_engine_internal_helpers_cover_edge_paths():
@@ -87,14 +96,132 @@ def test_merge_engine_internal_helpers_cover_edge_paths():
 
 
 def test_merge_engine_preserves_top_level_description_and_handles_added_removed_schema_objects():
-    existing = {
-        "description": {"usage": "business desc"},
-        "schema": [{"name": "legacy_table", "properties": []}],
-    }
-    imported = {"schema": [{"name": "new_table", "properties": []}]}
-    merged = merge_contract(existing=existing, imported=imported)
-    assert merged["description"] == {"usage": "business desc"}
-    names = [s["name"] for s in merged["schema"]]
+    existing = OpenDataContractStandard(
+        apiVersion="v3.1.0",
+        kind="DataContract",
+        version="1.0.0",
+        status="active",
+        description=Description(usage="business desc"),
+        schema=[
+            SchemaObject(
+                name="legacy_table",
+                customProperties=[_cp("lifecycleStatus", "active")],
+                properties=[],
+            )
+        ],
+    )
+    source = OpenDataContractStandard(
+        apiVersion="v3.1.0",
+        kind="DataContract",
+        version="1.0.0",
+        status="active",
+        schema=[
+            SchemaObject(
+                name="new_table",
+                customProperties=[_cp("lifecycleStatus", "active")],
+                properties=[],
+            )
+        ],
+    )
+    merged = ContractMergeEngine().merge(base_contract=source, business_contract=existing).contract
+    assert merged.description is not None and merged.description.usage == "business desc"
+    names = [s.name for s in (merged.schema_ or [])]
     assert "new_table" in names
-    legacy_obj = next(s for s in merged["schema"] if s["name"] == "legacy_table")
-    assert legacy_obj["deprecated"] is True
+    legacy_obj = next(s for s in (merged.schema_ or []) if s.name == "legacy_table")
+    assert legacy_obj.customProperties is not None
+    assert any(item.property == "contracthub.removed" for item in legacy_obj.customProperties)
+
+
+def test_merge_engine_skips_auto_deprecation_for_non_active_contract():
+    existing = OpenDataContractStandard(
+        apiVersion="v3.1.0",
+        kind="DataContract",
+        version="1.0.0",
+        status="draft",
+        schema=[SchemaObject(name="orders", properties=[SchemaProperty(name="legacy_col", physicalType="STRING")])],
+    )
+    source = OpenDataContractStandard(
+        apiVersion="v3.1.0",
+        kind="DataContract",
+        version="1.0.0",
+        status="draft",
+        schema=[SchemaObject(name="orders", properties=[])],
+    )
+
+    merged = ContractMergeEngine().merge(base_contract=source, business_contract=existing).contract
+    legacy_col = merged.schema_[0].properties[0]  # type: ignore[index]
+    assert legacy_col.customProperties is None or not any(item.property == "contracthub.removed" for item in legacy_col.customProperties)
+
+
+def test_merge_engine_skips_auto_deprecation_for_draft_property():
+    existing = OpenDataContractStandard(
+        apiVersion="v3.1.0",
+        kind="DataContract",
+        version="1.0.0",
+        status="active",
+        schema=[
+            SchemaObject(
+                name="orders",
+                customProperties=[_cp("lifecycleStatus", "active")],
+                properties=[
+                    SchemaProperty(
+                        name="legacy_col",
+                        physicalType="STRING",
+                        customProperties=[_cp("lifecycleStatus", "draft")],
+                    )
+                ],
+            )
+        ],
+    )
+    source = OpenDataContractStandard(
+        apiVersion="v3.1.0",
+        kind="DataContract",
+        version="1.0.0",
+        status="active",
+        schema=[SchemaObject(name="orders", properties=[])],
+    )
+
+    merged = ContractMergeEngine().merge(base_contract=source, business_contract=existing).contract
+    legacy_col = merged.schema_[0].properties[0]  # type: ignore[index]
+    assert legacy_col.customProperties is not None
+    assert not any(item.property == "contracthub.removed" for item in legacy_col.customProperties)
+
+
+def test_merge_engine_rejects_api_version_below_3():
+    existing = OpenDataContractStandard(
+        apiVersion="v2.9.0",
+        kind="DataContract",
+        version="1.0.0",
+        status="active",
+        schema=[SchemaObject(name="orders", properties=[])],
+    )
+    source = OpenDataContractStandard(
+        apiVersion="v2.9.0",
+        kind="DataContract",
+        version="1.0.0",
+        status="active",
+        schema=[SchemaObject(name="orders", properties=[])],
+    )
+
+    with pytest.raises(ValueError, match="Only v3.0.0 and above are supported"):
+        ContractMergeEngine().merge(base_contract=source, business_contract=existing)
+
+
+def test_merge_engine_rejects_retired_contract_modification():
+    existing = OpenDataContractStandard(
+        apiVersion="v3.1.0",
+        kind="DataContract",
+        version="1.0.0",
+        status="retired",
+        schema=[SchemaObject(name="orders", properties=[])],
+    )
+    source = OpenDataContractStandard(
+        apiVersion="v3.1.0",
+        kind="DataContract",
+        version="1.0.0",
+        status="active",
+        schema=[SchemaObject(name="orders", properties=[SchemaProperty(name="id", physicalType="INT")])],
+    )
+
+    with pytest.raises(merge_engine.MergeConflict, match="Retired contract cannot be modified"):
+        ContractMergeEngine().merge(base_contract=source, business_contract=existing)

@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from contracthub.lifecycle.helpers import is_active_contract, normalize_status, schema_items
-from contracthub.lifecycle.merge_engine import _decimal_reduction
+from contracthub.lifecycle.merge_engine import _decimal_precision_reduction, _decimal_scale_reduction
 
 
 @dataclass(slots=True)
@@ -132,7 +132,9 @@ def _property_breaking_changes(base_prop: dict[str, Any], target_prop: dict[str,
             )
         )
 
-    if _decimal_reduction(target_physical, base_physical):
+    if _decimal_precision_reduction(target_physical, base_physical) or _decimal_scale_reduction(
+        target_physical, base_physical
+    ):
         breaks.append(
             BreakingChange(
                 path=f"{path}.physicalType",

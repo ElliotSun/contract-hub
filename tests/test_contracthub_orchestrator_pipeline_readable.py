@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from types import SimpleNamespace
 
 import pytest
 
@@ -165,8 +166,9 @@ def test_pipeline_run_raises_on_failed_lifecycle_policy(monkeypatch, sample_odcs
     monkeypatch.setattr(
         ContractPipeline,
         "evaluate_policy",
-        lambda self, *args, **kwargs: PolicyEvaluation(
+        lambda self, *args, **kwargs: SimpleNamespace(
             valid=False,
+            version_violation=True,
             breaking_changes=[BreakingChange(path="schema[tbl]", message="removed")],
         ),
     )
@@ -179,6 +181,115 @@ def test_pipeline_run_raises_on_failed_lifecycle_policy(monkeypatch, sample_odcs
             merged_contract_output_path="/tmp/merged.yaml",
             ge_suite_output_path="/tmp/suite.json",
             ci_manifest_output_path="/tmp/manifest.json",
+        )
+
+
+def test_pipeline_run_does_not_block_non_version_policy_findings(monkeypatch, sample_odcs_model, tmp_path):
+    pipeline = ContractPipeline()
+    from contracthub.orchestrator.pipeline import PipelineArtifacts
+
+    expected_artifacts = PipelineArtifacts(
+        merged_contract_path=tmp_path / "merged.yaml",
+        ge_suite_path=tmp_path / "suite.json",
+        ci_manifest_path=tmp_path / "manifest.json",
+    )
+
+    monkeypatch.setattr(ContractPipeline, "import_schema", lambda self, *args, **kwargs: sample_odcs_model)
+    monkeypatch.setattr(type(pipeline.loader), "load", lambda self, _: sample_odcs_model)
+    monkeypatch.setattr(
+        ContractPipeline,
+        "merge_contract_updates",
+        lambda self, *args, **kwargs: MergeResult(contract=sample_odcs_model, conflicts=[]),
+    )
+    monkeypatch.setattr(ContractPipeline, "validate_contract", lambda self, _: ValidationReport(valid=True, issues=[]))
+    monkeypatch.setattr(
+        ContractPipeline,
+        "evaluate_policy",
+        lambda self, *args, **kwargs: PolicyEvaluation(
+            valid=False,
+            breaking_changes=[BreakingChange(path="schema[tbl]", message="removed")],
+        ),
+    )
+    monkeypatch.setattr(
+        ContractPipeline,
+        "prepare_ci_cd_artifacts",
+        lambda self, *args, **kwargs: expected_artifacts,
+    )
+
+    artifacts = pipeline.run(
+        source_type="sql",
+        source="sql_folder",
+        business_contract_path="sample_odcs.yaml",
+        merged_contract_output_path=str(tmp_path / "merged2.yaml"),
+        ge_suite_output_path=str(tmp_path / "suite2.json"),
+        ci_manifest_output_path=str(tmp_path / "manifest2.json"),
+    )
+
+    assert artifacts == expected_artifacts
+
+
+def test_pipeline_run_blocks_retired_contract(monkeypatch, sample_odcs_model):
+    pipeline = ContractPipeline()
+    retired_contract = sample_odcs_model.model_copy(deep=True)
+    retired_contract.status = "retired"
+
+    monkeypatch.setattr(ContractPipeline, "import_schema", lambda self, *args, **kwargs: sample_odcs_model)
+    monkeypatch.setattr(type(pipeline.loader), "load", lambda self, _: retired_contract)
+
+    with pytest.raises(ValueError, match="Cannot run pipeline on retired contract"):
+        pipeline.run(
+            source_type="sql",
+            source="sql_folder",
+            business_contract_path="sample_odcs.yaml",
+            merged_contract_output_path="/tmp/merged.yaml",
+            ge_suite_output_path="/tmp/suite.json",
+            ci_manifest_output_path="/tmp/manifest.json",
+        )
+
+
+def test_pipeline_run_blocks_when_merge_returns_none_contract(monkeypatch, sample_odcs_model):
+    pipeline = ContractPipeline()
+
+    monkeypatch.setattr(ContractPipeline, "import_schema", lambda self, *args, **kwargs: sample_odcs_model)
+    monkeypatch.setattr(type(pipeline.loader), "load", lambda self, _: sample_odcs_model)
+    monkeypatch.setattr(
+        ContractPipeline,
+        "merge_contract_updates",
+        lambda self, *args, **kwargs: SimpleNamespace(contract=None, conflicts=[]),
+    )
+
+    with pytest.raises(ValueError, match="Merge did not produce a contract"):
+        pipeline.run(
+            source_type="sql",
+            source="sql_folder",
+            business_contract_path="sample_odcs.yaml",
+            merged_contract_output_path="/tmp/merged.yaml",
+            ge_suite_output_path="/tmp/suite.json",
+            ci_manifest_output_path="/tmp/manifest.json",
+        )
+
+
+def test_pipeline_run_blocks_on_conflicts_when_fail_on_conflict(monkeypatch, sample_odcs_model):
+    pipeline = ContractPipeline()
+    conflict = MergeConflict(schema_id="orders", property_name="id", message="type mismatch")
+
+    monkeypatch.setattr(ContractPipeline, "import_schema", lambda self, *args, **kwargs: sample_odcs_model)
+    monkeypatch.setattr(type(pipeline.loader), "load", lambda self, _: sample_odcs_model)
+    monkeypatch.setattr(
+        ContractPipeline,
+        "merge_contract_updates",
+        lambda self, *args, **kwargs: MergeResult(contract=sample_odcs_model, conflicts=[conflict]),
+    )
+
+    with pytest.raises(ValueError, match="Merge conflicts detected: orders.id: type mismatch"):
+        pipeline.run(
+            source_type="sql",
+            source="sql_folder",
+            business_contract_path="sample_odcs.yaml",
+            merged_contract_output_path="/tmp/merged.yaml",
+            ge_suite_output_path="/tmp/suite.json",
+            ci_manifest_output_path="/tmp/manifest.json",
+            fail_on_conflict=True,
         )
 
 
