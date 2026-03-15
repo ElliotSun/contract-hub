@@ -10,10 +10,8 @@ contracthub/
     loader.py
     validator.py
   importers/
-    base.py
     delta_importer.py
     sql_importer.py
-    uc_importer.py
   lifecycle/
     merge_engine.py
     policy.py
@@ -42,7 +40,13 @@ uv sync --extra dev
 ## CLI
 
 ```bash
-contracthub import --type sql --source ./sql/orders --output ./contracts/orders.yaml
+contracthub import --type sql-folder --source ./sql/orders --output ./contracts/orders.yaml
+contracthub import --type sql --source ./ddl/orders.sql --output ./contracts/orders.yaml
+contracthub import --type delta --source abfss://container@acct.dfs.core.windows.net/orders \
+  --tables abfss://container@acct.dfs.core.windows.net/payments \
+  --output ./contracts/finance.yaml
+contracthub import --type unity --source main.silver.orders --workspace-url https://adb.example --token $DATABRICKS_TOKEN \
+  --output ./contracts/orders.yaml
 contracthub merge --base ./generated.yaml --business ./contracts/orders.yaml --output ./contracts/orders.merged.yaml
 contracthub export-ge --contract ./contracts/orders.yaml --output ./artifacts/orders_suite.json
 contracthub create-pr --organization org --project proj --repository-id repo --pat-token $ADO_PAT \
@@ -53,18 +57,19 @@ contracthub create-pr --organization org --project proj --repository-id repo --p
 ## SDK Usage
 
 ```python
-from contracthub.importers import DeltaTableImporter, SQLFolderImporter, UnityCatalogImporter
+from datacontract.data_contract import DataContract
 from contracthub.lifecycle import ContractMergeEngine
 from contracthub.quality import GreatExpectationsExporter, run_contract_tests
 
-contract_dict = SQLFolderImporter("./sql/orders").import_contract()
-merged = ContractMergeEngine().merge(contract_dict, "./contracts/orders.yaml")
+contract = DataContract.import_from_source(format="sql-folder", source="./sql/orders")
+merged = ContractMergeEngine().merge(contract, "./contracts/orders.yaml")
 GreatExpectationsExporter().export_to_path(merged.contract, "./artifacts/orders_suite.json")
 ```
 
 ## Notes
 
 - Importers are pure Python and Spark-free.
+- ContractHub registers custom importers (`delta`, `sql-folder`) into datacontract-cli's importer factory.
 - Merge and lifecycle policy logic are isolated in `contracthub.lifecycle`.
 - Great Expectations suite generation uses datacontract-cli exporter APIs.
 - Legacy packages `contracthub_importers` and `contracthub_enforcement` have been removed.

@@ -21,7 +21,7 @@ class GreatExpectationsExporter:
 
     def generate_suite(
         self,
-        contract: OpenDataContractStandard | dict[str, Any] | str,
+        contract: OpenDataContractStandard | str | Path,
         *,
         schema_name: str = "all",
         suite_name: str | None = None,
@@ -31,7 +31,7 @@ class GreatExpectationsExporter:
 
     def export_to_path(
         self,
-        contract: OpenDataContractStandard | dict[str, Any] | str,
+        contract: OpenDataContractStandard | str | Path,
         output_path: str,
         *,
         schema_name: str = "all",

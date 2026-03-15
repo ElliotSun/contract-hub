@@ -25,13 +25,11 @@ def test_yaml_utils_rejects_non_mapping_yaml(tmp_path):
         load_yaml(invalid_yaml)
 
 
-def test_schema_utils_convert_sample_contract_between_input_types(sample_odcs_dict, sample_odcs_path):
-    model_from_dict = contract_to_model(sample_odcs_dict)
+def test_schema_utils_convert_sample_contract_between_input_types(sample_odcs_dict, sample_odcs_path, sample_odcs_model):
     model_from_path = contract_to_model(sample_odcs_path)
     model_from_string_path = contract_to_model(str(sample_odcs_path))
-    dict_from_model = contract_to_dict(model_from_dict)
+    dict_from_model = contract_to_dict(sample_odcs_model)
 
-    assert model_from_dict.id == sample_odcs_dict["id"]
     assert model_from_path.id == sample_odcs_dict["id"]
     assert model_from_string_path.id == sample_odcs_dict["id"]
     assert dict_from_model["id"] == sample_odcs_dict["id"]

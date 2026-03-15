@@ -6,31 +6,29 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import sqlglot
+from datacontract.imports.importer import Importer
 from open_data_contract_standard.model import CustomProperty, OpenDataContractStandard, SchemaObject, SchemaProperty
 from sqlglot import expressions as exp
 
-from contracthub.importers.base import BaseImporter
+class SQLFolderImporter(Importer):
+    """Datacontract-compatible importer for SQL folders (one table per file)."""
 
+    def import_source(self, source: str, import_args: dict) -> OpenDataContractStandard:
+        _ = import_args
+        folder_path = Path(source).expanduser().resolve()
+        if not folder_path.is_dir():
+            raise ValueError(f"Folder does not exist: {folder_path}")
 
-class SQLFolderImporter(BaseImporter):
-    def __init__(self, folder_path: str, logger: Optional[logging.Logger] = None) -> None:
-        super().__init__(logger=logger)
-        self.folder_path = Path(folder_path).expanduser().resolve()
-
-    def _build_imported_contract(self) -> Dict[str, Any]:
-        if not self.folder_path.is_dir():
-            raise ValueError(f"Folder does not exist: {self.folder_path}")
-
-        sql_files = sorted(self.folder_path.glob("*.sql"))
+        sql_files = sorted(folder_path.glob("*.sql"))
         if not sql_files:
-            raise ValueError(f"No .sql files found under folder: {self.folder_path}")
+            raise ValueError(f"No .sql files found under folder: {folder_path}")
 
-        dataset_name = self.folder_path.name
+        dataset_name = folder_path.name
         contract_id = _to_contract_id(dataset_name)
         schema_objects: List[SchemaObject] = []
 
         for sql_file in sql_files:
-            self.logger.info("Parsing SQL file: %s", sql_file)
+            logging.getLogger("SQLFolderImporter").info("Parsing SQL file: %s", sql_file)
             sql_text = sql_file.read_text(encoding="utf-8")
             statements = sqlglot.parse(sql_text, read="spark")
             for statement in statements:
@@ -39,7 +37,7 @@ class SQLFolderImporter(BaseImporter):
                     schema_objects.append(schema_object)
 
         if not schema_objects:
-            raise ValueError(f"No CREATE TABLE statements found under folder: {self.folder_path}")
+            raise ValueError(f"No CREATE TABLE statements found under folder: {folder_path}")
 
         contract_model = OpenDataContractStandard(
             apiVersion="v3.1.0",
@@ -51,10 +49,7 @@ class SQLFolderImporter(BaseImporter):
             schema=schema_objects,
             customProperties=[CustomProperty(property="contracthub.source", value="sql-folder")],
         )
-        return contract_model.model_dump(by_alias=True, exclude_none=True)
-
-    def _set_source(self, source: str) -> None:
-        self.folder_path = Path(source).expanduser().resolve()
+        return contract_model
 
 
 def _to_contract_id(dataset_name: str) -> str:

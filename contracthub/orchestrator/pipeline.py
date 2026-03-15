@@ -2,24 +2,25 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass, field
+import os
 from pathlib import Path
 from typing import Any, Literal
 
 from open_data_contract_standard.model import OpenDataContractStandard
 
+from datacontract.data_contract import DataContract
+
+import contracthub.importers  # ensure custom importers are registered
 from contracthub.core.loader import ContractLoader
 from contracthub.core.validator import ContractValidator, ValidationReport
 from contracthub.devops.audit import AuditMetadata
-from contracthub.importers.delta_importer import DeltaTableImporter
-from contracthub.importers.sql_importer import SQLFolderImporter
-from contracthub.importers.uc_importer import UnityCatalogImporter
 from contracthub.lifecycle.merge_engine import ContractMergeEngine, MergeResult
 from contracthub.lifecycle.policy import PolicyEvaluation, evaluate_merge_policy
 from contracthub.quality.ge_exporter import GreatExpectationsExporter
-from contracthub.utils.schema_utils import contract_to_dict, contract_to_model
+from contracthub.utils.schema_utils import contract_to_dict
 from contracthub.utils.yaml_utils import dump_yaml
 
-ImportSourceType = Literal["delta", "sql", "uc"]
+ImportSourceType = str
 
 
 @dataclass(slots=True)
@@ -52,27 +53,37 @@ class ContractPipeline:
         source_type: ImportSourceType,
         source: str,
         *,
-        existing_contract: dict[str, Any] | None = None,
+        existing_contract: OpenDataContractStandard | None = None,
         uc_workspace_url: str | None = None,
         uc_token: str | None = None,
+        import_args: dict[str, Any] | None = None,
     ) -> OpenDataContractStandard:
-        if source_type == "delta":
-            contract_dict = DeltaTableImporter(source).import_contract(existing_contract=existing_contract)
-            return contract_to_model(contract_dict)
+        import_args = import_args or {}
+        normalized = source_type.strip().lower()
 
-        if source_type == "sql":
-            contract_dict = SQLFolderImporter(source).import_contract(existing_contract=existing_contract)
-            return contract_to_model(contract_dict)
-
-        if source_type == "uc":
-            if not uc_workspace_url or not uc_token:
-                raise ValueError("uc_workspace_url and uc_token are required for uc source_type")
-            return UnityCatalogImporter(workspace_url=uc_workspace_url, token=uc_token).import_contract(
-                source,
-                existing_contract=existing_contract,
+        if normalized in {"uc", "unity"}:
+            return _import_unity_contract(
+                table_fqn=source,
+                workspace_url=uc_workspace_url,
+                token=uc_token,
             )
 
-        raise ValueError(f"Unsupported source_type: {source_type}")
+        try:
+            imported = DataContract.import_from_source(
+                format=normalized,
+                source=source,
+                **import_args,
+            )
+        except ValueError as exc:
+            raise ValueError(f"Unsupported source_type: {source_type}") from exc
+
+        if existing_contract is not None:
+            return self.merge_engine.merge(
+                imported,
+                existing_contract,
+            ).contract
+
+        return imported
 
     def merge_contract_updates(
         self,
@@ -81,9 +92,11 @@ class ContractPipeline:
         *,
         fail_on_conflict: bool = False,
     ) -> MergeResult:
+        # `business_contract` is the lifecycle-governed target contract in Git.
+        target_contract = business_contract
         return self.merge_engine.merge(
             imported_contract,
-            business_contract,
+            target_contract,
             fail_on_conflict=fail_on_conflict,
         )
 
@@ -95,7 +108,7 @@ class ContractPipeline:
         base_contract: OpenDataContractStandard,
         merged_contract: OpenDataContractStandard,
     ) -> PolicyEvaluation:
-        return evaluate_merge_policy(contract_to_dict(base_contract), contract_to_dict(merged_contract))
+        return evaluate_merge_policy(base_contract, merged_contract)
 
     def prepare_ci_cd_artifacts(
         self,
@@ -220,3 +233,32 @@ class ContractPipeline:
             resolved = (str(item.value) if item.value is not None else "").strip().lower()
             return resolved or "draft"
         return "draft"
+
+
+def _import_unity_contract(
+    *,
+    table_fqn: str,
+    workspace_url: str | None,
+    token: str | None,
+) -> OpenDataContractStandard:
+    if not workspace_url or not token:
+        raise ValueError("uc_workspace_url and uc_token are required for uc source_type")
+
+    env_backup = {
+        "DATACONTRACT_DATABRICKS_SERVER_HOSTNAME": os.environ.get("DATACONTRACT_DATABRICKS_SERVER_HOSTNAME"),
+        "DATACONTRACT_DATABRICKS_TOKEN": os.environ.get("DATACONTRACT_DATABRICKS_TOKEN"),
+    }
+    os.environ["DATACONTRACT_DATABRICKS_SERVER_HOSTNAME"] = workspace_url
+    os.environ["DATACONTRACT_DATABRICKS_TOKEN"] = token
+    try:
+        return DataContract.import_from_source(
+            format="unity",
+            source=None,
+            unity_table_full_name=[table_fqn],
+        )
+    finally:
+        for key, value in env_backup.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value

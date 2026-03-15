@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 from deltalake import DeltaTable
+from datacontract.imports.importer import Importer
 from open_data_contract_standard.model import (
     CustomProperty,
     Description,
@@ -18,59 +19,148 @@ from open_data_contract_standard.model import (
 import sqlglot
 from sqlglot import expressions as exp
 
-from contracthub.importers.base import BaseImporter
+class DeltaTableImporter(Importer):
+    """Datacontract-compatible importer for Delta tables (delta-rs)."""
+
+    def import_source(self, source: str, import_args: dict) -> OpenDataContractStandard:
+        import_args = import_args or {}
+        table_uris = _resolve_table_uris(source, import_args)
+        storage_options = import_args.get("storage_options")
+        oauth_bearer_token = import_args.get("oauth_bearer_token")
+        dataset_name = import_args.get("dataset_name") or import_args.get("contract_name")
+        contract_id = import_args.get("contract_id")
+        contract_version = import_args.get("contract_version")
+
+        return _build_imported_contract(
+            table_uris=table_uris,
+            storage_options=storage_options,
+            oauth_bearer_token=oauth_bearer_token,
+            dataset_name=dataset_name,
+            contract_id=contract_id,
+            contract_version=contract_version,
+        )
 
 
-class DeltaTableImporter(BaseImporter):
-    def __init__(self, table_uri: str, logger: Optional[logging.Logger] = None) -> None:
-        super().__init__(logger=logger)
-        self.table_uri = table_uri
+def _build_imported_contract(
+    *,
+    table_uris: List[str],
+    storage_options: Optional[Dict[str, str]],
+    oauth_bearer_token: Optional[str],
+    dataset_name: Optional[str],
+    contract_id: Optional[str],
+    contract_version: Optional[str],
+) -> OpenDataContractStandard:
+    logger = logging.getLogger("DeltaTableImporter")
+    logger.info("Importing Delta tables: %s", ", ".join(table_uris))
 
-    def _build_imported_contract(self) -> Dict[str, Any]:
-        self.logger.info("Importing Delta table from uri=%s", self.table_uri)
-        table = DeltaTable(self.table_uri)
-        dataset_name = _derive_dataset_name(self.table_uri)
+    if not dataset_name:
+        dataset_name = _derive_contract_name(table_uris)
+    if not contract_id:
         contract_id = _to_contract_id(dataset_name)
+
+    schema_objects: List[SchemaObject] = []
+    versions: List[str] = []
+    contract_description: Optional[str] = None
+
+    for table_uri in table_uris:
+        normalized_options = _normalize_storage_options(
+            table_uri=table_uri,
+            storage_options=storage_options,
+            oauth_bearer_token=oauth_bearer_token,
+        )
+        table = DeltaTable(table_uri, storage_options=normalized_options)
+        table_name = _derive_dataset_name(table_uri)
+        table_id = _to_contract_id(table_name)
         delta_version = str(table.version())
+        versions.append(delta_version)
 
         metadata = table.metadata()
         description = _extract_table_description(metadata)
         partition_positions = _extract_partition_positions(metadata)
-
         fields = _extract_delta_fields(table, partition_positions)
-        schema_object = SchemaObject(
-            id=contract_id,
-            name=dataset_name,
-            physicalName=dataset_name,
-            logicalType="object",
-            physicalType="table",
-            properties=fields,
-            description=description,
+        if len(table_uris) == 1:
+            contract_description = description
+
+        schema_objects.append(
+            SchemaObject(
+                id=table_id,
+                name=table_name,
+                physicalName=table_name,
+                logicalType="object",
+                physicalType="table",
+                properties=fields,
+                description=description,
+                customProperties=[
+                    CustomProperty(property="contracthub.delta.uri", value=table_uri),
+                    CustomProperty(property="contracthub.delta.version", value=delta_version),
+                    CustomProperty(
+                        property="contracthub.delta.partitionColumns",
+                        value=[col for col, _ in sorted(partition_positions.items(), key=lambda item: item[1])],
+                    ),
+                ],
+            )
         )
 
-        contract_model = OpenDataContractStandard(
-            apiVersion="v3.1.0",
-            kind="DataContract",
-            id=contract_id,
-            name=dataset_name,
-            version=delta_version,
-            status="draft",
-            schema=[schema_object],
-            description=Description(usage=description) if description else None,
-            customProperties=[
-                CustomProperty(property="contracthub.source", value="delta"),
-                CustomProperty(property="contracthub.delta.uri", value=self.table_uri),
-                CustomProperty(property="contracthub.delta.version", value=delta_version),
-                CustomProperty(
-                    property="contracthub.delta.partitionColumns",
-                    value=[col for col, _ in sorted(partition_positions.items(), key=lambda item: item[1])],
-                ),
-            ],
-        )
-        return contract_model.model_dump(by_alias=True, exclude_none=True)
+    if contract_version is None:
+        contract_version = versions[0] if len(versions) == 1 else "1.0.0"
 
-    def _set_source(self, source: str) -> None:
-        self.table_uri = source
+    contract_model = OpenDataContractStandard(
+        apiVersion="v3.1.0",
+        kind="DataContract",
+        id=contract_id,
+        name=dataset_name,
+        version=contract_version,
+        status="draft",
+        schema=schema_objects,
+        description=Description(usage=contract_description) if contract_description else None,
+        customProperties=[
+            CustomProperty(property="contracthub.source", value="delta"),
+        ],
+    )
+    return contract_model
+
+
+def _resolve_table_uris(source: str, import_args: dict) -> List[str]:
+    table_uris = import_args.get("table_uris") or import_args.get("tables") or []
+    if isinstance(table_uris, str):
+        table_uris = [item.strip() for item in table_uris.split(",") if item.strip()]
+    if not isinstance(table_uris, list):
+        raise ValueError("table_uris must be a list of table URIs")
+
+    normalized = [item for item in table_uris if isinstance(item, str) and item.strip()]
+    if source:
+        normalized.insert(0, source)
+
+    if not normalized:
+        raise ValueError("Delta importer requires at least one table URI")
+    return normalized
+
+
+def _derive_contract_name(table_uris: List[str]) -> str:
+    if not table_uris:
+        return "delta_dataset"
+
+    segments: List[List[str]] = []
+    for uri in table_uris:
+        parsed = urlparse(uri)
+        path = parsed.path if parsed.scheme else uri
+        parts = [part for part in Path(path).parts if part not in {"/", ""}]
+        segments.append(parts)
+
+    if not segments:
+        return _derive_dataset_name(table_uris[0])
+
+    prefix: List[str] = []
+    for items in zip(*segments):
+        if all(item == items[0] for item in items):
+            prefix.append(items[0])
+        else:
+            break
+
+    if prefix:
+        return prefix[-1]
+
+    return _derive_dataset_name(table_uris[0])
 
 
 def _derive_dataset_name(table_uri: str) -> str:
@@ -80,6 +170,45 @@ def _derive_dataset_name(table_uri: str) -> str:
     else:
         name = Path(table_uri.rstrip("/")).name
     return name or "delta_dataset"
+
+
+def _normalize_storage_options(
+    *,
+    table_uri: str,
+    storage_options: Optional[Dict[str, str]],
+    oauth_bearer_token: Optional[str],
+) -> Optional[Dict[str, str]]:
+    if not storage_options and not oauth_bearer_token:
+        return storage_options
+
+    normalized = dict(storage_options or {})
+    token_keys = {"azure_storage_token", "bearer_token", "token"}
+    if oauth_bearer_token and not token_keys.intersection(normalized):
+        normalized["azure_storage_token"] = oauth_bearer_token
+
+    account_keys = {"azure_storage_account_name", "storage_account_name", "account_name"}
+    if oauth_bearer_token and not account_keys.intersection(normalized):
+        account_name = _extract_account_name_from_uri(table_uri)
+        if account_name:
+            normalized["azure_storage_account_name"] = account_name
+
+    return normalized or None
+
+
+def _extract_account_name_from_uri(table_uri: str) -> Optional[str]:
+    parsed = urlparse(table_uri)
+    if not parsed.netloc:
+        return None
+
+    host = parsed.netloc
+    if "@" in host:
+        host = host.split("@", 1)[1]
+
+    for suffix in (".dfs.core.windows.net", ".blob.core.windows.net", ".dfs.fabric.microsoft.com"):
+        if host.endswith(suffix):
+            return host[: -len(suffix)]
+
+    return None
 
 
 def _to_contract_id(dataset_name: str) -> str:

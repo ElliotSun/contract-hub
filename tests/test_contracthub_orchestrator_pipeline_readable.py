@@ -1,39 +1,34 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from types import SimpleNamespace
 
 import pytest
 
+from datacontract.data_contract import DataContract
+from open_data_contract_standard.model import OpenDataContractStandard
 from contracthub.core.validator import ValidationIssue, ValidationReport
 from contracthub.devops.audit import AuditMetadata
 from contracthub.lifecycle.merge_engine import MergeConflict, MergeResult
 from contracthub.lifecycle.policy import BreakingChange, PolicyEvaluation
 from contracthub.orchestrator.pipeline import ContractPipeline
-from contracthub.utils.schema_utils import contract_to_model
-
-
-@dataclass
-class _ImporterStub:
-    source: str
-
-    def import_contract(self, existing_contract=None):  # noqa: ANN001
-        _ = existing_contract
-        return {
-            "apiVersion": "v3.1.0",
-            "kind": "DataContract",
-            "id": "from-importer",
-            "name": self.source,
-            "version": "1.0.0",
-            "status": "draft",
-            "schema": [{"name": "t1", "properties": [{"name": "id", "logicalType": "string"}]}],
-        }
 
 
 def test_pipeline_import_schema_supports_delta_and_sql(monkeypatch):
-    monkeypatch.setattr("contracthub.orchestrator.pipeline.DeltaTableImporter", _ImporterStub)
-    monkeypatch.setattr("contracthub.orchestrator.pipeline.SQLFolderImporter", _ImporterStub)
+    def fake_import(format: str, source: str | None = None, **_kwargs):  # noqa: ANN001
+        return OpenDataContractStandard.model_validate(
+            {
+                "apiVersion": "v3.1.0",
+                "kind": "DataContract",
+                "id": "from-importer",
+                "name": source or "unknown",
+                "version": "1.0.0",
+                "status": "draft",
+                "schema": [{"name": "t1", "properties": [{"name": "id", "logicalType": "string"}]}],
+            }
+        )
+
+    monkeypatch.setattr(DataContract, "import_from_source", staticmethod(fake_import))
 
     pipeline = ContractPipeline()
 
@@ -52,26 +47,20 @@ def test_pipeline_import_schema_requires_uc_credentials():
 
 
 def test_pipeline_import_schema_supports_uc_when_credentials_are_given(monkeypatch):
-    class UcImporterStub:
-        def __init__(self, workspace_url: str, token: str) -> None:
-            self.workspace_url = workspace_url
-            self.token = token
+    def fake_import(format: str, source: str | None = None, **_kwargs):  # noqa: ANN001
+        return OpenDataContractStandard.model_validate(
+            {
+                "apiVersion": "v3.1.0",
+                "kind": "DataContract",
+                "id": "uc-id",
+                "name": "orders",
+                "version": "1.0.0",
+                "status": "draft",
+                "schema": [{"name": "t1", "properties": [{"name": "id", "logicalType": "string"}]}],
+            }
+        )
 
-        def import_contract(self, source: str, existing_contract=None):  # noqa: ANN001
-            _ = existing_contract
-            return contract_to_model(
-                {
-                    "apiVersion": "v3.1.0",
-                    "kind": "DataContract",
-                    "id": "uc-id",
-                    "name": source.split(".")[-1],
-                    "version": "1.0.0",
-                    "status": "draft",
-                    "schema": [{"name": "t1", "properties": [{"name": "id", "logicalType": "string"}]}],
-                }
-            )
-
-    monkeypatch.setattr("contracthub.orchestrator.pipeline.UnityCatalogImporter", UcImporterStub)
+    monkeypatch.setattr(DataContract, "import_from_source", staticmethod(fake_import))
     pipeline = ContractPipeline()
 
     contract = pipeline.import_schema(
@@ -91,9 +80,9 @@ def test_pipeline_import_schema_rejects_unknown_source_type():
         pipeline.import_schema("unknown", "src")  # type: ignore[arg-type]
 
 
-def test_pipeline_prepare_ci_cd_artifacts_writes_manifest_and_outputs(monkeypatch, tmp_path, sample_odcs_dict):
+def test_pipeline_prepare_ci_cd_artifacts_writes_manifest_and_outputs(monkeypatch, tmp_path, sample_odcs_model):
     pipeline = ContractPipeline()
-    merged_contract = contract_to_model(sample_odcs_dict)
+    merged_contract = sample_odcs_model
     merge_result = MergeResult(contract=merged_contract, conflicts=[MergeConflict("p", "r", 1, 2)])
     validation = ValidationReport(valid=True, issues=[])
     policy = PolicyEvaluation(valid=True, breaking_changes=[])

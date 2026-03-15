@@ -25,6 +25,9 @@ dependencies = [
 contracthub = "contracthub.interfaces.cli:main"
 
 [project.optional-dependencies]
+azure = [
+  "azure-identity>=1.16.0",
+]
 dev = [
   "pytest>=8.2.0",
 ]

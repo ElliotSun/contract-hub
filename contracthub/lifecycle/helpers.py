@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from open_data_contract_standard.model import CustomProperty, OpenDataContractStandard
+
 ACTIVE_STATUSES = {"active"}
 NON_BREAKING_LIFECYCLE_STATUSES = {"draft", "deprecated"}
 
@@ -14,23 +16,38 @@ def normalize_status(value: Any, default: str = "draft") -> str:
     return text or default
 
 
-def is_active_contract(contract: dict[str, Any]) -> bool:
+def is_active_contract(contract: OpenDataContractStandard) -> bool:
     """Return True when contract-level status is active."""
-    return normalize_status(contract.get("status"), default="draft") in ACTIVE_STATUSES
+    value = contract.status
+    if not value:
+        value = _lifecycle_from_custom_properties(contract.customProperties)
+    return normalize_status(value, default="draft") in ACTIVE_STATUSES
 
 
-def allows_breaking_changes(entity: dict[str, Any]) -> bool:
+def allows_breaking_changes(entity: Any) -> bool:
     """Return True when entity lifecycle status permits non-breaking updates only."""
-    lifecycle_status = normalize_status(entity.get("lifecycleStatus"), default="active")
+    value = getattr(entity, "lifecycleStatus", None)
+    if value is None:
+        value = _lifecycle_from_custom_properties(getattr(entity, "customProperties", None))
+    lifecycle_status = normalize_status(value, default="active")
     return lifecycle_status not in NON_BREAKING_LIFECYCLE_STATUSES
 
 
-def schema_items(contract: dict[str, Any]) -> list[dict[str, Any]]:
-    """Return schema entries from either schema or schema_ keys."""
-    schema = contract.get("schema")
-    if isinstance(schema, list):
-        return [item for item in schema if isinstance(item, dict)]
-    schema_alias = contract.get("schema_")
-    if isinstance(schema_alias, list):
-        return [item for item in schema_alias if isinstance(item, dict)]
-    return []
+def schema_items(contract: OpenDataContractStandard) -> list[Any]:
+    """Return schema entries for the ODCS contract."""
+    return list(contract.schema_ or [])
+
+
+def _lifecycle_from_custom_properties(custom_properties: Any) -> Any:
+    if not isinstance(custom_properties, list):
+        return None
+    for item in custom_properties:
+        if isinstance(item, CustomProperty):
+            key = (item.property or "").strip().lower()
+            if key == "lifecyclestatus":
+                return item.value
+        elif isinstance(item, dict):
+            key = str(item.get("property") or "").strip().lower()
+            if key == "lifecyclestatus":
+                return item.get("value")
+    return None

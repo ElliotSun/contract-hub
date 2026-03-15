@@ -5,7 +5,6 @@ from contracthub.core.validator import ContractValidator
 from contracthub.devops.pr_creator import AzureDevOpsConfig, PullRequestCreator
 from contracthub.importers.delta_importer import DeltaTableImporter
 from contracthub.importers.sql_importer import SQLFolderImporter
-from contracthub.importers.uc_importer import UCResolver, UnityCatalogImporter
 from contracthub.lifecycle.merge_engine import ContractMergeEngine
 from contracthub.lifecycle.policy import evaluate_merge_policy
 from contracthub.orchestrator.pipeline import ContractPipeline
@@ -18,8 +17,6 @@ __all__ = [
     "ContractValidator",
     "DeltaTableImporter",
     "SQLFolderImporter",
-    "UCResolver",
-    "UnityCatalogImporter",
     "ContractMergeEngine",
     "evaluate_merge_policy",
     "GreatExpectationsExporter",

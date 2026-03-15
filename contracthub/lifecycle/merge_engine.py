@@ -4,7 +4,7 @@ import re
 from copy import deepcopy
 from datetime import datetime
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable
+from typing import Any, Iterable
 
 from open_data_contract_standard.model import (
     CustomProperty,
@@ -84,8 +84,8 @@ class ContractMergeEngine:
 
     def merge(
         self,
-        base_contract: OpenDataContractStandard | dict[str, Any],
-        business_contract: OpenDataContractStandard | dict[str, Any],
+        base_contract: OpenDataContractStandard,
+        business_contract: OpenDataContractStandard,
         *,
         fail_on_conflict: bool = False,
     ) -> MergeResult:
@@ -115,8 +115,8 @@ class ContractMergeEngine:
 
     def detect_conflicts(
         self,
-        base_contract: OpenDataContractStandard | dict[str, Any],
-        business_contract: OpenDataContractStandard | dict[str, Any],
+        base_contract: OpenDataContractStandard,
+        business_contract: OpenDataContractStandard,
     ) -> list[MergeConflict]:
         # source_model = newly generated technical contract
         source_model = _to_odcs_model(base_contract)
@@ -289,16 +289,6 @@ class ContractMergeEngine:
             analysis=analysis,
         )
         return merged
-
-def merge_contract(existing: Dict[str, Any], imported: Dict[str, Any]) -> Dict[str, Any]:
-    """Merge imported contract into existing contract in patch mode."""
-    engine = ContractMergeEngine()
-    merged_model = engine.merge(base_contract=imported, business_contract=existing).contract
-    merged_dict = merged_model.model_dump(by_alias=True, exclude_none=True)
-    # Keep explicit deprecated markers for removed entities in dictionary output.
-    _apply_legacy_removed_markers(merged_dict)
-    return merged_dict
-
 
 def _merge_schema_objects_models(
     existing_schema: list[SchemaObject],
@@ -481,27 +471,6 @@ def _add_deprecated_tag(tags: list[str] | None) -> list[str]:
     return normalized
 
 
-def _apply_legacy_removed_markers(contract: dict[str, Any]) -> None:
-    schema_items = contract.get("schema")
-    if not isinstance(schema_items, list):
-        return
-
-    for schema_obj in schema_items:
-        if not isinstance(schema_obj, dict):
-            continue
-        if _has_removed_flag(_normalize_custom_properties(schema_obj.get("customProperties"))):
-            schema_obj["deprecated"] = True
-
-        props = schema_obj.get("properties")
-        if not isinstance(props, list):
-            continue
-        for prop in props:
-            if not isinstance(prop, dict):
-                continue
-            if _has_removed_flag(_normalize_custom_properties(prop.get("customProperties"))):
-                prop["deprecated"] = True
-
-
 def _schema_object_id(schema_obj: SchemaObject) -> str:
     # ODCS defines `name` as the stable identity.
     # `physicalName` is a technical attribute and must not be used as merge identity.
@@ -677,12 +646,6 @@ def _normalize_custom_property_models(items: Any) -> list[CustomProperty]:
     return normalized
 
 
-def _normalize_custom_properties(items: Any) -> list[dict[str, Any]]:
-    if not isinstance(items, list):
-        return []
-    return [item for item in items if isinstance(item, dict)]
-
-
 def _custom_property_key(item: Any) -> str:
     return str(getattr(item, "property", None) or "").strip().lower()
 
@@ -691,17 +654,11 @@ def _custom_property_sort_key(item: Any) -> str:
     return _custom_property_key(item)
 
 
-def _to_odcs_model(contract: OpenDataContractStandard | dict[str, Any]) -> OpenDataContractStandard:
+def _to_odcs_model(contract: OpenDataContractStandard) -> OpenDataContractStandard:
     # ContractMergeEngine is ODCS-only: always normalize to the canonical ODCS model.
-    if isinstance(contract, OpenDataContractStandard):
-        model = contract.model_copy(deep=True)
-        _assert_supported_api_version(model.apiVersion)
-        return model
-    if isinstance(contract, dict):
-        model = OpenDataContractStandard.model_validate(deepcopy(contract))
-        _assert_supported_api_version(model.apiVersion)
-        return model
-    raise TypeError("ContractMergeEngine only supports OpenDataContractStandard or ODCS dictionaries")
+    model = contract.model_copy(deep=True)
+    _assert_supported_api_version(model.apiVersion)
+    return model
 
 
 def _assert_supported_api_version(api_version: Any) -> None:

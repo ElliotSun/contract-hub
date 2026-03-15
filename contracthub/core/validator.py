@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, Iterable
+from pathlib import Path
 
 from open_data_contract_standard.model import OpenDataContractStandard, SchemaObject, SchemaProperty
 
@@ -29,7 +30,7 @@ class ValidationReport:
 class ContractValidator:
     """Validate ODCS schema structure and quality rule completeness."""
 
-    def validate(self, contract_input: OpenDataContractStandard | dict[str, Any] | str) -> ValidationReport:
+    def validate(self, contract_input: OpenDataContractStandard | str | Path) -> ValidationReport:
         contract = contract_to_model(contract_input)
         issues: list[ValidationIssue] = []
 

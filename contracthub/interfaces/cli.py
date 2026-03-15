@@ -2,18 +2,21 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 from typing import Any
 
+from open_data_contract_standard.model import OpenDataContractStandard
 from contracthub.core.loader import ContractLoader
+from datacontract.data_contract import DataContract
 from contracthub.devops.pr_creator import AzureDevOpsConfig, PullRequestCreator
-from contracthub.importers.delta_importer import DeltaTableImporter
-from contracthub.importers.sql_importer import SQLFolderImporter
-from contracthub.importers.uc_importer import UnityCatalogImporter
+import contracthub.importers  # ensure custom importers are registered
 from contracthub.lifecycle.merge_engine import ContractMergeEngine
 from contracthub.quality.ge_exporter import GreatExpectationsExporter
-from contracthub.utils.schema_utils import contract_to_dict, contract_to_model
+from contracthub.utils.schema_utils import contract_to_dict
 from contracthub.utils.yaml_utils import dump_yaml
+
+DEFAULT_AZURE_STORAGE_SCOPE = "https://storage.azure.com/.default"
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -21,13 +24,28 @@ def _build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     import_parser = subparsers.add_parser("import", help="Import contract from source")
-    import_parser.add_argument("--type", choices=["delta", "sql", "uc"], required=True)
+    import_parser.add_argument("--type", choices=["delta", "sql", "sql-folder", "uc", "unity"], required=True)
     import_parser.add_argument("--source", required=True)
     import_parser.add_argument("--output", required=True)
     import_parser.add_argument("--existing")
     import_parser.add_argument("--runtime-context", default="auto")
     import_parser.add_argument("--workspace-url")
     import_parser.add_argument("--token")
+    import_parser.add_argument("--adls-oauth-token", help="OAuth bearer token for ADLS Gen2 access")
+    import_parser.add_argument(
+        "--use-azure-identity",
+        action="store_true",
+        help="Fetch ADLS OAuth token via azure-identity DefaultAzureCredential",
+    )
+    import_parser.add_argument(
+        "--azure-scope",
+        default=DEFAULT_AZURE_STORAGE_SCOPE,
+        help=f"Azure scope for token acquisition (default: {DEFAULT_AZURE_STORAGE_SCOPE})",
+    )
+    import_parser.add_argument(
+        "--tables",
+        help="Comma-separated list of additional Delta table URIs (used with --type delta)",
+    )
 
     merge_parser = subparsers.add_parser("merge", help="Merge base and business-edited contracts")
     merge_parser.add_argument("--base", required=True)
@@ -61,25 +79,92 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def _run_import(args: argparse.Namespace) -> Path:
     loader = ContractLoader(runtime_context=args.runtime_context)
-    existing_contract: dict[str, Any] | None = None
+    existing_contract: Any | None = None
     if args.existing:
-        existing_contract = contract_to_dict(loader.load(args.existing))
+        existing_contract = loader.load(args.existing)
 
     if args.type == "delta":
-        contract_dict = DeltaTableImporter(args.source).import_contract(existing_contract=existing_contract)
-        contract = contract_to_model(contract_dict)
-    elif args.type == "sql":
-        contract_dict = SQLFolderImporter(args.source).import_contract(existing_contract=existing_contract)
-        contract = contract_to_model(contract_dict)
+        oauth_token = _resolve_adls_oauth_token(args)
+        table_uris = _parse_table_uris(args.tables)
+        contract = DataContract.import_from_source(
+            format="delta",
+            source=args.source,
+            oauth_bearer_token=oauth_token,
+            table_uris=table_uris,
+        )
+    elif args.type in {"sql", "sql-folder"}:
+        contract = DataContract.import_from_source(
+            format=args.type,
+            source=args.source,
+        )
     else:
-        if not args.workspace_url or not args.token:
-            raise ValueError("--workspace-url and --token are required for uc imports")
-        contract = UnityCatalogImporter(workspace_url=args.workspace_url, token=args.token).import_contract(
-            args.source,
-            existing_contract=existing_contract,
+        contract = _import_unity_contract(
+            table_fqn=args.source,
+            workspace_url=args.workspace_url,
+            token=args.token,
         )
 
+    if existing_contract is not None:
+        contract = ContractMergeEngine().merge(
+            base_contract=contract,
+            business_contract=existing_contract,
+        ).contract
+
     return dump_yaml(contract_to_dict(contract), args.output)
+
+
+def _import_unity_contract(
+    *,
+    table_fqn: str,
+    workspace_url: str | None,
+    token: str | None,
+) -> OpenDataContractStandard:
+    if not workspace_url or not token:
+        raise ValueError("--workspace-url and --token are required for uc imports")
+
+    env_backup = {
+        "DATACONTRACT_DATABRICKS_SERVER_HOSTNAME": os.environ.get("DATACONTRACT_DATABRICKS_SERVER_HOSTNAME"),
+        "DATACONTRACT_DATABRICKS_TOKEN": os.environ.get("DATACONTRACT_DATABRICKS_TOKEN"),
+    }
+    os.environ["DATACONTRACT_DATABRICKS_SERVER_HOSTNAME"] = workspace_url
+    os.environ["DATACONTRACT_DATABRICKS_TOKEN"] = token
+    try:
+        return DataContract.import_from_source(
+            format="unity",
+            source=None,
+            unity_table_full_name=[table_fqn],
+        )
+    finally:
+        for key, value in env_backup.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
+def _resolve_adls_oauth_token(args: argparse.Namespace) -> str | None:
+    if args.adls_oauth_token and args.use_azure_identity:
+        raise ValueError("Use either --adls-oauth-token or --use-azure-identity, not both")
+    if args.adls_oauth_token:
+        return args.adls_oauth_token
+    if not args.use_azure_identity:
+        return None
+    try:
+        from azure.identity import DefaultAzureCredential
+    except ImportError as exc:
+        raise ValueError(
+            "azure-identity is required for --use-azure-identity. Install with `pip install datacontract-flow[azure]`."
+        ) from exc
+    credential = DefaultAzureCredential()
+    token = credential.get_token(args.azure_scope)
+    return token.token
+
+
+def _parse_table_uris(value: str | None) -> list[str] | None:
+    if not value:
+        return None
+    items = [item.strip() for item in value.split(",") if item.strip()]
+    return items or None
 
 
 def _run_merge(args: argparse.Namespace) -> Path:

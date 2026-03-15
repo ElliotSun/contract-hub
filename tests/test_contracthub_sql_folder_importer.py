@@ -28,40 +28,44 @@ def test_sql_folder_importer_parses_real_sparksql_external_table_ddl(tmp_path):
         encoding="utf-8",
     )
 
-    importer = SQLFolderImporter(str(product_dir))
-    contract = importer.import_contract()
+    importer = SQLFolderImporter("sql-folder")
+    contract = importer.import_source(str(product_dir), {})
 
-    assert contract["name"] == "adls2_product"
-    assert len(contract["schema"]) == 1
+    assert contract.name == "adls2_product"
+    assert contract.schema_ is not None
+    assert len(contract.schema_) == 1
 
-    table = contract["schema"][0]
-    assert table["id"] == "orders_external"
-    assert table["name"] == "orders_external"
-    assert table["physicalType"] == "external-table"
-    table_props = {item["property"]: item["value"] for item in table.get("customProperties", [])}
+    table = contract.schema_[0]
+    assert table.id == "orders_external"
+    assert table.name == "orders_external"
+    assert table.physicalType == "external-table"
+    table_props = {item.property: item.value for item in table.customProperties or []}
     assert table_props["contracthub.table.external"] == "true"
     assert table_props["contracthub.table.format"] == "DELTA"
     assert table_props["contracthub.table.location"].startswith("abfss://silver@")
 
-    id_field = next(item for item in table["properties"] if item["name"] == "id")
-    assert id_field["id"] == "id"
-    assert id_field["physicalType"].lower().startswith("bigint")
-    assert id_field["required"] is True
-    assert id_field["description"] == "Order id"
+    assert table.properties is not None
+    id_field = next(item for item in table.properties if item.name == "id")
+    assert id_field.id == "id"
+    assert str(id_field.physicalType).lower().startswith("bigint")
+    assert id_field.required is True
+    assert id_field.description == "Order id"
 
-    amount_field = next(item for item in table["properties"] if item["name"] == "amount")
-    assert amount_field["logicalTypeOptions"] == {"precision": 18, "scale": 2}
+    amount_field = next(item for item in table.properties if item.name == "amount")
+    assert amount_field.logicalTypeOptions == {"precision": 18, "scale": 2}
 
-    payload_field = next(item for item in table["properties"] if item["name"] == "payload")
-    assert payload_field["logicalType"] == "object"
-    nested_names = {item["name"] for item in payload_field.get("properties", [])}
+    payload_field = next(item for item in table.properties if item.name == "payload")
+    assert payload_field.logicalType == "object"
+    nested_names = {item.name for item in payload_field.properties or []}
     assert nested_names == {"source", "metrics", "labels"}
-    events_field = next(item for item in table["properties"] if item["name"] == "events")
-    assert events_field["logicalType"] == "array"
-    assert events_field["items"]["logicalType"] == "object"
-    attributes_field = next(item for item in table["properties"] if item["name"] == "attributes")
-    assert attributes_field["logicalType"] == "object"
-    assert attributes_field["items"]["logicalType"] == "array"
+    events_field = next(item for item in table.properties if item.name == "events")
+    assert events_field.logicalType == "array"
+    assert events_field.items is not None
+    assert events_field.items.logicalType == "object"
+    attributes_field = next(item for item in table.properties if item.name == "attributes")
+    assert attributes_field.logicalType == "object"
+    assert attributes_field.items is not None
+    assert attributes_field.items.logicalType == "array"
 
 
 def test_sql_folder_importer_multiple_files_generate_one_contract_with_all_tables(tmp_path):
@@ -97,15 +101,16 @@ def test_sql_folder_importer_multiple_files_generate_one_contract_with_all_table
         encoding="utf-8",
     )
 
-    importer = SQLFolderImporter(str(product_dir))
-    contract = importer.import_contract()
+    importer = SQLFolderImporter("sql-folder")
+    contract = importer.import_source(str(product_dir), {})
 
     # One import call should produce one ODCS contract containing all table schemas.
-    assert contract["name"] == "finance_product"
-    assert contract["id"] == "finance_product"
-    assert len(contract["schema"]) == 3
+    assert contract.name == "finance_product"
+    assert contract.id == "finance_product"
+    assert contract.schema_ is not None
+    assert len(contract.schema_) == 3
 
-    table_names = {item["name"] for item in contract["schema"]}
+    table_names = {item.name for item in contract.schema_}
     assert table_names == {"accounts", "transactions", "balances"}
 
 
@@ -129,13 +134,15 @@ def test_sql_folder_importer_extracts_primary_key_unique_and_partition_metadata(
         encoding="utf-8",
     )
 
-    contract = SQLFolderImporter(str(product_dir)).import_contract()
-    table = contract["schema"][0]
+    contract = SQLFolderImporter("sql-folder").import_source(str(product_dir), {})
+    assert contract.schema_ is not None
+    table = contract.schema_[0]
 
-    assert table["description"] == "Event fact table"
-    fields = {item["name"]: item for item in table["properties"]}
-    assert fields["event_id"]["primaryKey"] is True
-    assert fields["event_id"]["primaryKeyPosition"] == 1
-    assert fields["source"]["unique"] is True
-    assert fields["event_date"]["partitioned"] is True
-    assert fields["event_date"]["partitionKeyPosition"] == 1
+    assert table.description == "Event fact table"
+    assert table.properties is not None
+    fields = {item.name: item for item in table.properties if item.name}
+    assert fields["event_id"].primaryKey is True
+    assert fields["event_id"].primaryKeyPosition == 1
+    assert fields["source"].unique is True
+    assert fields["event_date"].partitioned is True
+    assert fields["event_date"].partitionKeyPosition == 1

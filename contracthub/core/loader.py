@@ -21,7 +21,14 @@ RuntimeContext = Literal["auto", "synapse", "fabric"]
 
 @dataclass(slots=True)
 class ContractLoader:
-    """Load ODCS YAML contracts into ODCS model objects."""
+    """Load ODCS YAML contracts into ODCS model objects.
+
+    Purpose:
+    - Provide a single loader that supports all contract storage locations we
+      operate in (local, HTTP/S, ADLS2, Unity Catalog volumes).
+    - Support notebook runtimes (Synapse/Fabric) via `mssparkutils`.
+    - Always return an `OpenDataContractStandard` model, since we only support ODCS.
+    """
 
     runtime_context: RuntimeContext = "auto"
 
@@ -33,7 +40,12 @@ def load_contract(
     contract_path: str,
     runtime_context: RuntimeContext | str | None = None,
 ) -> OpenDataContractStandard:
-    """Load an ODCS contract from local or remote YAML sources."""
+    """Load an ODCS contract from local or remote YAML sources.
+
+    This is intentionally more capable than `OpenDataContractStandard.from_file`,
+    because we need to handle remote paths (ADLS2/HTTP) and notebook-only access
+    methods (mssparkutils).
+    """
     resolved_context = _resolve_runtime_context(runtime_context)
     contract_text = _read_contract_text(contract_path, resolved_context)
     payload = yaml.safe_load(contract_text)
@@ -43,6 +55,7 @@ def load_contract(
 
 
 def _read_contract_text(contract_path: str, runtime_context: RuntimeContext) -> str:
+    """Return raw YAML text from the supported storage backends."""
     if _is_uc_volume_path(contract_path):
         return _read_uc_volume_text(contract_path, runtime_context)
 
@@ -68,6 +81,7 @@ def _read_contract_text(contract_path: str, runtime_context: RuntimeContext) -> 
 
 
 def _read_uc_volume_text(contract_path: str, runtime_context: RuntimeContext) -> str:
+    """Read from UC volume paths, preferring local `/dbfs` if available."""
     local_candidate = _normalize_uc_volume_local_path(contract_path)
     try:
         return _read_local_text(local_candidate)
@@ -80,6 +94,7 @@ def _read_uc_volume_text(contract_path: str, runtime_context: RuntimeContext) ->
 
 
 def _read_local_text(contract_path: str) -> str:
+    """Read a local file (plain path or file:// URI)."""
     parsed = urlparse(contract_path)
     if parsed.scheme == "file":
         local_path = Path(parsed.path).expanduser()
@@ -89,12 +104,14 @@ def _read_local_text(contract_path: str) -> str:
 
 
 def _read_adls2_text(contract_path: str) -> str:
+    """Read ADLS2 content via HTTPS, using bearer token if configured."""
     https_url = _adls2_to_https_url(contract_path)
     headers = _adls2_headers(https_url)
     return _read_http_text(https_url, headers=headers)
 
 
 def _read_http_text(url: str, headers: Optional[dict[str, str]] = None) -> str:
+    """Fetch contract text over HTTP/S with optional headers."""
     response = requests.get(url, headers=headers or {}, timeout=30)
     if not response.ok:
         raise RuntimeError(
@@ -105,6 +122,7 @@ def _read_http_text(url: str, headers: Optional[dict[str, str]] = None) -> str:
 
 
 def _read_with_mssparkutils(contract_path: str) -> Optional[str]:
+    """Attempt to read via mssparkutils in Synapse/Fabric runtimes."""
     mssparkutils = _get_mssparkutils()
     if mssparkutils is None:
         return None
@@ -141,6 +159,7 @@ def _get_mssparkutils() -> Any:
 
 
 def _resolve_runtime_context(runtime_context: RuntimeContext | str | None) -> RuntimeContext:
+    """Normalize runtime_context for notebook-aware reads."""
     candidate = runtime_context or os.getenv("CONTRACTHUB_RUNTIME_CONTEXT", "auto")
     normalized = str(candidate).strip().lower()
     if normalized == "local":

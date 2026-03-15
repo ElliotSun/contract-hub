@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from typing import Any
-
+from open_data_contract_standard.model import CustomProperty, OpenDataContractStandard, SchemaObject, SchemaProperty
 from contracthub.lifecycle.helpers import is_active_contract, normalize_status, schema_items
 from contracthub.lifecycle.merge_engine import _decimal_precision_reduction, _decimal_scale_reduction
 
@@ -24,7 +24,10 @@ class PolicyEvaluation:
     breaking_changes: list[BreakingChange] = field(default_factory=list)
 
 
-def evaluate_merge_policy(base_contract: dict[str, Any], merged_contract: dict[str, Any]) -> PolicyEvaluation:
+def evaluate_merge_policy(
+    base_contract: OpenDataContractStandard,
+    merged_contract: OpenDataContractStandard,
+) -> PolicyEvaluation:
     """Evaluate breaking-change policy for a merged contract.
 
     Breaking checks apply only when contract status is active and schema/field
@@ -75,12 +78,13 @@ def evaluate_merge_policy(base_contract: dict[str, Any], merged_contract: dict[s
     return PolicyEvaluation(valid=not breaks, breaking_changes=breaks)
 
 
-def _schema_key(schema: dict[str, Any]) -> str:
-    return str(schema.get("physicalName") or schema.get("name") or "").lower()
+def _schema_key(schema: SchemaObject) -> str:
+    value = schema.physicalName or schema.name or ""
+    return str(value).lower()
 
 
-def _schema_index(contract: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    index: dict[str, dict[str, Any]] = {}
+def _schema_index(contract: OpenDataContractStandard) -> dict[str, SchemaObject]:
+    index: dict[str, SchemaObject] = {}
     for schema in schema_items(contract):
         key = _schema_key(schema)
         if key:
@@ -88,31 +92,36 @@ def _schema_index(contract: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return index
 
 
-def _prop_index(schema: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    properties = schema.get("properties")
+def _prop_index(schema: SchemaObject) -> dict[str, SchemaProperty]:
+    properties = schema.properties
     if not isinstance(properties, list):
         return {}
 
-    index: dict[str, dict[str, Any]] = {}
+    index: dict[str, SchemaProperty] = {}
     for prop in properties:
-        if not isinstance(prop, dict):
-            continue
-        key = str(prop.get("physicalName") or prop.get("name") or "").lower()
+        key = str(prop.physicalName or prop.name or "").lower()
         if key:
             index[key] = prop
     return index
 
 
-def _is_draft_or_deprecated(entity: dict[str, Any]) -> bool:
-    lifecycle_status = normalize_status(entity.get("lifecycleStatus"), default="active")
+def _is_draft_or_deprecated(entity: SchemaObject | SchemaProperty) -> bool:
+    value = getattr(entity, "lifecycleStatus", None)
+    if value is None:
+        value = _lifecycle_from_custom_properties(getattr(entity, "customProperties", None))
+    lifecycle_status = normalize_status(value, default="active")
     return lifecycle_status in {"draft", "deprecated"}
 
 
-def _property_breaking_changes(base_prop: dict[str, Any], target_prop: dict[str, Any], path: str) -> list[BreakingChange]:
+def _property_breaking_changes(
+    base_prop: SchemaProperty,
+    target_prop: SchemaProperty,
+    path: str,
+) -> list[BreakingChange]:
     breaks: list[BreakingChange] = []
 
-    base_logical = base_prop.get("logicalType")
-    target_logical = target_prop.get("logicalType")
+    base_logical = base_prop.logicalType
+    target_logical = target_prop.logicalType
     if base_logical is not None and target_logical is not None and str(base_logical) != str(target_logical):
         breaks.append(
             BreakingChange(
@@ -121,8 +130,8 @@ def _property_breaking_changes(base_prop: dict[str, Any], target_prop: dict[str,
             )
         )
 
-    base_physical = base_prop.get("physicalType")
-    target_physical = target_prop.get("physicalType")
+    base_physical = base_prop.physicalType
+    target_physical = target_prop.physicalType
 
     if _is_physical_type_narrowing(base_physical, target_physical):
         breaks.append(
@@ -142,8 +151,8 @@ def _property_breaking_changes(base_prop: dict[str, Any], target_prop: dict[str,
             )
         )
 
-    base_required = base_prop.get("required")
-    target_required = target_prop.get("required")
+    base_required = base_prop.required
+    target_required = target_prop.required
     if base_required is False and target_required is True:
         breaks.append(
             BreakingChange(
@@ -216,7 +225,10 @@ def _type_width(physical_type: str) -> int | None:
     return None
 
 
-def _is_enum_value_reduction(base_prop: dict[str, Any], target_prop: dict[str, Any]) -> bool:
+def _is_enum_value_reduction(
+    base_prop: SchemaProperty,
+    target_prop: SchemaProperty,
+) -> bool:
     base_values = _enum_values(base_prop)
     target_values = _enum_values(target_prop)
     if not base_values or not target_values:
@@ -224,10 +236,25 @@ def _is_enum_value_reduction(base_prop: dict[str, Any], target_prop: dict[str, A
     return not base_values.issubset(target_values)
 
 
-def _enum_values(prop: dict[str, Any]) -> set[str]:
+def _enum_values(prop: SchemaProperty) -> set[str]:
     for key in ("enum", "enumValues"):
-        values = prop.get(key)
+        values = getattr(prop, key, None)
         if not isinstance(values, list):
             continue
         return {str(item) for item in values}
     return set()
+
+
+def _lifecycle_from_custom_properties(custom_properties: Any) -> Any:
+    if not isinstance(custom_properties, list):
+        return None
+    for item in custom_properties:
+        if isinstance(item, CustomProperty):
+            key = (item.property or "").strip().lower()
+            if key == "lifecyclestatus":
+                return item.value
+        elif isinstance(item, dict):
+            key = str(item.get("property") or "").strip().lower()
+            if key == "lifecyclestatus":
+                return item.get("value")
+    return None
