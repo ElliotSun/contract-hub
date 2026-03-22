@@ -1,0 +1,436 @@
+"""Single-page Streamlit application for ContractHub."""
+
+from __future__ import annotations
+
+from copy import deepcopy
+from typing import Any
+
+import streamlit as st
+
+from contracthub.interfaces.streamlit.editor.analysis import render_analysis_body, run_analysis
+from contracthub.interfaces.streamlit.editor.contract_model import (
+    contract_data_product,
+    contract_description_part,
+    contract_domain,
+    contract_status,
+    contract_tags,
+    contract_tenant,
+    contract_to_yaml,
+    contract_version,
+    parse_yaml_payload,
+)
+from contracthub.interfaces.streamlit.editor.raw_yaml import apply_raw_yaml, validate_raw_yaml
+from contracthub.interfaces.streamlit.editor.sections import (
+    render_advanced_tab,
+    render_contract_section,
+    render_infrastructure_section,
+    render_quality_tab,
+    render_schema_tab,
+)
+from contracthub.interfaces.streamlit.editor.state import (
+    ensure_selected_field,
+    ensure_selected_schema,
+    sync_contract_inputs,
+    sync_field_inputs,
+    sync_schema_inputs,
+)
+from contracthub.interfaces.streamlit.editor.styles import catalog_badges_html, inject_app_styles, section_title
+from contracthub.interfaces.streamlit.services.contract_service import load_sample_contract_yaml
+
+
+st.set_page_config(page_title="ContractHub", layout="wide")
+
+CATALOG_SORT_OPTIONS = ["Name", "Version", "Status", "Domain", "Tenant"]
+
+
+def main() -> None:
+    """Render the single-page ContractHub UI."""
+    inject_app_styles()
+    _ensure_app_state()
+
+    if st.session_state["view_mode"] == "catalog":
+        _render_catalog_view()
+        return
+
+    _render_detail_view()
+
+
+# Header
+
+def _render_catalog_header() -> None:
+    """Render the catalog header."""
+    title_col, actions_col = st.columns([1.25, 0.75], gap="large")
+    with title_col:
+        st.title("ContractHub")
+        st.caption("Business-first contract catalog")
+    with actions_col:
+        action_col_1, action_col_2 = st.columns([1.0, 1.0], gap="small")
+        with action_col_2:
+            st.markdown("<div style='height: 1.8rem'></div>", unsafe_allow_html=True)
+            if st.button("New Contract", width="stretch"):
+                _handle_new_contract()
+
+    filter_cols = st.columns([1.45, 0.85, 0.85, 0.85], gap="small")
+    with filter_cols[0]:
+        st.text_input("Search", key="catalog_search", placeholder="Search contracts by data product")
+    with filter_cols[1]:
+        st.selectbox("Domain", options=["All", *_catalog_filter_options("domain")], key="catalog_filter_domain")
+    with filter_cols[2]:
+        st.selectbox("Status", options=["All", *_catalog_filter_options("status")], key="catalog_filter_status")
+    with filter_cols[3]:
+        st.selectbox("Sort By", options=CATALOG_SORT_OPTIONS, key="catalog_sort_by")
+
+
+def _render_detail_header(contract: dict[str, Any]) -> None:
+    """Render the detail panel header."""
+    title_col, actions_col = st.columns([1.2, 0.8], gap="large")
+    with title_col:
+        st.title("ContractHub")
+        st.subheader(f"{contract_data_product(contract) or 'Untitled Contract'}  ·  {contract_version(contract) or 'Not defined'}")
+    with actions_col:
+        button_cols = st.columns(3, gap="small")
+        with button_cols[0]:
+            if st.button("Back to Catalog", width="stretch"):
+                st.session_state["view_mode"] = "catalog"
+                st.session_state["editor_analysis_visible"] = False
+                st.rerun()
+        with button_cols[1]:
+            if st.button("Analyze Changes", width="stretch"):
+                _handle_analyze()
+        with button_cols[2]:
+            if st.button("Save", width="stretch"):
+                _handle_save()
+
+
+# Catalog View
+
+def _render_catalog_view() -> None:
+    """Render the catalog landing page."""
+    _render_catalog_header()
+    st.divider()
+    section_title("Contract Catalog", "Browse contracts, filter business context, and jump into detail editing when needed.")
+
+    entries = _filtered_catalog_entries()
+    if not entries:
+        st.info("No contracts match the current search and filters.")
+        return
+
+    columns = st.columns(2, gap="large")
+    for index, entry in enumerate(entries):
+        with columns[index % len(columns)]:
+            _render_catalog_card(entry)
+
+
+def _render_catalog_card(entry: dict[str, Any]) -> None:
+    """Render a business-first catalog card."""
+    contract = entry["contract"]
+    status = str(contract_status(contract) or "draft").lower()
+
+    with st.container(border=True):
+        st.markdown(f"### {contract_data_product(contract) or 'Untitled Contract'}")
+        st.markdown(
+            f"<div class='ch-card-subtitle'>{contract_domain(contract) or 'Domain not defined'}</div>",
+            unsafe_allow_html=True,
+        )
+        st.caption(f"Version {contract_version(contract) or 'Not defined'}")
+        st.markdown(
+            catalog_badges_html(status, entry.get("flags", []), contract_tags(contract)),
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            f"<div class='ch-card-purpose'>{_summary_text(contract_description_part(contract, 'purpose'), fallback='No purpose defined.')}</div>",
+            unsafe_allow_html=True,
+        )
+        st.caption(_summary_text(contract_description_part(contract, "usage"), fallback="No usage summary defined."))
+
+        action_cols = st.columns(2, gap="small")
+        with action_cols[0]:
+            if st.button("View Details", key=f"catalog_view_{entry['id']}", width="stretch"):
+                _open_contract(entry, edit_mode=False)
+        with action_cols[1]:
+            if st.button("Edit", key=f"catalog_edit_{entry['id']}", width="stretch"):
+                _open_contract(entry, edit_mode=True)
+
+
+# Detail Panel
+
+def _render_detail_view() -> None:
+    """Render the selected contract detail panel."""
+    contract = st.session_state.get("contract")
+    if not isinstance(contract, dict):
+        st.session_state["view_mode"] = "catalog"
+        st.rerun()
+        return
+
+    _render_detail_header(contract)
+    st.divider()
+    render_contract_section(contract)
+    st.divider()
+
+    schema_tab, quality_tab, advanced_tab = st.tabs(["Schema", "Quality", "Advanced"])
+    with schema_tab:
+        render_schema_tab(contract)
+    with quality_tab:
+        render_quality_tab(contract)
+    with advanced_tab:
+        render_advanced_tab(
+            contract,
+            on_apply_yaml=apply_raw_yaml,
+            on_validate_yaml=validate_raw_yaml,
+            generated_yaml=contract_to_yaml(contract),
+        )
+
+    if st.session_state.get("editor_analysis_visible") and isinstance(st.session_state.get("editor_analysis_result"), dict):
+        st.divider()
+        # Analyze Results
+        section_title("Analyze Results", "Review governance impact before saving contract changes.")
+        render_analysis_body(st.session_state["editor_analysis_result"])
+
+    st.divider()
+    render_infrastructure_section(contract)
+
+
+# State Logic
+
+def _ensure_app_state() -> None:
+    """Initialize app-level session state."""
+    if "catalog_contracts" not in st.session_state:
+        st.session_state["catalog_contracts"] = _build_catalog_entries()
+    if "view_mode" not in st.session_state:
+        st.session_state["view_mode"] = "catalog"
+    if "selected_contract_id" not in st.session_state:
+        st.session_state["selected_contract_id"] = None
+    if "contract" not in st.session_state:
+        st.session_state["contract"] = None
+    if "editor_baseline_yaml" not in st.session_state:
+        st.session_state["editor_baseline_yaml"] = ""
+    if "editor_analysis_result" not in st.session_state:
+        st.session_state["editor_analysis_result"] = None
+    if "editor_analysis_visible" not in st.session_state:
+        st.session_state["editor_analysis_visible"] = False
+    if "editor_notice" not in st.session_state:
+        st.session_state["editor_notice"] = None
+    if "editor_warning" not in st.session_state:
+        st.session_state["editor_warning"] = None
+    if "editor_error" not in st.session_state:
+        st.session_state["editor_error"] = None
+    if "catalog_search" not in st.session_state:
+        st.session_state["catalog_search"] = ""
+    if "catalog_filter_domain" not in st.session_state:
+        st.session_state["catalog_filter_domain"] = "All"
+    if "catalog_filter_status" not in st.session_state:
+        st.session_state["catalog_filter_status"] = "All"
+    if "catalog_sort_by" not in st.session_state:
+        st.session_state["catalog_sort_by"] = CATALOG_SORT_OPTIONS[0]
+
+    if st.session_state.get("editor_notice"):
+        st.success(st.session_state["editor_notice"])
+        st.session_state["editor_notice"] = None
+    if st.session_state.get("editor_warning"):
+        st.warning(st.session_state["editor_warning"])
+        st.session_state["editor_warning"] = None
+    if st.session_state.get("editor_error"):
+        st.error(st.session_state["editor_error"])
+        st.session_state["editor_error"] = None
+
+
+def _build_catalog_entries() -> list[dict[str, Any]]:
+    """Build an in-memory contract catalog from the repository sample."""
+    sample_yaml = load_sample_contract_yaml()
+    sample_contract = parse_yaml_payload(sample_yaml)
+
+    legacy_contract = deepcopy(sample_contract)
+    legacy_contract["dataProduct"] = "seller payments legacy"
+    legacy_contract["version"] = "1.0.0"
+    legacy_contract["status"] = "deprecated"
+    legacy_contract.setdefault("description", {})["purpose"] = "Legacy seller payment metrics for decommissioning workflows."
+    legacy_contract["description"]["usage"] = "Reference only for backfill and historic validation."
+    legacy_contract["tags"] = ["finance", "legacy"]
+
+    breaking_contract = deepcopy(sample_contract)
+    breaking_contract["dataProduct"] = "seller payments next"
+    breaking_contract["version"] = "1.2.0"
+    breaking_contract["status"] = "active"
+    breaking_contract.setdefault("description", {})["purpose"] = "Upcoming seller payment contract with pending schema changes."
+    breaking_contract["description"]["usage"] = "Used for rollout planning and release readiness checks."
+    breaking_contract["tags"] = ["finance", "candidate"]
+
+    draft_contract = deepcopy(sample_contract)
+    draft_contract["dataProduct"] = "seller settlements sandbox"
+    draft_contract["version"] = "0.3.0"
+    draft_contract["status"] = "draft"
+    draft_contract.setdefault("description", {})["purpose"] = "Draft contract for sandbox settlement testing."
+    draft_contract["description"]["usage"] = "Internal experimentation only."
+    draft_contract["tags"] = ["sandbox", "testing"]
+
+    return [
+        {"id": "sample", "contract": deepcopy(sample_contract), "flags": []},
+        {"id": "legacy", "contract": legacy_contract, "flags": ["deprecated"]},
+        {"id": "breaking", "contract": breaking_contract, "flags": ["breaking"]},
+        {"id": "draft", "contract": draft_contract, "flags": []},
+    ]
+
+
+def _open_contract(entry: dict[str, Any], *, edit_mode: bool) -> None:
+    """Load a catalog contract into detail view."""
+    contract_copy = deepcopy(entry["contract"])
+    st.session_state["contract"] = contract_copy
+    st.session_state["selected_contract_id"] = entry["id"]
+    st.session_state["view_mode"] = "detail"
+    st.session_state["editor_baseline_yaml"] = contract_to_yaml(contract_copy)
+    st.session_state["editor_analysis_result"] = None
+    st.session_state["editor_analysis_visible"] = False
+    st.session_state["editor_selected_schema_index"] = 0
+    st.session_state["editor_selected_field_index"] = 0
+    ensure_selected_schema(contract_copy)
+    ensure_selected_field(contract_copy)
+    sync_contract_inputs(contract_copy, force=True)
+    sync_schema_inputs(contract_copy, force=True)
+    sync_field_inputs(contract_copy, force=True)
+    if edit_mode:
+        st.session_state["editor_schema_detail_mode"] = False
+    st.rerun()
+
+
+def _handle_new_contract() -> None:
+    """Create a new contract and open detail view."""
+    new_contract = {
+        "apiVersion": "v3.1.0",
+        "kind": "DataContract",
+        "dataProduct": "new data product",
+        "version": "0.1.0",
+        "status": "draft",
+        "domain": "",
+        "tenant": "",
+        "description": {"purpose": "", "limitations": "", "usage": ""},
+        "tags": [],
+        "schema": [
+            {
+                "name": "default_schema",
+                "businessName": "",
+                "description": "",
+                "tags": [],
+                "properties": [],
+            }
+        ],
+        "servers": [],
+    }
+    new_entry = {
+        "id": f"new_{len(st.session_state['catalog_contracts']) + 1}",
+        "contract": deepcopy(new_contract),
+        "flags": [],
+    }
+    st.session_state["catalog_contracts"] = [new_entry, *st.session_state["catalog_contracts"]]
+    _open_contract(new_entry, edit_mode=True)
+
+
+def _handle_analyze() -> None:
+    """Run analysis for the selected detail contract."""
+    contract = st.session_state.get("contract")
+    if not isinstance(contract, dict):
+        return
+    run_analysis(contract)
+    st.session_state["editor_analysis_visible"] = isinstance(st.session_state.get("editor_analysis_result"), dict)
+
+
+def _handle_save() -> None:
+    """Persist the edited contract back into the in-memory catalog."""
+    contract = st.session_state.get("contract")
+    if not isinstance(contract, dict):
+        return
+
+    selected_id = st.session_state.get("selected_contract_id")
+    updated_entries: list[dict[str, Any]] = []
+    saved = False
+    for entry in st.session_state["catalog_contracts"]:
+        if entry["id"] == selected_id:
+            updated_entries.append({**entry, "contract": deepcopy(contract)})
+            saved = True
+        else:
+            updated_entries.append(entry)
+
+    if not saved:
+        updated_entries.insert(0, {"id": f"saved_{len(updated_entries) + 1}", "contract": deepcopy(contract), "flags": []})
+    st.session_state["catalog_contracts"] = updated_entries
+    st.session_state["editor_baseline_yaml"] = contract_to_yaml(contract)
+    st.session_state["editor_saved_yaml"] = st.session_state["editor_baseline_yaml"]
+    st.session_state["editor_analysis_visible"] = False
+    st.session_state["editor_notice"] = "Contract saved to the in-memory catalog."
+    st.rerun()
+
+
+# Helpers
+
+def _filtered_catalog_entries() -> list[dict[str, Any]]:
+    """Apply search, filter, and sorting to the catalog."""
+    entries = list(st.session_state.get("catalog_contracts", []))
+    search = str(st.session_state.get("catalog_search", "")).strip().lower()
+    domain_filter = st.session_state.get("catalog_filter_domain", "All")
+    status_filter = st.session_state.get("catalog_filter_status", "All")
+    sort_by = st.session_state.get("catalog_sort_by", CATALOG_SORT_OPTIONS[0])
+
+    def include(entry: dict[str, Any]) -> bool:
+        contract = entry["contract"]
+        if domain_filter != "All" and contract_domain(contract) != domain_filter:
+            return False
+        if status_filter != "All" and contract_status(contract) != status_filter:
+            return False
+        if not search:
+            return True
+        haystack = " ".join(
+            [
+                contract_data_product(contract),
+                contract_version(contract),
+                contract_status(contract),
+                contract_domain(contract),
+                contract_tenant(contract),
+                contract_description_part(contract, "purpose"),
+                contract_description_part(contract, "usage"),
+                " ".join(contract_tags(contract)),
+            ]
+        ).lower()
+        return search in haystack
+
+    filtered = [entry for entry in entries if include(entry)]
+
+    def sort_key(entry: dict[str, Any]) -> str:
+        contract = entry["contract"]
+        if sort_by == "Version":
+            return contract_version(contract)
+        if sort_by == "Status":
+            return contract_status(contract)
+        if sort_by == "Domain":
+            return contract_domain(contract)
+        if sort_by == "Tenant":
+            return contract_tenant(contract)
+        return contract_data_product(contract)
+
+    return sorted(filtered, key=lambda entry: sort_key(entry).lower())
+
+
+def _catalog_filter_options(field: str) -> list[str]:
+    """Return unique filter values for a catalog field."""
+    values = set()
+    for entry in st.session_state.get("catalog_contracts", []):
+        contract = entry["contract"]
+        if field == "domain":
+            value = contract_domain(contract)
+        elif field == "status":
+            value = contract_status(contract)
+        else:
+            value = contract_tenant(contract)
+        if value:
+            values.add(value)
+    return sorted(values)
+
+
+def _summary_text(value: str, *, fallback: str) -> str:
+    """Render a short business summary."""
+    normalized = str(value or "").strip()
+    if not normalized:
+        return fallback
+    return normalized if len(normalized) <= 140 else f"{normalized[:137]}..."
+
+
+if __name__ == "__main__":
+    main()
