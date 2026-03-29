@@ -9,6 +9,8 @@ contracthub/
   core/
     loader.py
     validator.py
+  exporters/
+    sql_exporter.py
   importers/
     delta_importer.py
     sql_importer.py
@@ -18,7 +20,6 @@ contracthub/
     helpers.py
   quality/
     ge_exporter.py
-    sql_exporter.py
     validation.py
   orchestrator/
     pipeline.py
@@ -35,6 +36,12 @@ contracthub/
 
 ```bash
 uv sync --extra dev
+```
+
+Azure-backed contract storage support:
+
+```bash
+uv sync --extra dev --extra azure
 ```
 
 ## CLI
@@ -72,4 +79,18 @@ GreatExpectationsExporter().export_to_path(merged.contract, "./artifacts/orders_
 - ContractHub registers custom importers (`delta`, `sql-folder`) into datacontract-cli's importer factory.
 - Merge and lifecycle policy logic are isolated in `contracthub.lifecycle`.
 - Great Expectations suite generation uses datacontract-cli exporter APIs.
+- Databricks/Spark SQL deployment DDL generation lives in `contracthub.exporters.sql_exporter`.
+- Databricks-only quality constraint mapping is appended only when `sql_server_type="databricks"`.
+- Great Expectations export follows a two-step validation boundary:
+  - contract-level quality rule validation in `contracthub.core.validator`
+  - GE-specific expectation preflight in `contracthub.quality.ge_exporter`
 - Legacy packages `contracthub_importers` and `contracthub_enforcement` have been removed.
+- Contract catalog storage currently supports:
+  - local filesystem paths
+  - ADLS2 paths (`abfs://`, `abfss://`, or `https://<account>.dfs.core.windows.net/...`)
+  - Databricks Unity Catalog volume paths (`/Volumes/...`, `dbfs:/Volumes/...`)
+- ADLS2 access is SDK-based and supports only:
+  - `CONTRACTHUB_ADLS_BEARER_TOKEN`
+  - `azure.identity.DefaultAzureCredential`
+- SAS URL authentication is not supported.
+- Unity Catalog external volumes are accessed as mounted paths and do not use separate ContractHub-managed cloud auth.

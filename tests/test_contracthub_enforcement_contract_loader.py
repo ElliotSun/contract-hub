@@ -28,36 +28,42 @@ def test_load_contract_from_local_file(tmp_path):
 def test_load_contract_from_adls2_via_http(monkeypatch):
     calls: dict[str, object] = {}
 
-    class FakeResponse:
-        ok = True
-        status_code = 200
-        text = CONTRACT_YAML
-
-    class FakeFS:
+    class FakeDownloader:
         @staticmethod
-        def head(path, maxBytes):  # noqa: ANN001, N803
-            raise AssertionError("mssparkutils should not be used in auto context")
+        def readall() -> bytes:
+            return CONTRACT_YAML.encode("utf-8")
 
-    class FakeMSSparkUtils:
-        fs = FakeFS()
+    class FakeFileClient:
+        def __init__(self, account_url, file_system_name, file_path, credential):  # noqa: ANN001
+            calls["account_url"] = account_url
+            calls["file_system_name"] = file_system_name
+            calls["file_path"] = file_path
+            calls["credential"] = credential
 
-    def fake_get(url, headers, timeout):  # noqa: ANN001
-        calls["url"] = url
-        calls["headers"] = headers
-        calls["timeout"] = timeout
-        return FakeResponse()
+        @staticmethod
+        def download_file() -> FakeDownloader:
+            return FakeDownloader()
 
-    monkeypatch.setattr(loader, "_get_mssparkutils", lambda: FakeMSSparkUtils())
-    monkeypatch.setattr(loader.requests, "get", fake_get)
+    monkeypatch.setattr(
+        loader,
+        "_import_azure_datalake_sdk",
+        lambda: {
+            "AccessToken": object,
+            "DataLakeFileClient": FakeFileClient,
+            "DataLakeServiceClient": object,
+        },
+    )
+    monkeypatch.setattr(loader, "_resolve_adls2_credential", lambda _: "credential-1")
 
     loaded = loader.load_contract(
-        "abfss://contracts@acct.dfs.core.windows.net/domain/orders.yaml?sig=abc123"
+        "abfss://contracts@acct.dfs.core.windows.net/domain/orders.yaml"
     )
 
     assert loaded.name == "orders"
-    assert calls["url"] == "https://acct.dfs.core.windows.net/contracts/domain/orders.yaml?sig=abc123"
-    assert calls["headers"] == {}
-    assert calls["timeout"] == 30
+    assert calls["account_url"] == "https://acct.dfs.core.windows.net"
+    assert calls["file_system_name"] == "contracts"
+    assert calls["file_path"] == "domain/orders.yaml"
+    assert calls["credential"] == "credential-1"
 
 
 @pytest.mark.parametrize("runtime_context", ["synapse", "fabric"])
@@ -221,10 +227,6 @@ def test_adls2_uri_conversion_and_headers(monkeypatch):
     with pytest.raises(ValueError, match="format abfss://"):
         loader._adls2_to_https_url("abfss://acct.dfs.core.windows.net/path.yaml")  # noqa: SLF001
 
-    assert loader._adls2_headers("https://x.dfs.core.windows.net/c/path.yaml?sig=abc") == {}  # noqa: SLF001
-    monkeypatch.setenv("CONTRACTHUB_ADLS_BEARER_TOKEN", "token-1")
-    assert loader._adls2_headers("https://x.dfs.core.windows.net/c/path.yaml") == {"Authorization": "Bearer token-1"}  # noqa: E501, SLF001
-
 
 def test_read_contract_text_classifiers():
     assert loader._is_uc_volume_path("/Volumes/main/silver/c.yaml") is True  # noqa: SLF001
@@ -260,6 +262,48 @@ def test_get_mssparkutils_returns_none_when_all_imports_fail(monkeypatch):
     assert loader._get_mssparkutils() is None  # noqa: SLF001
 
 
-def test_adls2_headers_without_sig_and_without_token_is_empty(monkeypatch):
+def test_resolve_adls2_credential_uses_static_token_wrapper(monkeypatch):
+    class FakeAccessToken:
+        def __init__(self, token, expires_on):  # noqa: ANN001
+            self.token = token
+            self.expires_on = expires_on
+
+    monkeypatch.setenv("CONTRACTHUB_ADLS_BEARER_TOKEN", "token-1")
+    monkeypatch.setattr(
+        loader,
+        "_import_azure_datalake_sdk",
+        lambda: {
+            "AccessToken": FakeAccessToken,
+            "DataLakeFileClient": object,
+            "DataLakeServiceClient": object,
+        },
+    )
+
+    credential = loader._resolve_adls2_credential("abfss://c@acct.dfs.core.windows.net/path.yaml")  # noqa: SLF001
+    token = credential.get_token("https://storage.azure.com/.default")
+
+    assert token.token == "token-1"
+
+
+def test_resolve_adls2_credential_uses_default_azure_credential(monkeypatch):
+    class FakeDefaultAzureCredential:
+        pass
+
+    class FakeAzureIdentity:
+        DefaultAzureCredential = FakeDefaultAzureCredential
+
     monkeypatch.delenv("CONTRACTHUB_ADLS_BEARER_TOKEN", raising=False)
-    assert loader._adls2_headers("https://x.dfs.core.windows.net/c/path.yaml") == {}  # noqa: SLF001
+    monkeypatch.setattr(
+        loader,
+        "_import_azure_datalake_sdk",
+        lambda: {
+            "AccessToken": object,
+            "DataLakeFileClient": object,
+            "DataLakeServiceClient": object,
+        },
+    )
+    monkeypatch.setattr(loader.importlib, "import_module", lambda name: FakeAzureIdentity if name == "azure.identity" else (_ for _ in ()).throw(ImportError(name)))
+
+    credential = loader._resolve_adls2_credential("abfss://c@acct.dfs.core.windows.net/path.yaml")  # noqa: SLF001
+
+    assert isinstance(credential, FakeDefaultAzureCredential)

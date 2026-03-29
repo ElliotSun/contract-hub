@@ -7,6 +7,7 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 from contracthub.interfaces.streamlit.services import governance_service
+from contracthub.lifecycle.merge_engine import MergeAnalysis, MergeConflict
 
 from .constants import CHANGE_FILTER_OPTIONS
 from .contract_model import contract_to_yaml
@@ -110,14 +111,37 @@ def run_analysis(contract: dict[str, Any]) -> None:
     st.session_state["editor_error"] = None
 
 
-def normalize_analysis_result(raw_result: dict[str, Any]) -> dict[str, Any]:
+def normalize_analysis_result(raw_result: Any) -> dict[str, Any]:
     """Normalize governance output for editor display."""
-    if {"diff", "breaking_changes", "auto_deprecations", "allowed"}.issubset(raw_result):
+    if isinstance(raw_result, dict) and {"diff", "breaking_changes", "auto_deprecations", "allowed"}.issubset(raw_result):
         return {
             "diff": list(raw_result.get("diff", []) or []),
             "breaking_changes": list(raw_result.get("breaking_changes", []) or []),
             "auto_deprecations": list(raw_result.get("auto_deprecations", []) or []),
             "allowed": bool(raw_result.get("allowed")),
+        }
+
+    if isinstance(raw_result, MergeAnalysis):
+        breaking_changes = [_conflict_to_row(conflict) for conflict in raw_result.conflicts]
+        auto_deprecations: list[dict[str, Any]] = []
+        for schema_name in sorted(raw_result.deprecated_schemas):
+            auto_deprecations.append({"field": schema_name, "action": "Mark as deprecated"})
+        for schema_name, property_names in sorted(raw_result.deprecated_properties.items()):
+            for property_name in sorted(property_names):
+                auto_deprecations.append({"field": f"{schema_name}.{property_name}", "action": "Mark as deprecated"})
+
+        diff_rows = [
+            {"field": item["field"], "change_type": "MODIFIED", "detail": item["issue"]}
+            for item in breaking_changes
+        ] + [
+            {"field": item["field"], "change_type": "DEPRECATED", "detail": item["action"]}
+            for item in auto_deprecations
+        ]
+        return {
+            "diff": diff_rows,
+            "breaking_changes": breaking_changes,
+            "auto_deprecations": auto_deprecations,
+            "allowed": not breaking_changes,
         }
 
     breaking_changes = [
@@ -208,4 +232,19 @@ def field_governance_info_for(schema_obj: dict[str, Any], field_obj: dict[str, A
         "breaking_emoji": "🚨" if breaking_message else "",
         "deprecation": deprecation_message,
         "deprecation_emoji": "⚠️" if deprecation_message else "",
+    }
+
+
+def _conflict_to_row(conflict: MergeConflict) -> dict[str, Any]:
+    """Normalize a merge conflict object for UI display."""
+    return {
+        "field": compose_field_name(
+            {
+                "schema_id": conflict.schema_id,
+                "property_name": conflict.property_name,
+            }
+        ),
+        "issue": conflict.message or conflict.rule or "breaking change detected",
+        "from": conflict.business_value,
+        "to": conflict.base_value,
     }

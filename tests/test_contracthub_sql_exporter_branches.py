@@ -1,8 +1,8 @@
 import pytest
 
-from open_data_contract_standard.model import OpenDataContractStandard, SchemaObject, SchemaProperty
+from open_data_contract_standard.model import DataQuality, OpenDataContractStandard, SchemaObject, SchemaProperty
 
-import contracthub.quality.sql_exporter as exporter_mod
+import contracthub.exporters.sql_exporter as exporter_mod
 
 
 def _minimal_contract_model():
@@ -76,3 +76,84 @@ def test_upsert_unity_server_replaces_existing():
     servers = [s for s in (contract.servers or []) if s.server == "contracthub_target"]
     assert len(servers) == 1
     assert servers[0].catalog == "main2"
+
+
+def test_export_contract_appends_check_constraint_for_valid_values():
+    contract = _minimal_contract_model()
+    contract.schema_[0].properties[0].quality = [
+        DataQuality(
+            metric="invalidValues",
+            mustBe=0,
+            arguments={"validValues": ["A", "B"]},
+        )
+    ]
+
+    ddl = exporter_mod.export_contract_to_spark_sql(contract)
+
+    assert "ADD CONSTRAINT chk_tbl_phys_id_phys_valid_values" in ddl
+    assert "CHECK (id_phys IN ('A', 'B'))" in ddl
+
+
+def test_export_contract_appends_check_constraint_for_pattern():
+    contract = _minimal_contract_model()
+    contract.schema_[0].properties[0].quality = [
+        DataQuality(
+            metric="invalidValues",
+            mustBe=0,
+            arguments={"pattern": "^[A-Z]{2}$"},
+        )
+    ]
+
+    ddl = exporter_mod.export_contract_to_spark_sql(contract)
+
+    assert "ADD CONSTRAINT chk_tbl_phys_id_phys_pattern" in ddl
+    assert "CHECK (id_phys RLIKE '^[A-Z]{2}$')" in ddl
+
+
+def test_export_contract_does_not_duplicate_not_null_when_required_already_true():
+    contract = _minimal_contract_model()
+    contract.schema_[0].properties[0].required = True
+    contract.schema_[0].properties[0].quality = [
+        DataQuality(metric="nullValues", mustBe=0),
+    ]
+
+    ddl = exporter_mod.export_contract_to_spark_sql(contract)
+
+    assert "id_phys BIGINT not null" in ddl
+    assert "ALTER COLUMN id_phys SET NOT NULL" not in ddl
+
+
+def test_export_contract_ignores_non_mappable_quality_rules():
+    contract = _minimal_contract_model()
+    contract.schema_[0].properties[0].quality = [
+        DataQuality(metric="duplicateValues", mustBe=0),
+        DataQuality(metric="rowCount", mustBeGreaterThan=0),
+    ]
+
+    ddl = exporter_mod.export_contract_to_spark_sql(contract)
+
+    assert "ADD CONSTRAINT" not in ddl
+    assert "ALTER COLUMN" not in ddl
+
+
+def test_export_contract_does_not_append_quality_constraints_for_non_databricks_target():
+    contract = _minimal_contract_model()
+    contract.schema_[0].properties[0].quality = [
+        DataQuality(metric="nullValues", mustBe=0),
+        DataQuality(metric="invalidValues", mustBe=0, arguments={"validValues": ["A"]}),
+    ]
+
+    ddl = exporter_mod.export_contract_to_spark_sql(contract, sql_server_type="postgres")
+
+    assert "ALTER TABLE" not in ddl
+    assert "ADD CONSTRAINT" not in ddl
+
+
+def test_export_contract_rejects_unity_catalog_for_non_databricks_target():
+    with pytest.raises(ValueError, match="only supported for sql_server_type=databricks"):
+        exporter_mod.export_contract_to_spark_sql(
+            _minimal_contract_model(),
+            unity_catalog="main",
+            unity_schema="silver",
+            sql_server_type="postgres",
+        )

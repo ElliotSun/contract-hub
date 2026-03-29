@@ -25,9 +25,16 @@ class ContractLoader:
 
     Purpose:
     - Provide a single loader that supports all contract storage locations we
-      operate in (local, HTTP/S, ADLS2, Unity Catalog volumes).
+      operate in (local paths, ADLS2, HTTP/S, and Unity Catalog volumes).
     - Support notebook runtimes (Synapse/Fabric) via `mssparkutils`.
     - Always return an `OpenDataContractStandard` model, since we only support ODCS.
+
+    Storage/auth scope:
+    - ADLS2 access is SDK-based and uses either a configured bearer token or
+      `azure.identity.DefaultAzureCredential`.
+    - Unity Catalog external volumes are treated as mounted paths and read via
+      the local/Databricks filesystem layer, not via ContractHub-managed cloud auth.
+    - SAS URL authentication is intentionally not supported.
     """
 
     runtime_context: RuntimeContext = "auto"
@@ -43,8 +50,8 @@ def load_contract(
     """Load an ODCS contract from local or remote YAML sources.
 
     This is intentionally more capable than `OpenDataContractStandard.from_file`,
-    because we need to handle remote paths (ADLS2/HTTP) and notebook-only access
-    methods (mssparkutils).
+    because we need to handle supported remote paths (ADLS2/HTTP) and
+    notebook-only access methods (`mssparkutils`).
     """
     resolved_context = _resolve_runtime_context(runtime_context)
     contract_text = _read_contract_text(contract_path, resolved_context)
@@ -81,7 +88,7 @@ def _read_contract_text(contract_path: str, runtime_context: RuntimeContext) -> 
 
 
 def _read_uc_volume_text(contract_path: str, runtime_context: RuntimeContext) -> str:
-    """Read from UC volume paths, preferring local `/dbfs` if available."""
+    """Read from UC volume paths, preferring mounted local `/dbfs` access."""
     local_candidate = _normalize_uc_volume_local_path(contract_path)
     try:
         return _read_local_text(local_candidate)
@@ -104,10 +111,17 @@ def _read_local_text(contract_path: str) -> str:
 
 
 def _read_adls2_text(contract_path: str) -> str:
-    """Read ADLS2 content via HTTPS, using bearer token if configured."""
-    https_url = _adls2_to_https_url(contract_path)
-    headers = _adls2_headers(https_url)
-    return _read_http_text(https_url, headers=headers)
+    """Read ADLS2 content via Azure Storage SDK.
+
+    We prefer the Microsoft SDK here so auth can follow Azure-native patterns
+    such as `DefaultAzureCredential` instead of custom REST handling.
+    """
+    file_client = _create_adls2_file_client(contract_path)
+    downloader = file_client.download_file()
+    payload = downloader.readall()
+    if isinstance(payload, bytes):
+        return payload.decode("utf-8")
+    return str(payload)
 
 
 def _read_http_text(url: str, headers: Optional[dict[str, str]] = None) -> str:
@@ -119,6 +133,24 @@ def _read_http_text(url: str, headers: Optional[dict[str, str]] = None) -> str:
             f"status={response.status_code}, body={response.text[:500]}"
         )
     return response.text
+
+
+def _list_adls2_paths(root_path: str) -> list[str]:
+    """List YAML documents under an ADLS2 root using the Azure SDK."""
+    parsed_root = _parse_adls2_path(root_path)
+    if _looks_like_yaml_path(parsed_root["relative_path"]):
+        return [root_path]
+
+    filesystem_client = _create_adls2_filesystem_client(root_path)
+    discovered: list[str] = []
+    for entry in filesystem_client.get_paths(path=parsed_root["relative_path"] or None, recursive=True):
+        entry_name = str(getattr(entry, "name", "") or "")
+        if not entry_name or bool(getattr(entry, "is_directory", False)):
+            continue
+        if not _looks_like_yaml_path(entry_name):
+            continue
+        discovered.append(_adls2_document_path(parsed_root, entry_name))
+    return sorted(discovered, key=str.lower)
 
 
 def _read_with_mssparkutils(contract_path: str) -> Optional[str]:
@@ -156,6 +188,73 @@ def _get_mssparkutils() -> Any:
         return importlib.import_module("mssparkutils")
     except Exception:
         return None
+
+
+def _create_adls2_file_client(contract_path: str) -> Any:
+    """Create a `DataLakeFileClient` for a single ADLS2 file path."""
+    sdk = _import_azure_datalake_sdk()
+    parsed = _parse_adls2_path(contract_path)
+    credential = _resolve_adls2_credential(contract_path)
+    return sdk["DataLakeFileClient"](
+        account_url=parsed["account_url"],
+        file_system_name=parsed["filesystem"],
+        file_path=parsed["relative_path"],
+        credential=credential,
+    )
+
+
+def _create_adls2_filesystem_client(root_path: str) -> Any:
+    """Create a `DataLakeFileSystemClient` for ADLS2 directory listing."""
+    sdk = _import_azure_datalake_sdk()
+    parsed = _parse_adls2_path(root_path)
+    credential = _resolve_adls2_credential(root_path)
+    service_client = sdk["DataLakeServiceClient"](
+        account_url=parsed["account_url"],
+        credential=credential,
+    )
+    return service_client.get_file_system_client(file_system=parsed["filesystem"])
+
+
+def _resolve_adls2_credential(contract_path: str) -> Any | None:
+    """Resolve Azure auth using bearer token or `DefaultAzureCredential`.
+
+    ContractHub does not support SAS-based ADLS2 authentication.
+    """
+    sdk = _import_azure_datalake_sdk()
+    token = os.getenv("CONTRACTHUB_ADLS_BEARER_TOKEN")
+    if token:
+        return _StaticBearerTokenCredential(
+            token=token,
+            AccessToken=sdk["AccessToken"],
+        )
+
+    try:
+        azure_identity = importlib.import_module("azure.identity")
+    except ImportError as exc:
+        raise RuntimeError(
+            "ADLS2 access requires azure-identity or CONTRACTHUB_ADLS_BEARER_TOKEN. "
+            "Install with `pip install datacontract-flow[azure]`."
+        ) from exc
+
+    return azure_identity.DefaultAzureCredential()
+
+
+def _import_azure_datalake_sdk() -> dict[str, Any]:
+    """Import Azure SDK types lazily so local-only flows stay lightweight."""
+    try:
+        azure_core_credentials = importlib.import_module("azure.core.credentials")
+        azure_datalake = importlib.import_module("azure.storage.filedatalake")
+    except ImportError as exc:
+        raise RuntimeError(
+            "ADLS2 access requires azure-storage-file-datalake. "
+            "Install with `pip install datacontract-flow[azure]`."
+        ) from exc
+
+    return {
+        "AccessToken": azure_core_credentials.AccessToken,
+        "DataLakeFileClient": azure_datalake.DataLakeFileClient,
+        "DataLakeServiceClient": azure_datalake.DataLakeServiceClient,
+    }
 
 
 def _resolve_runtime_context(runtime_context: RuntimeContext | str | None) -> RuntimeContext:
@@ -223,12 +322,58 @@ def _adls2_to_https_url(contract_path: str) -> str:
     return f"https://{account_host}/{container}/{relative_path}{query}"
 
 
-def _adls2_headers(https_url: str) -> dict[str, str]:
-    parsed = urlparse(https_url)
-    if "sig=" in parsed.query.lower():
-        return {}
+def _parse_adls2_path(contract_path: str) -> dict[str, str]:
+    """Normalize ADLS2 paths for SDK-based access."""
+    parsed = urlparse(contract_path)
+    if parsed.scheme in {"abfs", "abfss"}:
+        if "@" not in parsed.netloc:
+            raise ValueError("ADLS2 URI must be in format abfss://<container>@<account>.dfs.core.windows.net/<path>")
+        filesystem, account_host = parsed.netloc.split("@", 1)
+        relative_path = parsed.path.lstrip("/")
+    elif parsed.scheme in {"http", "https"} and parsed.netloc.endswith(".dfs.core.windows.net"):
+        path_parts = parsed.path.lstrip("/").split("/", 1)
+        if not path_parts or not path_parts[0]:
+            raise ValueError("ADLS2 HTTPS URI must include the filesystem path segment")
+        filesystem = path_parts[0]
+        account_host = parsed.netloc
+        relative_path = path_parts[1] if len(path_parts) > 1 else ""
+    else:
+        raise ValueError(f"Unsupported ADLS2 URI: {contract_path}")
 
-    token = os.getenv("CONTRACTHUB_ADLS_BEARER_TOKEN")
-    if token:
-        return {"Authorization": f"Bearer {token}"}
-    return {}
+    return {
+        "filesystem": filesystem,
+        "account_host": account_host,
+        "relative_path": relative_path.rstrip("/"),
+        "account_url": f"https://{account_host}",
+        "scheme": parsed.scheme,
+        "query": parsed.query,
+    }
+
+
+def _adls2_document_path(parsed_adls2_path: dict[str, str], relative_path: str) -> str:
+    query = f"?{parsed_adls2_path['query']}" if parsed_adls2_path["query"] else ""
+    if parsed_adls2_path["scheme"] in {"abfs", "abfss"}:
+        return (
+            f"{parsed_adls2_path['scheme']}://{parsed_adls2_path['filesystem']}"
+            f"@{parsed_adls2_path['account_host']}/{relative_path}{query}"
+        )
+    return (
+        f"https://{parsed_adls2_path['account_host']}/{parsed_adls2_path['filesystem']}"
+        f"/{relative_path}{query}"
+    )
+
+
+def _looks_like_yaml_path(path: str) -> bool:
+    lowered = str(path or "").lower()
+    return lowered.endswith(".yaml") or lowered.endswith(".yml")
+
+
+class _StaticBearerTokenCredential:
+    """Minimal TokenCredential wrapper around a pre-fetched bearer token."""
+
+    def __init__(self, token: str, AccessToken: Any) -> None:  # noqa: N803
+        self._token = token
+        self._access_token_cls = AccessToken
+
+    def get_token(self, *scopes: str, **kwargs: Any) -> Any:  # noqa: ARG002
+        return self._access_token_cls(self._token, 2_000_000_000)

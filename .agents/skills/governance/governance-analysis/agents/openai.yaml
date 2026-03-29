@@ -1,0 +1,4 @@
+interface:
+  display_name: "Governance Analysis"
+  short_description: "Analyze contract changes for safe evolution"
+  default_prompt: "Use $governance-analysis to review ContractHub breaking changes, deprecations, and merge decisions between main and draft contracts."

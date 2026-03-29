@@ -1,3 +1,19 @@
+"""ContractHub orchestration pipeline for import, merge, validation, and export.
+
+This module is not the interactive draft-editing workflow used by the UI.
+Instead, it is the automation layer for batch and CI/CD scenarios where we:
+
+1. import or generate a technical contract from a source system
+2. load an existing lifecycle-governed contract from storage/Git
+3. merge technical updates into the governed contract
+4. validate the merged result
+5. evaluate lifecycle policy
+6. export downstream artifacts such as GE suites and CI manifests
+
+Think of this module as the non-interactive "pipeline runner" for ContractHub.
+It is useful for engineering automation, scheduled imports, and GitOps flows.
+"""
+
 from __future__ import annotations
 
 import json
@@ -34,7 +50,19 @@ class PipelineArtifacts:
 
 @dataclass(slots=True)
 class ContractPipeline:
-    """Orchestrate ContractHub import, merge, export, and CI artifact generation."""
+    """Orchestrate ContractHub import, merge, export, and CI artifact generation.
+
+    Purpose:
+    - Provide one non-UI entrypoint for technical schema ingestion and governed
+      contract artifact generation.
+    - Encapsulate the standard execution order for automation:
+      import -> merge -> validate -> policy check -> export artifacts.
+
+    Important boundary:
+    - This pipeline works with the canonical lifecycle-governed contract.
+    - It is not the user draft workflow. UI draft save/analyze flows belong to
+      the service layer and governance adapters.
+    """
 
     runtime_context: str = "auto"
     loader: ContractLoader = field(init=False)
@@ -43,6 +71,7 @@ class ContractPipeline:
     ge_exporter: GreatExpectationsExporter = field(init=False)
 
     def __post_init__(self) -> None:
+        """Initialize shared collaborators for pipeline execution."""
         self.loader = ContractLoader(runtime_context=self.runtime_context)
         self.validator = ContractValidator()
         self.merge_engine = ContractMergeEngine()
@@ -58,6 +87,16 @@ class ContractPipeline:
         uc_token: str | None = None,
         import_args: dict[str, Any] | None = None,
     ) -> OpenDataContractStandard:
+        """Import a technical contract from a supported source type.
+
+        This step creates the "source" side of the merge:
+        the latest contract representation generated from a system of record
+        such as SQL DDL, Delta metadata, or Unity Catalog metadata.
+
+        If `existing_contract` is provided, the importer result is immediately
+        merged against it using the merge engine. This is mainly useful for
+        importer-driven patch/update scenarios.
+        """
         import_args = import_args or {}
         normalized = source_type.strip().lower()
 
@@ -92,6 +131,15 @@ class ContractPipeline:
         *,
         fail_on_conflict: bool = False,
     ) -> MergeResult:
+        """Merge imported technical updates into the governed target contract.
+
+        Terminology:
+        - `imported_contract`: newly generated technical/source contract
+        - `business_contract`: lifecycle-governed target contract from Git
+
+        The merge engine preserves governed metadata while applying technical
+        schema updates and lifecycle rules.
+        """
         # `business_contract` is the lifecycle-governed target contract in Git.
         target_contract = business_contract
         return self.merge_engine.merge(
@@ -101,6 +149,7 @@ class ContractPipeline:
         )
 
     def validate_contract(self, contract: OpenDataContractStandard) -> ValidationReport:
+        """Run contract-level structural and quality-rule validation."""
         return self.validator.validate(contract)
 
     def evaluate_policy(
@@ -108,6 +157,7 @@ class ContractPipeline:
         base_contract: OpenDataContractStandard,
         merged_contract: OpenDataContractStandard,
     ) -> PolicyEvaluation:
+        """Evaluate lifecycle policy on the merged contract result."""
         return evaluate_merge_policy(base_contract, merged_contract)
 
     def prepare_ci_cd_artifacts(
@@ -124,6 +174,13 @@ class ContractPipeline:
         ge_suite_name: str | None = None,
         audit_metadata: AuditMetadata | None = None,
     ) -> PipelineArtifacts:
+        """Write the merged contract and downstream CI/CD artifacts to disk.
+
+        Artifacts currently include:
+        - merged contract YAML
+        - Great Expectations suite JSON
+        - CI manifest summarizing validation, policy, conflicts, and outputs
+        """
         merged_contract_path = dump_yaml(contract_to_dict(merged_contract), merged_contract_output_path)
         ge_suite_path = self.ge_exporter.export_to_path(
             merged_contract,
@@ -170,6 +227,19 @@ class ContractPipeline:
         ge_suite_name: str | None = None,
         audit_metadata: AuditMetadata | None = None,
     ) -> PipelineArtifacts:
+        """Execute the full ContractHub automation pipeline end to end.
+
+        Execution order:
+        1. import technical/source contract
+        2. load existing governed contract
+        3. block execution for retired contracts
+        4. merge imported updates into the governed contract
+        5. validate merged contract structure and rule completeness
+        6. evaluate lifecycle policy/version constraints
+        7. write merged contract + artifact outputs
+
+        This is the main API for CI/CD or scheduled automation jobs.
+        """
         imported_contract = self.import_schema(
             source_type,
             source,
@@ -223,6 +293,7 @@ class ContractPipeline:
         )
 
     def _resolve_lifecycle(self, contract: OpenDataContractStandard) -> str:
+        """Resolve lifecycle status from status or customProperties fallback."""
         value = (contract.status or "").strip().lower()
         if value:
             return value
@@ -241,6 +312,7 @@ def _import_unity_contract(
     workspace_url: str | None,
     token: str | None,
 ) -> OpenDataContractStandard:
+    """Import a Unity Catalog contract using datacontract-cli's unity importer."""
     if not workspace_url or not token:
         raise ValueError("uc_workspace_url and uc_token are required for uc source_type")
 

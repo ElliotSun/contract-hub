@@ -4,8 +4,10 @@ from pathlib import Path
 
 import pytest
 
+import contracthub.core.loader as contract_loader
+import contracthub.utils.yaml_utils as yaml_utils
 from contracthub.utils.schema_utils import contract_to_dict, contract_to_model, ensure_schema_key
-from contracthub.utils.yaml_utils import dump_yaml, load_yaml
+from contracthub.utils.yaml_utils import dump_yaml, list_yaml_documents, load_yaml
 
 
 def test_yaml_utils_can_load_and_dump_sample_contract(sample_odcs_dict, tmp_path):
@@ -23,6 +25,65 @@ def test_yaml_utils_rejects_non_mapping_yaml(tmp_path):
 
     with pytest.raises(ValueError, match="mapping object"):
         load_yaml(invalid_yaml)
+
+
+def test_yaml_utils_list_yaml_documents_supports_recursive_local_root(tmp_path):
+    contracts_root = tmp_path / "contracts"
+    dump_yaml({"id": "a"}, contracts_root / "domain-a" / "a.yaml")
+    dump_yaml({"id": "b"}, contracts_root / "domain-b" / "nested" / "b.yml")
+    (contracts_root / "ignore.txt").write_text("x", encoding="utf-8")
+
+    discovered = list_yaml_documents(contracts_root)
+
+    assert discovered == [
+        str((contracts_root / "domain-a" / "a.yaml").resolve()),
+        str((contracts_root / "domain-b" / "nested" / "b.yml").resolve()),
+    ]
+
+
+def test_yaml_utils_list_yaml_documents_supports_adls2_directory(monkeypatch):
+    monkeypatch.setattr(
+        contract_loader,
+        "_list_adls2_paths",
+        lambda root: [
+            "abfss://contracts@acct.dfs.core.windows.net/contracts/a.yaml",
+            "abfss://contracts@acct.dfs.core.windows.net/contracts/sub/b.yml",
+        ],
+    )
+
+    discovered = list_yaml_documents("abfss://contracts@acct.dfs.core.windows.net/contracts")
+
+    assert discovered == [
+        "abfss://contracts@acct.dfs.core.windows.net/contracts/a.yaml",
+        "abfss://contracts@acct.dfs.core.windows.net/contracts/sub/b.yml",
+    ]
+
+
+def test_yaml_utils_load_yaml_metadata_supports_adls2_file(monkeypatch):
+    class FakeDownloader:
+        @staticmethod
+        def readall() -> bytes:
+            return b"id: orders\ndataProduct: seller_payments\nversion: 1.0.0\nstatus: active\ntenant: tenant-a\n"
+
+    class FakeFileClient:
+        @staticmethod
+        def download_file() -> FakeDownloader:
+            return FakeDownloader()
+
+    monkeypatch.setattr(contract_loader, "_create_adls2_file_client", lambda path: FakeFileClient())
+
+    metadata = yaml_utils.load_yaml_metadata(
+        "abfss://contracts@acct.dfs.core.windows.net/orders.yaml",
+        keys=["id", "dataProduct", "version", "status", "tenant"],
+    )
+
+    assert metadata == {
+        "id": "orders",
+        "dataProduct": "seller_payments",
+        "version": "1.0.0",
+        "status": "active",
+        "tenant": "tenant-a",
+    }
 
 
 def test_schema_utils_convert_sample_contract_between_input_types(sample_odcs_dict, sample_odcs_path, sample_odcs_model):

@@ -37,6 +37,29 @@ def test_suite_dict_defaults_name_and_skips_invalid_entries(monkeypatch):
     assert suite.expectations[0].expectation_type == "expect_column_values_to_not_be_null"
 
 
+def test_validate_ge_suite_dict_rejects_unknown_expectation(monkeypatch):
+    monkeypatch.setattr(ge_adapter, "_load_ge_expectation_registry", lambda: lambda expectation_type: None)
+
+    with pytest.raises(ValueError, match="Unknown Great Expectations rule"):
+        ge_adapter._validate_ge_suite_dict(  # noqa: SLF001
+            {
+                "expectations": [
+                    {
+                        "type": "definitely_not_real_expectation",
+                        "kwargs": {},
+                    }
+                ]
+            }
+        )
+
+
+def test_validate_ge_suite_dict_requires_expectations_list(monkeypatch):
+    monkeypatch.setattr(ge_adapter, "_load_ge_expectation_registry", lambda: lambda expectation_type: object())
+
+    with pytest.raises(ValueError, match="expectations list"):
+        ge_adapter._validate_ge_suite_dict({"expectations": {}})  # noqa: SLF001
+
+
 def test_create_suite_object_falls_back_to_name_kwarg():
     class FallbackSuite:
         def __init__(self, **kwargs):
