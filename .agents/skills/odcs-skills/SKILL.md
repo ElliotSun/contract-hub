@@ -52,7 +52,8 @@ Load these references as needed:
   Use for package/module boundaries and architecture alignment decisions.
 - `references/ContractHub DevOps Workflow.md`
   Use for GitOps flow, CI/CD expectations, and delivery workflow constraints.
-
+- `reference/ContractHub Streamlit UI.md`
+  Use for any UI related developments, make sure UI does not have any business logics.
 ## Repository Pointers
 
 - Use `sample_odcs.yaml` as baseline ODCS shape.
