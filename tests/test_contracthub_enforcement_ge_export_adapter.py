@@ -42,9 +42,9 @@ def test_generate_expectation_suite_uses_datacontract_exporter(monkeypatch):
         "_load_ge_suite_classes",
         lambda: (FakeExpectationSuite, FakeExpectationConfiguration),
     )
+    monkeypatch.setattr(ge_adapter, "_load_ge_expectation_registry", lambda: lambda expectation_type: object())
 
     suite = ge_adapter.generate_expectation_suite(contract=object(), schema_name="all")
     assert suite.expectation_suite_name == "suite.sample"
     assert len(suite.expectations) == 1
     assert suite.expectations[0].expectation_type == "expect_column_values_to_not_be_null"
-

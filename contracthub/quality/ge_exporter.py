@@ -1,10 +1,29 @@
+"""Great Expectations export adapter for ODCS contracts.
+
+Responsibilities:
+- normalize supported contract inputs into the canonical ODCS model
+- delegate GE suite generation to datacontract-cli's built-in exporter
+- run a lightweight GE-specific preflight check on the exported suite payload
+- build a notebook/runtime-friendly ExpectationSuite object
+
+Validation boundary:
+- Contract-level quality rule validation belongs in `contracthub.core.validator`
+- GE-specific expectation validation belongs here, after datacontract-cli has
+  mapped ODCS rules to Great Expectations expectation configs
+
+This module intentionally does not:
+- execute Spark or pandas validations
+- implement governance logic
+- implement vendor-specific deployment beyond Great Expectations suite generation
+"""
+
 from __future__ import annotations
 
 import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Optional, TypedDict, cast
 
 from datacontract.export.exporter import ExportFormat
 from datacontract.export.exporter_factory import exporter_factory
@@ -15,9 +34,30 @@ from contracthub.utils.schema_utils import contract_to_model
 LOGGER = logging.getLogger(__name__)
 
 
+class ExpectationConfigDict(TypedDict, total=False):
+    """Minimal JSON shape for one exported GE expectation."""
+
+    expectation_type: str
+    type: str
+    kwargs: dict[str, Any]
+    meta: dict[str, Any]
+
+
+class ExpectationSuiteDict(TypedDict, total=False):
+    """Minimal JSON shape returned by datacontract-cli GE exporter."""
+
+    name: str
+    expectations: list[ExpectationConfigDict]
+
+
 @dataclass(slots=True)
 class GreatExpectationsExporter:
-    """Export ODCS contracts to Great Expectations suites via datacontract-cli."""
+    """Export ODCS contracts to Great Expectations suites via datacontract-cli.
+
+    This is the GE adapter for generic Spark/pandas-style runtime validation.
+    It is not the deployment mechanism for Databricks constraints or Lakeflow
+    expectations.
+    """
 
     def generate_suite(
         self,
@@ -57,7 +97,12 @@ def generate_expectation_suite(
     schema_name: str = "all",
     suite_name: Optional[str] = None,
 ) -> Any:
-    """Generate a Great Expectations ExpectationSuite using datacontract-cli exporter."""
+    """Generate a Great Expectations suite using datacontract-cli exporter.
+
+    The exporter first maps ODCS quality rules into GE expectation JSON and then
+    performs a GE-specific preflight check to catch unknown expectation types
+    before notebook/runtime execution.
+    """
     exporter = exporter_factory.create(ExportFormat.great_expectations)
     exported = exporter.export(
         data_contract=contract,
@@ -66,11 +111,13 @@ def generate_expectation_suite(
         sql_server_type="auto",
         export_args={"engine": "spark", "suite_name": suite_name},
     )
-    suite_dict = json.loads(exported)
+    suite_dict = cast(ExpectationSuiteDict, json.loads(exported))
+    _validate_ge_suite_dict(suite_dict)
     return _suite_dict_to_expectation_suite(suite_dict)
 
 
-def _suite_dict_to_expectation_suite(suite_dict: Dict[str, Any]) -> Any:
+def _suite_dict_to_expectation_suite(suite_dict: ExpectationSuiteDict) -> Any:
+    """Build a GE ExpectationSuite instance from exported JSON."""
     ExpectationSuite, ExpectationConfiguration = _load_ge_suite_classes()
 
     suite_name = suite_dict.get("name") or "contracthub_suite"
@@ -79,7 +126,7 @@ def _suite_dict_to_expectation_suite(suite_dict: Dict[str, Any]) -> Any:
     for expectation in suite_dict.get("expectations", []):
         if not isinstance(expectation, dict):
             continue
-        expectation_type = expectation.get("expectation_type") or expectation.get("type")
+        expectation_type = _expectation_type(expectation)
         if not expectation_type:
             continue
 
@@ -91,6 +138,44 @@ def _suite_dict_to_expectation_suite(suite_dict: Dict[str, Any]) -> Any:
         _add_expectation(expectation_suite, config)
 
     return expectation_suite
+
+
+def _validate_ge_suite_dict(suite_dict: ExpectationSuiteDict) -> None:
+    """Run lightweight GE-specific sanity checks before building a suite.
+
+    This is intentionally a preflight check, not a runtime data validation. It
+    ensures the exported suite shape is sane and that each expectation type can
+    be resolved by the installed Great Expectations registry.
+    """
+    if not isinstance(suite_dict, dict):
+        raise ValueError("Great Expectations exporter output must deserialize into a mapping object")
+
+    expectations = suite_dict.get("expectations", [])
+    if not isinstance(expectations, list):
+        raise ValueError("Great Expectations suite must contain an expectations list")
+
+    get_expectation_impl = _load_ge_expectation_registry()
+
+    for index, expectation in enumerate(expectations):
+        if not isinstance(expectation, dict):
+            raise ValueError(f"Expectation at index {index} must be a mapping object")
+
+        expectation_type = _expectation_type(expectation)
+        if not expectation_type:
+            raise ValueError(f"Expectation at index {index} must define expectation_type or type")
+
+        try:
+            expectation_impl = get_expectation_impl(expectation_type)
+        except Exception as exc:
+            raise ValueError(f"Failed to resolve Great Expectations rule '{expectation_type}'") from exc
+
+        if not expectation_impl:
+            raise ValueError(f"Unknown Great Expectations rule '{expectation_type}'")
+
+
+def _expectation_type(expectation: ExpectationConfigDict) -> str:
+    """Resolve the GE expectation type from exporter JSON."""
+    return str(expectation.get("expectation_type") or expectation.get("type") or "").strip()
 
 
 def _create_suite_object(ExpectationSuite: Any, suite_name: str) -> Any:
@@ -145,7 +230,20 @@ def _load_ge_suite_classes() -> tuple[Any, Any]:
                 ) from third_exc
 
 
+def _load_ge_expectation_registry() -> Any:
+    """Load the GE expectation registry used for export-time preflight checks."""
+    try:
+        from great_expectations.expectations.registry import get_expectation_impl
+
+        return get_expectation_impl
+    except Exception as exc:
+        raise RuntimeError(
+            "great_expectations expectation registry is required to validate exported suites"
+        ) from exc
+
+
 def _to_json_safe_dict(value: Any) -> dict[str, Any]:
+    """Fallback JSON serialization for suite-like objects across GE versions."""
     if isinstance(value, dict):
         return value
     if hasattr(value, "__dict__"):

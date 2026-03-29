@@ -1,133 +1,95 @@
-You are working on the ContractHub platform.
+# ContractHub Architecture
 
 This skill defines the permanent architecture rules for the system.
 
 These rules ALWAYS override task-level instructions.
 
+------------------------------------------------
 CORE PURPOSE
 
-ContractHub is an enterprise data contract control plane that manages Open Data Contract Standard (ODCS) contracts across:
+ContractHub is an enterprise data contract control plane.
 
-Databricks Unity Catalog
-
-Delta Lake
-
-SparkSQL pipelines
-
-Great Expectations validation
-
-GitOps CI/CD workflows
-
+------------------------------------------------
 ARCHITECTURE PRINCIPLES
 
-The system must follow strict layered architecture:
+The system must follow strict layered architecture.
 
-1. Import Layer
+------------------------------------------------
+1. IMPORT LAYER
 
-Responsible ONLY for converting external sources into ODCS contracts.
+Responsible ONLY for converting external sources into ODCS.
 
-Importers must:
+Rules:
 
-Be stateless
+- stateless
+- idempotent
+- NO merge logic
+- NO governance logic
+- NO CI/CD logic
 
-Be idempotent
+------------------------------------------------
+2. CORE CONTRACT MODEL
 
-Contain NO merge logic
+- ODCS YAML is the single canonical model
+- No alternative representations allowed
 
-Contain NO governance rules
+------------------------------------------------
+3. LIFECYCLE GOVERNANCE LAYER
 
-Contain NO CI/CD behavior
+Handles:
 
-Importers only perform mapping:
+- breaking change detection
+- lifecycle evaluation
+- merge policy
+- deprecation
 
-External Metadata → ODCS Contract
+Rules:
 
-2. Core Contract Model
+- ONLY place for lifecycle logic
+- must not be implemented elsewhere
 
-ODCS YAML is the single canonical representation.
+------------------------------------------------
+4. EXPORT LAYER
 
-All modules must operate on this model.
+- Converts contracts to artifacts (GE, CI, etc.)
+- MUST NOT modify contracts
 
-No alternative internal schema representations are allowed.
+------------------------------------------------
+5. ORCHESTRATION LAYER
 
-3. Lifecycle Governance Layer
+- Coordinates workflows (import → merge → export → PR)
+- MUST NOT contain business logic
 
-All contract lifecycle logic belongs exclusively to the governance engine.
+------------------------------------------------
+6. DEVOPS LAYER
 
-This includes:
+- PR creation
+- versioning
+- audit metadata
 
-Breaking change detection
-
-LifecycleStatus evaluation
-
-Auto-deprecation rules
-
-Merge policy enforcement
-
-Importers must never implement lifecycle logic.
-
-4. Export Layer
-
-Exporters convert contracts into operational artifacts such as:
-
-Great Expectations suites
-
-CI validation configs
-
-Exporters must not modify contracts.
-
-5. Orchestration Layer
-
-Orchestrators coordinate workflows:
-
-Import → Merge → Export → PR
-
-They must not contain business logic.
-
-6. DevOps Layer
-
-Handles Git integration:
-
-PR creation
-
-Version management
-
-Audit metadata
-
+------------------------------------------------
 TECHNICAL CONSTRAINTS
 
-Python 3.11
+- Python 3.11
+- typed code
+- modular design
+- reusable components
 
-Fully typed
-
-Modular design
-
-Testable components
-
-Pure Python where possible
-
-No Spark dependencies in importers
-
-datacontract-cli must be reused
-
+------------------------------------------------
 DESIGN GUARDRAILS
 
 NEVER:
 
-Put merge logic in importers
-
-Reimplement datacontract-cli features
-
-Mix governance logic with ingestion logic
-
-Create monolithic modules
+- put merge logic in importers
+- mix governance with ingestion
+- create monolithic modules
 
 ALWAYS:
 
-Separate responsibilities
+- separate responsibilities
+- enforce clean boundaries
 
-Favor composable services
+------------------------------------------------
+GOAL
 
-Maintain clean module boundaries
-
-END OF SKILL
+Ensure a scalable, maintainable, and extensible system architecture.

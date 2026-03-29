@@ -7,4 +7,6 @@
     "python.testing.cwd": "${workspaceFolder}",
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,
+    "python-envs.defaultEnvManager": "ms-python.python:venv",
+    "chatgpt.openOnStartup": false,
 }

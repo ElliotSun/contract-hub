@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any, Iterable
 from pathlib import Path
 
-from open_data_contract_standard.model import OpenDataContractStandard, SchemaObject, SchemaProperty
+from open_data_contract_standard.model import DataQuality, OpenDataContractStandard, SchemaObject, SchemaProperty
 
 from contracthub.utils.schema_utils import contract_to_model
 
@@ -30,8 +30,8 @@ class ValidationReport:
 class ContractValidator:
     """Validate ODCS schema structure and quality rule completeness."""
 
-    def validate(self, contract_input: OpenDataContractStandard | str | Path) -> ValidationReport:
-        contract = contract_to_model(contract_input)
+    def validate(self, contract_input: OpenDataContractStandard | dict[str, Any] | str | Path) -> ValidationReport:
+        contract = _normalize_contract(contract_input)
         issues: list[ValidationIssue] = []
 
         if not contract.schema_:
@@ -88,38 +88,143 @@ class ContractValidator:
 
         return issues
 
-    def _validate_quality_rules(self, path: str, rules: Iterable[Any]) -> list[ValidationIssue]:
+    def _validate_quality_rules(self, path: str, rules: Iterable[DataQuality | None]) -> list[ValidationIssue]:
         issues: list[ValidationIssue] = []
-        threshold_keys = {
-            "mustBe",
-            "mustNotBe",
-            "mustBeGreaterThan",
-            "mustBeGreaterOrEqualTo",
-            "mustBeLessThan",
-            "mustBeLessOrEqualTo",
-            "mustBeBetween",
-            "mustNotBeBetween",
-            "rule",
-            "query",
-            "implementation",
-        }
 
         for idx, rule in enumerate(rules):
             if rule is None:
                 issues.append(ValidationIssue(path=f"{path}[{idx}]", message="Quality rule must not be null"))
                 continue
 
-            metric = getattr(rule, "metric", None)
-            if not metric:
-                issues.append(ValidationIssue(path=f"{path}[{idx}].metric", message="Quality rule metric is required"))
+            issues.extend(self._validate_quality_rule(f"{path}[{idx}]", rule))
 
-            has_threshold = any(getattr(rule, key, None) is not None for key in threshold_keys)
-            if not has_threshold:
+        return issues
+
+    def _validate_quality_rule(self, path: str, rule: DataQuality) -> list[ValidationIssue]:
+        issues: list[ValidationIssue] = []
+        rule_type = self._quality_rule_type(rule)
+
+        if rule_type not in {"library", "text", "sql", "custom"}:
+            issues.append(
+                ValidationIssue(
+                    path=f"{path}.type",
+                    message="Quality rule type must be one of: library, text, sql, custom",
+                )
+            )
+            return issues
+
+        if rule_type == "library":
+            metric = str(rule.metric or rule.rule or "").strip()
+            if not metric:
+                issues.append(ValidationIssue(path=f"{path}.metric", message="Library quality rule metric is required"))
+                return issues
+
+            if metric not in {"nullValues", "missingValues", "invalidValues", "duplicateValues", "rowCount"}:
                 issues.append(
                     ValidationIssue(
-                        path=f"{path}[{idx}]",
-                        message="Quality rule must include at least one assertion threshold or implementation",
+                        path=f"{path}.metric",
+                        message="Unsupported ODCS library metric",
+                    )
+                )
+
+            if not self._has_comparison(rule):
+                issues.append(
+                    ValidationIssue(
+                        path=path,
+                        message="Library quality rule must include at least one comparison operator",
+                    )
+                )
+
+            arguments = rule.arguments
+            if metric == "missingValues" and not self._argument_value(arguments, "missingValues"):
+                issues.append(
+                    ValidationIssue(
+                        path=f"{path}.arguments.missingValues",
+                        message="missingValues metric requires arguments.missingValues",
+                    )
+                )
+            if metric == "invalidValues" and not (
+                self._argument_value(arguments, "validValues") or self._argument_value(arguments, "pattern")
+            ):
+                issues.append(
+                    ValidationIssue(
+                        path=f"{path}.arguments",
+                        message="invalidValues metric requires arguments.validValues or arguments.pattern",
+                    )
+                )
+            if metric == "duplicateValues" and path.startswith("schema[") and ".properties[" not in path:
+                if not self._argument_value(arguments, "properties"):
+                    issues.append(
+                        ValidationIssue(
+                            path=f"{path}.arguments.properties",
+                            message="Schema-level duplicateValues metric requires arguments.properties",
+                        )
+                    )
+
+        elif rule_type == "text":
+            if not str(rule.description or "").strip():
+                issues.append(ValidationIssue(path=f"{path}.description", message="Text quality rule description is required"))
+
+        elif rule_type == "sql":
+            if not str(rule.query or "").strip():
+                issues.append(ValidationIssue(path=f"{path}.query", message="SQL quality rule query is required"))
+            if not self._has_comparison(rule):
+                issues.append(
+                    ValidationIssue(
+                        path=path,
+                        message="SQL quality rule must include at least one comparison operator",
+                    )
+                )
+
+        elif rule_type == "custom":
+            if not str(rule.engine or "").strip():
+                issues.append(ValidationIssue(path=f"{path}.engine", message="Custom quality rule engine is required"))
+            if not str(rule.implementation or "").strip():
+                issues.append(
+                    ValidationIssue(
+                        path=f"{path}.implementation",
+                        message="Custom quality rule implementation is required",
                     )
                 )
 
         return issues
+
+    def _quality_rule_type(self, rule: DataQuality) -> str:
+        explicit_type = str(rule.type or "").strip()
+        if explicit_type:
+            return explicit_type
+        if rule.metric or rule.rule:
+            return "library"
+        return "library"
+
+    def _has_comparison(self, rule: DataQuality) -> bool:
+        return any(
+            value is not None
+            for value in (
+                rule.mustBe,
+                rule.mustNotBe,
+                rule.mustBeGreaterThan,
+                rule.mustBeGreaterOrEqualTo,
+                rule.mustBeLessThan,
+                rule.mustBeLessOrEqualTo,
+                rule.mustBeBetween,
+                rule.mustNotBeBetween,
+            )
+        )
+
+    def _argument_value(self, arguments: dict[str, Any] | None, key: str) -> Any:
+        if arguments is None:
+            return None
+        return arguments.get(key)
+
+
+def validate(contract_input: OpenDataContractStandard | dict[str, Any] | str | Path) -> ValidationReport:
+    """Validate a contract input using the shared ContractValidator."""
+    return ContractValidator().validate(contract_input)
+
+
+def _normalize_contract(contract_input: OpenDataContractStandard | dict[str, Any] | str | Path) -> OpenDataContractStandard:
+    """Normalize supported validator inputs into the canonical ODCS model."""
+    if isinstance(contract_input, dict):
+        return OpenDataContractStandard.model_validate(contract_input)
+    return contract_to_model(contract_input)

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Service Layer"
+  short_description: "Define thin ContractHub backend service boundaries"
+  default_prompt: "Use $service-layer to implement or review ContractHub service modules for contract loading, draft management, validation, permissions, and governance integration."
