@@ -319,7 +319,7 @@ def _handle_analyze() -> None:
     contract = st.session_state.get("contract")
     if not isinstance(contract, dict):
         return
-    run_analysis(contract)
+    run_analysis(contract, _current_user())
     st.session_state["editor_analysis_visible"] = isinstance(st.session_state.get("editor_analysis_result"), dict)
 
 

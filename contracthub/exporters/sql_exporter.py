@@ -28,7 +28,6 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
-import yaml
 from datacontract.export.exporter import ExportFormat
 from datacontract.export.exporter_factory import exporter_factory
 from open_data_contract_standard.model import (
@@ -137,10 +136,10 @@ def _load_contract_model(contract: ContractInput) -> OpenDataContractStandard:
         return OpenDataContractStandard.model_validate(deepcopy(contract))
 
     path = Path(contract).expanduser().resolve()
-    payload = yaml.safe_load(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise ValueError("Contract file must contain a YAML mapping object")
-    return OpenDataContractStandard.model_validate(payload)
+    try:
+        return OpenDataContractStandard.from_string(path.read_text(encoding="utf-8"))
+    except TypeError as exc:
+        raise ValueError("Contract file must contain a YAML mapping object") from exc
 
 
 def _prepare_for_sql_export(

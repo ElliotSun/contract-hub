@@ -37,12 +37,23 @@ API intent:
 from __future__ import annotations
 
 import os
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from contracthub.core.draft_normalizer import normalize_draft_contract
 from contracthub.core import validator as contract_validator
-from contracthub.utils.yaml_utils import dump_yaml, list_yaml_documents, load_yaml, load_yaml_metadata, read_yaml_text
+from contracthub.interfaces.streamlit.services import governance_service
+from contracthub.utils.yaml_utils import (
+    dump_yaml,
+    dump_yaml_text,
+    list_yaml_documents,
+    load_yaml,
+    load_yaml_metadata,
+    parse_yaml_text,
+    read_yaml_text,
+)
 
 
 DEFAULT_CONTRACTS_DIR = Path("contracts")
@@ -86,6 +97,14 @@ class ContractService:
     def load_sample_contract_yaml(self) -> str:
         """Return the configured sample ODCS YAML text."""
         return read_yaml_text(self.sample_contract_path)
+
+    def parse_contract_yaml(self, source_yaml: str) -> dict[str, Any]:
+        """Parse YAML text into a contract mapping for UI/editor flows."""
+        return parse_yaml_text(source_yaml)
+
+    def serialize_contract_yaml(self, contract: dict[str, Any]) -> str:
+        """Serialize a contract mapping back to YAML text."""
+        return dump_yaml_text(contract)
 
     def list_contracts(self, user: Any) -> list[dict[str, Any]]:
         """Load lightweight contract metadata for the catalog.
@@ -139,7 +158,7 @@ class ContractService:
         draft_path = self._get_draft_path(contract_id, user)
         if draft_path.exists():
             return load_yaml(draft_path)
-        return dict(main_contract)
+        return deepcopy(main_contract)
 
     def save_draft(self, contract: dict[str, Any], user: Any) -> dict[str, Any]:
         """Validate and persist a user draft without modifying the main contract.
@@ -152,9 +171,22 @@ class ContractService:
         main_contract = self.get_contract(contract_id)
         _ensure_can_edit(user, main_contract, contract_id)
 
-        self._validate_contract(contract)
-        dump_yaml(contract, self._get_draft_path(contract_id, user))
-        return contract
+        normalized_draft = normalize_draft_contract(contract, main_contract)
+        self._validate_contract(normalized_draft)
+        dump_yaml(normalized_draft, self._get_draft_path(contract_id, user))
+        return normalized_draft
+
+    def analyze_draft(self, contract: dict[str, Any], user: Any) -> Any:
+        """Analyze a working draft against the canonical main contract."""
+        contract_id = _contract_id(contract)
+        main_contract = self.get_contract(contract_id)
+        _ensure_can_edit(user, main_contract, contract_id)
+
+        normalized_draft = normalize_draft_contract(contract, main_contract)
+        return governance_service.analyze(
+            source_yaml=self.serialize_contract_yaml(normalized_draft),
+            target_yaml=self.serialize_contract_yaml(main_contract),
+        )
 
     def _get_contract_path(self, contract_id: str) -> str:
         """Return the configured YAML path for a contract identifier.
@@ -208,9 +240,24 @@ def save_draft(contract: dict[str, Any], user: Any) -> dict[str, Any]:
     return ContractService().save_draft(contract, user)
 
 
+def analyze_draft(contract: dict[str, Any], user: Any) -> Any:
+    """Convenience wrapper for draft governance analysis."""
+    return ContractService().analyze_draft(contract, user)
+
+
 def load_sample_contract_yaml() -> str:
     """Convenience wrapper for the configured sample ODCS YAML text."""
     return ContractService().load_sample_contract_yaml()
+
+
+def parse_contract_yaml(source_yaml: str) -> dict[str, Any]:
+    """Convenience wrapper for editor/service-safe YAML parsing."""
+    return ContractService().parse_contract_yaml(source_yaml)
+
+
+def serialize_contract_yaml(contract: dict[str, Any]) -> str:
+    """Convenience wrapper for editor/service-safe YAML serialization."""
+    return ContractService().serialize_contract_yaml(contract)
 
 
 def _contract_id(contract: dict[str, Any]) -> str:

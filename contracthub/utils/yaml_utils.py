@@ -5,8 +5,24 @@ from typing import Any
 from urllib.parse import urlparse
 
 import yaml
+from open_data_contract_standard.model import OpenDataContractStandard
 
 from contracthub.core import loader as contract_loader
+
+
+def parse_yaml_text(source_yaml: str) -> dict[str, Any]:
+    """Parse ODCS YAML text into a canonical contract mapping."""
+    try:
+        model = OpenDataContractStandard.from_string(source_yaml)
+    except TypeError as exc:
+        raise ValueError("YAML content must be a mapping object") from exc
+    return model.model_dump(by_alias=True, exclude_none=True)
+
+
+def dump_yaml_text(payload: dict[str, Any]) -> str:
+    """Serialize a contract mapping through the ODCS model definition."""
+    model = OpenDataContractStandard.model_validate(payload)
+    return model.to_yaml()
 
 
 def read_yaml_text(path: str | Path) -> str:

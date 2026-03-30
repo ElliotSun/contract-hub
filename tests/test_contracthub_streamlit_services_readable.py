@@ -5,7 +5,12 @@ from pathlib import Path
 import yaml
 
 import contracthub.interfaces.streamlit.services.contract_service as contract_service_module
-from contracthub.interfaces.streamlit.services.contract_service import ContractService
+from contracthub.interfaces.streamlit.services.contract_service import (
+    ContractService,
+    analyze_draft,
+    parse_contract_yaml,
+    serialize_contract_yaml,
+)
 from contracthub.interfaces.streamlit.services import governance_service
 from contracthub.lifecycle.merge_engine import MergeAnalysis, MergeResult
 from contracthub.utils.yaml_utils import dump_yaml, load_yaml
@@ -144,6 +149,104 @@ def test_contract_service_save_draft_persists_draft_without_overwriting_main(sam
     assert persisted_draft["description"]["purpose"] == "Draft purpose"
 
 
+def test_contract_service_save_draft_preserves_read_only_contract_fields_from_main(sample_odcs_dict, tmp_path):
+    contracts_dir = tmp_path / "contracts"
+    drafts_dir = tmp_path / ".contracthub" / "drafts"
+    main_contract = dict(sample_odcs_dict)
+    main_contract["id"] = "seller-payments"
+    main_contract["tenant"] = "tenant-a"
+    main_contract["status"] = "active"
+    main_contract["domain"] = "seller"
+    main_contract["dataProduct"] = "seller payments"
+    main_contract["name"] = "seller_payments_contract"
+    main_contract["apiVersion"] = "v3.1.0"
+    main_contract["kind"] = "DataContract"
+    main_contract["servers"] = [{"server": "main-server", "type": "postgres"}]
+    main_contract.setdefault("description", {})["purpose"] = "Main purpose"
+    dump_yaml(main_contract, contracts_dir / "seller-payments.yaml")
+
+    draft = dict(main_contract)
+    draft["status"] = "deprecated"
+    draft["domain"] = "buyer"
+    draft["dataProduct"] = "buyer payments"
+    draft["tenant"] = "tenant-b"
+    draft["name"] = "overwritten_name"
+    draft["apiVersion"] = "v9.9.9"
+    draft["kind"] = "SomethingElse"
+    draft["servers"] = [{"server": "draft-server", "type": "databricks"}]
+    draft["description"]["purpose"] = "Draft purpose"
+
+    service = ContractService(contracts_dir=contracts_dir, drafts_dir=drafts_dir)
+    saved = service.save_draft(draft, user={"tenant": "tenant-a", "role": "editor", "id": "alice"})
+
+    assert saved["status"] == "active"
+    assert saved["domain"] == "seller"
+    assert saved["dataProduct"] == "seller payments"
+    assert saved["tenant"] == "tenant-a"
+    assert saved["name"] == "seller_payments_contract"
+    assert saved["apiVersion"] == "v3.1.0"
+    assert saved["kind"] == "DataContract"
+    assert saved["servers"] == [{"server": "main-server", "type": "postgres"}]
+    assert saved["description"]["purpose"] == "Draft purpose"
+
+    persisted_draft = load_yaml(drafts_dir / "alice" / "seller-payments.yaml")
+    assert persisted_draft["status"] == "active"
+    assert persisted_draft["domain"] == "seller"
+    assert persisted_draft["dataProduct"] == "seller payments"
+    assert persisted_draft["description"]["purpose"] == "Draft purpose"
+
+
+def test_contract_service_save_draft_preserves_schema_and_property_technical_fields(sample_odcs_dict, tmp_path):
+    contracts_dir = tmp_path / "contracts"
+    drafts_dir = tmp_path / ".contracthub" / "drafts"
+    main_contract = dict(sample_odcs_dict)
+    main_contract["id"] = "seller-payments"
+    main_contract["tenant"] = "tenant-a"
+    main_contract["schema"][0]["name"] = "payments"
+    main_contract["schema"][0]["businessName"] = "Payments"
+    main_contract["schema"][0]["description"] = "Main schema description"
+    main_contract["schema"][0]["tags"] = ["finance"]
+    main_contract["schema"][0]["quality"] = [{"name": "row_count", "metric": "rowCount", "mustBeGreaterThan": 0}]
+    main_contract["schema"][0]["properties"][0]["name"] = "payment_id"
+    main_contract["schema"][0]["properties"][0]["logicalType"] = "string"
+    main_contract["schema"][0]["properties"][0]["required"] = False
+    main_contract["schema"][0]["properties"][0]["businessName"] = "Payment Id"
+    main_contract["schema"][0]["properties"][0]["description"] = "Main field description"
+    dump_yaml(main_contract, contracts_dir / "seller-payments.yaml")
+
+    draft = yaml.safe_load(yaml.safe_dump(main_contract, sort_keys=False))
+    draft["schema"][0]["name"] = "renamed_schema"
+    draft["schema"][0]["businessName"] = "Edited Payments"
+    draft["schema"][0]["description"] = "Edited schema description"
+    draft["schema"][0]["tags"] = ["edited"]
+    draft["schema"][0]["quality"] = [{"name": "schema_rule", "metric": "rowCount", "mustBeGreaterThan": 1}]
+    draft["schema"][0]["properties"][0]["name"] = "renamed_field"
+    draft["schema"][0]["properties"][0]["logicalType"] = "int"
+    draft["schema"][0]["properties"][0]["required"] = True
+    draft["schema"][0]["properties"][0]["businessName"] = "Edited Payment Id"
+    draft["schema"][0]["properties"][0]["description"] = "Edited field description"
+    draft["schema"][0]["properties"][0]["quality"] = [{"name": "field_rule", "metric": "nullValues", "mustBe": 0}]
+
+    service = ContractService(contracts_dir=contracts_dir, drafts_dir=drafts_dir)
+    saved = service.save_draft(draft, user={"tenant": "tenant-a", "role": "editor", "id": "alice"})
+
+    saved_schema = saved["schema"][0]
+    saved_field = saved_schema["properties"][0]
+
+    assert saved_schema["name"] == "payments"
+    assert saved_schema["businessName"] == "Edited Payments"
+    assert saved_schema["description"] == "Edited schema description"
+    assert saved_schema["tags"] == ["edited"]
+    assert saved_schema["quality"] == [{"name": "schema_rule", "metric": "rowCount", "mustBeGreaterThan": 1}]
+
+    assert saved_field["name"] == "payment_id"
+    assert saved_field["logicalType"] == "string"
+    assert saved_field["required"] is False
+    assert saved_field["businessName"] == "Edited Payment Id"
+    assert saved_field["description"] == "Edited field description"
+    assert saved_field["quality"] == [{"name": "field_rule", "metric": "nullValues", "mustBe": 0}]
+
+
 def test_contract_service_save_draft_rejects_unauthorized_user(sample_odcs_dict, tmp_path):
     contracts_dir = tmp_path / "contracts"
     main_contract = dict(sample_odcs_dict)
@@ -161,6 +264,66 @@ def test_contract_service_save_draft_rejects_unauthorized_user(sample_odcs_dict,
         raise AssertionError("Expected save_draft to reject an unauthorized user")
 
 
+def test_contract_service_analyze_draft_delegates_main_vs_draft_to_governance(sample_odcs_dict, tmp_path, monkeypatch):
+    contracts_dir = tmp_path / "contracts"
+    main_contract = dict(sample_odcs_dict)
+    main_contract["id"] = "seller-payments"
+    main_contract["tenant"] = "tenant-a"
+    main_contract["status"] = "active"
+    dump_yaml(main_contract, contracts_dir / "seller-payments.yaml")
+
+    draft_contract = dict(main_contract)
+    draft_contract.setdefault("description", {})["purpose"] = "Draft purpose"
+    draft_contract["status"] = "deprecated"
+
+    captured: dict[str, dict[str, object]] = {}
+
+    def fake_analyze(*, source_yaml, target_yaml):
+        captured["source"] = yaml.safe_load(source_yaml)
+        captured["target"] = yaml.safe_load(target_yaml)
+        return {"allowed": True, "diff": [], "breaking_changes": [], "auto_deprecations": []}
+
+    monkeypatch.setattr(contract_service_module.governance_service, "analyze", fake_analyze)
+
+    service = ContractService(contracts_dir=contracts_dir, drafts_dir=tmp_path / ".contracthub" / "drafts")
+    result = service.analyze_draft(draft_contract, user={"tenant": "tenant-a", "role": "editor", "id": "alice"})
+
+    assert result["allowed"] is True
+    assert captured["source"]["description"]["purpose"] == "Draft purpose"
+    assert captured["source"]["status"] == "active"
+    assert captured["target"]["status"] == "active"
+
+
+def test_contract_service_analyze_draft_convenience_wrapper(sample_odcs_dict, tmp_path, monkeypatch):
+    contracts_dir = tmp_path / "contracts"
+    main_contract = dict(sample_odcs_dict)
+    main_contract["id"] = "seller-payments"
+    main_contract["tenant"] = "tenant-a"
+    dump_yaml(main_contract, contracts_dir / "seller-payments.yaml")
+
+    monkeypatch.setenv("CONTRACTHUB_CONTRACTS_DIR", str(contracts_dir))
+    monkeypatch.setenv("CONTRACTHUB_DRAFTS_DIR", str(tmp_path / ".contracthub" / "drafts"))
+    monkeypatch.setattr(
+        contract_service_module.governance_service,
+        "analyze",
+        lambda **kwargs: {"allowed": True, "diff": [], "breaking_changes": [], "auto_deprecations": []},
+    )
+
+    result = analyze_draft(main_contract, user={"tenant": "tenant-a", "role": "editor", "id": "alice"})
+
+    assert result["allowed"] is True
+
+
+def test_contract_service_parse_and_serialize_yaml_helpers_round_trip(sample_odcs_dict):
+    source_yaml = yaml.safe_dump(sample_odcs_dict, sort_keys=False)
+
+    payload = parse_contract_yaml(source_yaml)
+    rendered = serialize_contract_yaml(payload)
+
+    assert payload["id"] == sample_odcs_dict["id"]
+    assert parse_contract_yaml(rendered)["id"] == sample_odcs_dict["id"]
+
+
 def test_governance_service_analyze_delegates_to_merge_engine(sample_odcs_dict, sample_odcs_model, monkeypatch):
     source_yaml = yaml.safe_dump(sample_odcs_dict, sort_keys=False)
     target_yaml = yaml.safe_dump(sample_odcs_dict, sort_keys=False)
@@ -168,9 +331,9 @@ def test_governance_service_analyze_delegates_to_merge_engine(sample_odcs_dict, 
     captured: dict[str, object] = {}
 
     class FakeEngine:
-        def _analyze_merge(self, *, target_model, source_model):
-            captured["target"] = target_model
-            captured["source"] = source_model
+        def analyze(self, *, base_contract, business_contract):
+            captured["base"] = base_contract
+            captured["business"] = business_contract
             return expected
 
     monkeypatch.setattr(governance_service, "_MERGE_ENGINE", FakeEngine())
@@ -178,8 +341,8 @@ def test_governance_service_analyze_delegates_to_merge_engine(sample_odcs_dict, 
     result = governance_service.analyze(source_yaml, target_yaml)
 
     assert result is expected
-    assert captured["target"] == sample_odcs_model
-    assert captured["source"] == sample_odcs_model
+    assert captured["base"] == sample_odcs_model
+    assert captured["business"] == sample_odcs_model
 
 
 def test_governance_service_apply_delegates_to_merge_engine(sample_odcs_dict, sample_odcs_model, monkeypatch):

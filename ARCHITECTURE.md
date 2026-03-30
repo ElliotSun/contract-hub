@@ -1,0 +1,240 @@
+# ContractHub Architecture
+
+## Purpose
+
+ContractHub is an ODCS-first contract governance platform.
+
+The current implementation focuses on:
+
+- canonical main contracts
+- user-scoped drafts
+- lifecycle governance analysis
+- contract quality export
+- deployment artifact export
+- a Streamlit UI as one presentation layer
+
+ContractHub is not a CRUD system. It is a change-driven system:
+
+- edit -> save draft
+- analyze -> compare draft vs main
+- promote -> future GitOps workflow
+
+## Current Runtime Layers
+
+### 1. Core
+
+Location:
+
+- `contracthub/core/`
+
+Responsibilities:
+
+- load canonical ODCS contracts from supported storage
+- validate ODCS contracts and quality rules
+- normalize user drafts so business edits do not overwrite technical fields
+
+Key modules:
+
+- `contracthub/core/loader.py`
+- `contracthub/core/validator.py`
+- `contracthub/core/draft_normalizer.py`
+
+### 2. Lifecycle Governance
+
+Location:
+
+- `contracthub/lifecycle/`
+
+Responsibilities:
+
+- analyze main vs source contract changes
+- detect breaking changes
+- determine auto-deprecations
+- apply lifecycle-aware merges
+
+Key modules:
+
+- `contracthub/lifecycle/merge_engine.py`
+- `contracthub/lifecycle/policy.py`
+
+### 3. Utilities
+
+Location:
+
+- `contracthub/utils/`
+
+Responsibilities:
+
+- YAML file IO
+- YAML string parse/dump through ODCS model definitions
+- input normalization helpers
+
+Key modules:
+
+- `contracthub/utils/yaml_utils.py`
+- `contracthub/utils/schema_utils.py`
+
+### 4. Service Layer
+
+Location:
+
+- `contracthub/interfaces/streamlit/services/`
+
+Responsibilities:
+
+- serve as the only UI boundary into system logic
+- read canonical contracts
+- read and persist user drafts
+- enforce edit permissions
+- delegate governance analysis
+
+Key modules:
+
+- `contracthub/interfaces/streamlit/services/contract_service.py`
+- `contracthub/interfaces/streamlit/services/governance_service.py`
+
+### 5. Exporters
+
+Location:
+
+- `contracthub/exporters/`
+- `contracthub/quality/`
+
+Responsibilities:
+
+- generate Great Expectations suites from ODCS contracts
+- generate SQL deployment DDL
+- add limited Databricks-specific constraint enhancement where supported
+
+Key modules:
+
+- `contracthub/quality/ge_exporter.py`
+- `contracthub/exporters/sql_exporter.py`
+
+### 6. Orchestration
+
+Location:
+
+- `contracthub/orchestrator/`
+
+Responsibilities:
+
+- coordinate non-interactive automation flows
+- import -> merge -> validate -> export
+
+Key module:
+
+- `contracthub/orchestrator/pipeline.py`
+
+### 7. Interfaces
+
+Location:
+
+- `contracthub/interfaces/`
+
+Responsibilities:
+
+- presentation only
+- collect user input
+- display governance results
+- call service layer
+
+Current interface:
+
+- Streamlit single-page app in `contracthub/interfaces/streamlit/app.py`
+
+## Current Contract Model
+
+ContractHub currently assumes:
+
+- Open Data Contract Standard (ODCS) is the single canonical contract representation
+- `open_data_contract_standard.model.OpenDataContractStandard` is the canonical runtime model
+
+The system may temporarily work with Python `dict` objects at boundaries, but normalization should converge back to ODCS objects or ODCS-shaped mappings.
+
+## Draft Workflow
+
+Current draft workflow:
+
+1. load main contract
+2. load existing draft or initialize draft from main
+3. edit draft
+4. analyze draft vs main
+5. save draft
+6. promote later through GitOps workflow
+
+Important rules:
+
+- UI must not overwrite the main contract
+- draft persists independently
+- service layer validates before saving draft
+- service layer preserves non-editable contract/schema/property fields from the main contract
+
+Draft storage:
+
+- `.contracthub/drafts/{user}/{contract_id}.yaml`
+
+## Storage Support
+
+Current canonical contract roots support:
+
+- local filesystem paths
+- ADLS2 paths
+- Databricks Unity Catalog mounted volume paths
+
+ADLS2 authentication currently supports:
+
+- `CONTRACTHUB_ADLS_BEARER_TOKEN`
+- `azure.identity.DefaultAzureCredential`
+
+SAS URL authentication is intentionally not supported.
+
+## Quality and Export Boundaries
+
+### Contract validation
+
+`contracthub/core/validator.py` validates:
+
+- ODCS structure
+- quality rule completeness
+- ODCS quality type semantics
+
+### GE export
+
+`contracthub/quality/ge_exporter.py`:
+
+- delegates suite generation to datacontract-cli
+- performs GE-specific preflight on exported expectation configs
+- does not execute runtime validation
+
+### SQL export
+
+`contracthub/exporters/sql_exporter.py`:
+
+- delegates base SQL generation to datacontract-cli
+- appends Databricks-only constraints for a limited supported subset of ODCS quality rules
+
+Current supported Databricks mappings:
+
+- `nullValues mustBe 0` -> `SET NOT NULL`
+- `invalidValues + validValues` -> `CHECK IN (...)`
+- `invalidValues + pattern` -> `CHECK RLIKE ...`
+
+Precedence:
+
+- schema `required=True` is emitted first by datacontract-cli as `NOT NULL`
+- ContractHub does not emit duplicate nullability constraints
+
+## Current Design Principles
+
+- main contract is canonical and immutable from the UI path
+- service layer is the only boundary between UI and system logic
+- lifecycle logic belongs in the lifecycle layer
+- ODCS is the canonical contract model
+- datacontract-cli is reused where possible instead of reimplemented
+
+## Known Next Steps
+
+- formalize draft promotion flow
+- continue reducing UI-specific logic that still lives near editor helpers
+- keep converging helper logic toward ODCS model-driven behavior

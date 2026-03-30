@@ -7,13 +7,12 @@ Enterprise Python library for Open Data Contract Standard (ODCS) workflows with 
 ```text
 contracthub/
   core/
+    draft_normalizer.py
+    editor_contract.py
     loader.py
     validator.py
   exporters/
     sql_exporter.py
-  importers/
-    delta_importer.py
-    sql_importer.py
   lifecycle/
     merge_engine.py
     policy.py
@@ -21,11 +20,15 @@ contracthub/
   quality/
     ge_exporter.py
     validation.py
+    sql_exporter.py
   orchestrator/
     pipeline.py
   interfaces/
     cli.py
-    ui_streamlit.py
+    streamlit/
+      app.py
+      editor/
+      services/
   devops/
     pr_creator.py
     ci_cd.py
@@ -78,12 +81,14 @@ GreatExpectationsExporter().export_to_path(merged.contract, "./artifacts/orders_
 - Importers are pure Python and Spark-free.
 - ContractHub registers custom importers (`delta`, `sql-folder`) into datacontract-cli's importer factory.
 - Merge and lifecycle policy logic are isolated in `contracthub.lifecycle`.
+- Draft normalization and editor-safe contract mutation helpers live in `contracthub.core`.
 - Great Expectations suite generation uses datacontract-cli exporter APIs.
 - Databricks/Spark SQL deployment DDL generation lives in `contracthub.exporters.sql_exporter`.
 - Databricks-only quality constraint mapping is appended only when `sql_server_type="databricks"`.
 - Great Expectations export follows a two-step validation boundary:
   - contract-level quality rule validation in `contracthub.core.validator`
   - GE-specific expectation preflight in `contracthub.quality.ge_exporter`
+- Streamlit is a presentation layer and should call service-layer helpers under `contracthub/interfaces/streamlit/services/`.
 - Legacy packages `contracthub_importers` and `contracthub_enforcement` have been removed.
 - Contract catalog storage currently supports:
   - local filesystem paths

@@ -7,7 +7,7 @@ import pytest
 import contracthub.core.loader as contract_loader
 import contracthub.utils.yaml_utils as yaml_utils
 from contracthub.utils.schema_utils import contract_to_dict, contract_to_model, ensure_schema_key
-from contracthub.utils.yaml_utils import dump_yaml, list_yaml_documents, load_yaml
+from contracthub.utils.yaml_utils import dump_yaml, dump_yaml_text, list_yaml_documents, load_yaml, parse_yaml_text
 
 
 def test_yaml_utils_can_load_and_dump_sample_contract(sample_odcs_dict, tmp_path):
@@ -17,6 +17,14 @@ def test_yaml_utils_can_load_and_dump_sample_contract(sample_odcs_dict, tmp_path
     assert output_path.exists()
     assert reloaded["id"] == sample_odcs_dict["id"]
     assert len(reloaded["schema"]) == len(sample_odcs_dict["schema"])
+
+
+def test_yaml_utils_parse_and_dump_yaml_text_use_odcs_contract_shape(sample_odcs_dict):
+    rendered = dump_yaml_text(sample_odcs_dict)
+    reparsed = parse_yaml_text(rendered)
+
+    assert reparsed["id"] == sample_odcs_dict["id"]
+    assert len(reparsed["schema"]) == len(sample_odcs_dict["schema"])
 
 
 def test_yaml_utils_rejects_non_mapping_yaml(tmp_path):
