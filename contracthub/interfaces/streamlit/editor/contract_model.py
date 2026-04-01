@@ -4,27 +4,42 @@ from __future__ import annotations
 
 from typing import Any
 
-from contracthub.core.editor_contract import (
+from contracthub.constants import BUSINESS_PROPERTY_KEYS, TECHNICAL_PROPERTY_KEYS
+from contracthub.core.editor_rows import (
     add_field,
     add_quality_rule,
     apply_field_detail,
     apply_quality_rows,
     apply_quick_field_rows,
-    contract_description_part,
-    contract_tags,
     field_by_name,
+    quality_rows,
+    selected_schema_field_names,
+)
+from contracthub.core.editor_semantics import (
+    contract_api_version,
+    contract_data_product,
+    contract_description_part,
+    contract_domain,
+    contract_id,
+    contract_kind,
+    contract_name,
+    contract_status,
+    contract_tags,
+    contract_tenant,
+    contract_version,
+    field_option_label,
     field_examples_text,
     field_lifecycle_status,
+    field_type,
     normalize_tags,
-    quality_rows,
+    schema_label,
     schema_items,
-    selected_schema_field_names,
+    server_items,
+    server_label,
     set_contract_description_part,
     set_contract_tags_list,
 )
 from contracthub.interfaces.streamlit.services.contract_service import parse_contract_yaml, serialize_contract_yaml
-
-from .constants import BUSINESS_PROPERTY_KEYS, TECHNICAL_PROPERTY_KEYS, TYPE_OPTIONS
 
 
 def parse_yaml_payload(source_yaml: str) -> dict[str, Any]:
@@ -38,84 +53,6 @@ def parse_yaml_payload(source_yaml: str) -> dict[str, Any]:
 def contract_to_yaml(contract: dict[str, Any]) -> str:
     """Serialize the working contract back to YAML."""
     return serialize_contract_yaml(contract)
-
-
-def contract_name(contract: dict[str, Any]) -> str:
-    """Resolve contract name."""
-    if contract.get("name") is not None:
-        return str(contract.get("name", ""))
-    nested_contract = contract.get("contract")
-    if isinstance(nested_contract, dict) and nested_contract.get("name") is not None:
-        return str(nested_contract.get("name", ""))
-    return str(contract.get("name", ""))
-
-
-def contract_version(contract: dict[str, Any]) -> str:
-    """Resolve contract version."""
-    if contract.get("version") is not None:
-        return str(contract.get("version", ""))
-    nested_contract = contract.get("contract")
-    if isinstance(nested_contract, dict) and nested_contract.get("version") is not None:
-        return str(nested_contract.get("version", ""))
-    return str(contract.get("version", ""))
-
-
-def contract_status(contract: dict[str, Any]) -> str:
-    """Resolve contract status."""
-    if contract.get("status") is not None:
-        return str(contract.get("status", ""))
-    nested_contract = contract.get("contract")
-    if isinstance(nested_contract, dict) and nested_contract.get("status") is not None:
-        return str(nested_contract.get("status", ""))
-    return str(contract.get("status", ""))
-
-
-def contract_domain(contract: dict[str, Any]) -> str:
-    """Resolve contract domain."""
-    return str(contract.get("domain", "") or "")
-
-
-def contract_data_product(contract: dict[str, Any]) -> str:
-    """Resolve contract data product."""
-    return str(contract.get("dataProduct", "") or "")
-
-
-def contract_tenant(contract: dict[str, Any]) -> str:
-    """Resolve contract tenant."""
-    return str(contract.get("tenant", "") or "")
-
-
-def contract_id(contract: dict[str, Any]) -> str:
-    """Resolve contract identifier."""
-    return str(contract.get("id", "") or "")
-
-
-def contract_api_version(contract: dict[str, Any]) -> str:
-    """Resolve ODCS API version."""
-    return str(contract.get("apiVersion", "") or "")
-
-
-def contract_kind(contract: dict[str, Any]) -> str:
-    """Resolve ODCS kind."""
-    return str(contract.get("kind", "") or "")
-
-
-def schema_label(contract: dict[str, Any], index: int) -> str:
-    """Format a schema label for selection."""
-    schema_obj = schema_items(contract)[index]
-    return str(schema_obj.get("name", f"schema_{index + 1}"))
-
-
-def field_option_label(field_obj: dict[str, Any], index: int) -> str:
-    """Format a field label for display."""
-    field_name = str(field_obj.get("name", "")).strip()
-    return field_name or f"field_{index + 1}"
-
-
-def field_type(field_obj: dict[str, Any]) -> str:
-    """Resolve the editor type for a field."""
-    type_value = str(field_obj.get("logicalType") or field_obj.get("physicalType") or "string")
-    return type_value if type_value in TYPE_OPTIONS else "string"
 
 
 def is_technical_property_key(key: str) -> bool:
@@ -153,23 +90,3 @@ def quick_field_rows(schema_obj: dict[str, Any]) -> list[dict[str, Any]]:
             }
         )
     return rows
-
-
-def server_items(contract: dict[str, Any]) -> list[dict[str, Any]]:
-    """Return server objects defined on the contract."""
-    return [server for server in contract.get("servers", []) or [] if isinstance(server, dict)]
-
-
-def server_label(server: dict[str, Any]) -> str:
-    """Format a server label for selection."""
-    server_id = str(server.get("id", "") or "").strip()
-    server_name = str(server.get("server", "") or "").strip()
-    environment = str(server.get("environment", "") or "").strip()
-
-    if server_id and environment:
-        return f"{server_id} ({environment})"
-    if server_id:
-        return server_id
-    if server_name and environment:
-        return f"{server_name} ({environment})"
-    return server_name or "server"

@@ -95,10 +95,12 @@ def test_yaml_utils_load_yaml_metadata_supports_adls2_file(monkeypatch):
 
 
 def test_schema_utils_convert_sample_contract_between_input_types(sample_odcs_dict, sample_odcs_path, sample_odcs_model):
+    model_from_dict = contract_to_model(sample_odcs_dict)
     model_from_path = contract_to_model(sample_odcs_path)
     model_from_string_path = contract_to_model(str(sample_odcs_path))
     dict_from_model = contract_to_dict(sample_odcs_model)
 
+    assert model_from_dict.id == sample_odcs_dict["id"]
     assert model_from_path.id == sample_odcs_dict["id"]
     assert model_from_string_path.id == sample_odcs_dict["id"]
     assert dict_from_model["id"] == sample_odcs_dict["id"]

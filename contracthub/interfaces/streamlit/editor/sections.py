@@ -6,8 +6,9 @@ from typing import Any
 
 import streamlit as st
 
+from contracthub.constants import LIFECYCLE_OPTIONS, QUALITY_SEVERITY_OPTIONS, QUALITY_TYPE_OPTIONS, TABLE_RULE_COLUMN
+
 from .analysis import field_governance_info_for
-from .constants import LIFECYCLE_OPTIONS, QUALITY_SEVERITY_OPTIONS, QUALITY_TYPE_OPTIONS, TABLE_RULE_COLUMN
 from .contract_model import (
     add_quality_rule,
     apply_field_detail,
@@ -31,7 +32,6 @@ from .contract_model import (
     is_technical_property_key,
     quality_rows,
     quick_field_rows,
-    schema_label,
     selected_schema_field_names,
     server_items,
     server_label,
@@ -139,8 +139,9 @@ def render_contract_section(contract: dict[str, Any]) -> None:
 def render_schema_selector(contract: dict[str, Any], on_change: Any) -> None:
     """Render shared schema selection controls."""
     section_title("Schema", "Review table-level metadata and switch between schemas without leaving the editor.")
-    schema_indexes = list(range(len(schema_items(contract))))
-    if not schema_indexes:
+    schemas = schema_items(contract)
+    schema_names = [str(schema.get("name", "") or f"schema_{index + 1}") for index, schema in enumerate(schemas)]
+    if not schema_names:
         st.warning("No schemas defined in this contract.")
         return
 
@@ -148,9 +149,8 @@ def render_schema_selector(contract: dict[str, Any], on_change: Any) -> None:
     with selector_col:
         st.selectbox(
             "Select Schema",
-            options=schema_indexes,
-            format_func=lambda idx: schema_label(contract, idx),
-            key="editor_selected_schema_index",
+            options=schema_names,
+            key="editor_selected_schema_name",
             on_change=on_change,
         )
 
@@ -181,21 +181,18 @@ def render_schema_tab(contract: dict[str, Any]) -> None:
 
     schema_meta_col_1, schema_meta_col_2, schema_meta_col_3 = st.columns(3, gap="large")
     with schema_meta_col_1:
-        schema_name = st.text_input("Schema Name", key="editor_schema_name_input")
+        st.text_input("Schema Name", key="editor_schema_name_input", disabled=True)
     with schema_meta_col_2:
         business_name = st.text_input("Business Name", key="editor_schema_business_name_input")
     with schema_meta_col_3:
+        schema_state_id = str(st.session_state.get("editor_selected_schema_name", "") or "schema")
         tags = render_tags_editor(
             current_schema.get("tags"),
-            state_prefix=f"editor_schema_{st.session_state.get('editor_selected_schema_index', 0)}",
+            state_prefix=f"editor_schema_{schema_state_id}",
             label="Tags",
         )
     description = st.text_area("Table Description", key="editor_schema_description_input", height=100)
 
-    if schema_name != str(current_schema.get("name", "")):
-        current_schema["name"] = schema_name
-        st.session_state["editor_selected_schema_source"] = None
-        st.rerun()
     if business_name != str(current_schema.get("businessName", "")):
         current_schema["businessName"] = business_name
     if description != str(current_schema.get("description", "") or ""):
@@ -282,7 +279,7 @@ def _render_field_detail_form(schema_obj: dict[str, Any], field_obj: dict[str, A
 
     with st.form(
         key=(
-            f"editor_field_form_{st.session_state.get('editor_selected_schema_index', 0)}_"
+            f"editor_field_form_{st.session_state.get('editor_selected_schema_name', '')}_"
             f"{index}"
         )
     ):

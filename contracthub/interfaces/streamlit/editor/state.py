@@ -69,8 +69,8 @@ def reset_editor_state() -> None:
     st.session_state["contract"] = payload
     st.session_state["editor_baseline_yaml"] = sample_yaml
     st.session_state["editor_raw_yaml"] = sample_yaml
-    st.session_state["editor_selected_schema_index"] = 0
-    st.session_state["editor_selected_field_index"] = 0
+    st.session_state["editor_selected_schema_name"] = ""
+    st.session_state["editor_selected_field_name"] = ""
     st.session_state["editor_analysis_result"] = None
     st.session_state["editor_notice"] = None
     st.session_state["editor_warning"] = None
@@ -85,7 +85,8 @@ def handle_schema_change() -> None:
     contract = st.session_state.get("contract")
     if not isinstance(contract, dict):
         return
-    st.session_state["editor_selected_field_index"] = 0
+    st.session_state["editor_selected_field_name"] = ""
+    ensure_selected_field(contract)
     sync_schema_inputs(contract, force=True)
     sync_field_inputs(contract, force=True)
 
@@ -99,26 +100,33 @@ def handle_field_change() -> None:
 
 
 def ensure_selected_schema(contract: dict[str, Any]) -> None:
-    """Ensure the selected schema index is valid."""
-    schema_count = len(schema_items(contract))
-    selected_index = st.session_state.get("editor_selected_schema_index", 0)
-    if not isinstance(selected_index, int) or selected_index < 0 or selected_index >= schema_count:
-        st.session_state["editor_selected_schema_index"] = 0
+    """Ensure the selected schema name is valid."""
+    schemas = schema_items(contract)
+    if not schemas:
+        st.session_state["editor_selected_schema_name"] = ""
+        return
+
+    schema_names = [_schema_identity(schema, index) for index, schema in enumerate(schemas)]
+    selected_name = str(st.session_state.get("editor_selected_schema_name", "") or "").strip()
+    if selected_name not in schema_names:
+        st.session_state["editor_selected_schema_name"] = schema_names[0]
 
 
 def ensure_selected_field(contract: dict[str, Any]) -> None:
-    """Ensure the selected field index is valid for the current schema."""
+    """Ensure the selected field name is valid for the current schema."""
     current_schema = selected_schema(contract)
     if current_schema is None:
-        st.session_state["editor_selected_field_index"] = 0
+        st.session_state["editor_selected_field_name"] = ""
         return
-    field_count = len(current_schema.get("properties", []) or [])
-    selected_index = st.session_state.get("editor_selected_field_index", 0)
-    if field_count == 0:
-        st.session_state["editor_selected_field_index"] = 0
+
+    fields = current_schema.get("properties", []) or []
+    field_names = [_field_identity(field, index) for index, field in enumerate(fields) if isinstance(field, dict)]
+    if not field_names:
+        st.session_state["editor_selected_field_name"] = ""
         return
-    if not isinstance(selected_index, int) or selected_index < 0 or selected_index >= field_count:
-        st.session_state["editor_selected_field_index"] = 0
+    selected_name = str(st.session_state.get("editor_selected_field_name", "") or "").strip()
+    if selected_name not in field_names:
+        st.session_state["editor_selected_field_name"] = field_names[0]
 
 
 def selected_schema(contract: dict[str, Any]) -> dict[str, Any] | None:
@@ -126,7 +134,11 @@ def selected_schema(contract: dict[str, Any]) -> dict[str, Any] | None:
     all_schemas = schema_items(contract)
     if not all_schemas:
         return None
-    return all_schemas[st.session_state.get("editor_selected_schema_index", 0)]
+    selected_name = str(st.session_state.get("editor_selected_schema_name", "") or "").strip()
+    for index, schema in enumerate(all_schemas):
+        if _schema_identity(schema, index) == selected_name:
+            return schema
+    return all_schemas[0]
 
 
 def selected_field(contract: dict[str, Any]) -> dict[str, Any] | None:
@@ -137,10 +149,14 @@ def selected_field(contract: dict[str, Any]) -> dict[str, Any] | None:
     fields = current_schema.get("properties", []) or []
     if not fields:
         return None
-    field_index = st.session_state.get("editor_selected_field_index", 0)
-    if field_index >= len(fields):
-        return None
-    return fields[field_index]
+    selected_name = str(st.session_state.get("editor_selected_field_name", "") or "").strip()
+    for index, field in enumerate(fields):
+        if isinstance(field, dict) and _field_identity(field, index) == selected_name:
+            return field
+    for field in fields:
+        if isinstance(field, dict):
+            return field
+    return None
 
 
 def sync_contract_inputs(contract: dict[str, Any], *, force: bool = False) -> None:
@@ -178,7 +194,7 @@ def sync_schema_inputs(contract: dict[str, Any], *, force: bool = False) -> None
     current_schema = selected_schema(contract)
     if current_schema is None:
         return
-    selected_key = str(st.session_state.get("editor_selected_schema_index", 0))
+    selected_key = str(st.session_state.get("editor_selected_schema_name", "") or "")
     if not force and st.session_state.get("editor_selected_schema_source") == selected_key:
         return
     st.session_state["editor_schema_name_input"] = str(current_schema.get("name", ""))
@@ -192,8 +208,8 @@ def sync_field_inputs(contract: dict[str, Any], *, force: bool = False) -> None:
     """Sync selected-field detail inputs from the working contract."""
     current_field = selected_field(contract)
     selected_key = (
-        f"{st.session_state.get('editor_selected_schema_index', 0)}:"
-        f"{st.session_state.get('editor_selected_field_index', 0)}"
+        f"{st.session_state.get('editor_selected_schema_name', '')}:"
+        f"{st.session_state.get('editor_selected_field_name', '')}"
     )
     if current_field is None:
         return
@@ -211,3 +227,15 @@ def sync_field_inputs(contract: dict[str, Any], *, force: bool = False) -> None:
     st.session_state["editor_field_transform_description_input"] = str(current_field.get("transformDescription", "") or "")
     st.session_state["editor_field_physical_name_input"] = str(current_field.get("physicalName", "") or "")
     st.session_state["editor_selected_field_source"] = selected_key
+
+
+def _schema_identity(schema: dict[str, Any], index: int) -> str:
+    """Return the stable schema identity used by the editor."""
+    name = str(schema.get("name", "") or "").strip()
+    return name or f"schema_{index + 1}"
+
+
+def _field_identity(field: dict[str, Any], index: int) -> str:
+    """Return the stable field identity used by the editor."""
+    name = str(field.get("name", "") or "").strip()
+    return name or f"field_{index + 1}"

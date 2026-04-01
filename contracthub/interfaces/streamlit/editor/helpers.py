@@ -7,16 +7,15 @@ from typing import Any
 
 import pandas as pd
 import streamlit as st
-from contracthub.core.editor_contract import (
+from contracthub.core.editor_rows import (
     is_blank_quality_row,
     is_blank_quick_field_row,
-    normalize_tags,
     optional_int,
     rule_condition,
-    set_mapping_text,
     tags_to_text,
     text_to_tags,
 )
+from contracthub.core.editor_semantics import normalize_tags, set_mapping_text
 
 try:
     from streamlit_tags import st_tags
