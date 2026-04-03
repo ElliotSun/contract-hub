@@ -69,7 +69,7 @@ def _build_business_contract() -> OpenDataContractStandard:
                         physicalType="varchar(18)",
                         required=False,
                         customProperties=[_cp("lifecycleStatus", "active")],
-                        quality=[DataQuality(name="id_unique", metric="uniqueValues", mustBe="100%")],
+                        quality=[DataQuality(name="id_duplicate_count", metric="duplicateValues", mustBe=0)],
                     ),
                     SchemaProperty(
                         name="amount",
@@ -79,7 +79,7 @@ def _build_business_contract() -> OpenDataContractStandard:
                         customProperties=[_cp("lifecycleStatus", "active")],
                     ),
                 ],
-                quality=[DataQuality(name="freshness", metric="freshness", mustBeLessThan=1)],
+                quality=[DataQuality(name="row_count_upper_bound", metric="rowCount", mustBeLessThan=1000)],
             )
         ],
     )
@@ -176,3 +176,42 @@ def test_merge_engine_skips_breaking_checks_for_draft_property():
 
     conflicts = ContractMergeEngine().detect_conflicts(base, business)
     assert conflicts == []
+
+
+def test_merge_engine_detects_temporal_type_changes_on_fixture(sample_temporal_types_contract_model):
+    base = sample_temporal_types_contract_model.model_copy(deep=True)
+    target = sample_temporal_types_contract_model.model_copy(deep=True)
+    assert base.schema_ is not None
+    assert target.schema_ is not None
+    assert base.schema_[0].properties is not None
+    assert target.schema_[0].properties is not None
+
+    base_event_ts = next(prop for prop in base.schema_[0].properties if prop.name == "event_ts")
+    target_event_ts = next(prop for prop in target.schema_[0].properties if prop.name == "event_ts")
+    target_event_ts.logicalType = "date"
+    target_event_ts.physicalType = "DATE"
+
+    conflicts = ContractMergeEngine().detect_conflicts(base, target)
+
+    conflict_rules = {item.rule for item in conflicts}
+    assert "logical_type_mismatch" in conflict_rules
+    assert "physical_type_change" in conflict_rules
+
+
+def test_merge_engine_allows_decimal_widening_on_numeric_fixture(sample_numeric_precision_contract_model):
+    base = sample_numeric_precision_contract_model.model_copy(deep=True)
+    target = sample_numeric_precision_contract_model.model_copy(deep=True)
+    assert base.schema_ is not None
+    assert target.schema_ is not None
+    assert base.schema_[0].properties is not None
+    assert target.schema_[0].properties is not None
+
+    base_fx_rate = next(prop for prop in base.schema_[0].properties if prop.name == "fx_rate")
+    target_fx_rate = next(prop for prop in target.schema_[0].properties if prop.name == "fx_rate")
+    base_fx_rate.physicalType = "DECIMAL(20,8)"
+    target_fx_rate.physicalType = "DECIMAL(18,6)"
+
+    conflicts = ContractMergeEngine().detect_conflicts(base, target)
+    fx_rate_conflicts = [item for item in conflicts if "fx_rate" in item.path]
+
+    assert fx_rate_conflicts == []

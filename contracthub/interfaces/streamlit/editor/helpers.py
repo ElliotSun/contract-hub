@@ -7,6 +7,15 @@ from typing import Any
 
 import pandas as pd
 import streamlit as st
+from contracthub.core.editor_rows import (
+    is_blank_quality_row,
+    is_blank_quick_field_row,
+    optional_int,
+    rule_condition,
+    tags_to_text,
+    text_to_tags,
+)
+from contracthub.core.editor_semantics import normalize_tags, set_mapping_text
 
 try:
     from streamlit_tags import st_tags
@@ -18,35 +27,6 @@ def display_value(value: str) -> str:
     """Render a read-only contract field value without showing an empty widget."""
     normalized = str(value or "").strip()
     return normalized if normalized else "Not defined"
-
-
-def tags_to_text(tags: Any) -> str:
-    """Render tags as a comma-separated string."""
-    return ", ".join(normalize_tags(tags))
-
-
-def text_to_tags(value: str) -> list[str]:
-    """Parse tags from a comma-separated string."""
-    return normalize_tags(value.split(","))
-
-
-def normalize_tags(tags: Any) -> list[str]:
-    """Normalize tag values into a stable, de-duplicated list."""
-    if not isinstance(tags, list):
-        return []
-
-    normalized_tags: list[str] = []
-    seen: set[str] = set()
-    for tag in tags:
-        normalized = str(tag).strip()
-        if not normalized:
-            continue
-        lowered = normalized.lower()
-        if lowered in seen:
-            continue
-        seen.add(lowered)
-        normalized_tags.append(normalized)
-    return normalized_tags
 
 
 def render_tag_badges(tags: list[str]) -> None:
@@ -87,14 +67,6 @@ def render_tags_editor(tags: Any, *, state_prefix: str, label: str) -> list[str]
     return normalized_tags
 
 
-def set_mapping_text(mapping: dict[str, Any], key: str, value: str) -> None:
-    """Set or remove a string mapping field."""
-    if value.strip():
-        mapping[key] = value
-    else:
-        mapping.pop(key, None)
-
-
 def rows_from_dataframe(frame: Any) -> list[dict[str, Any]]:
     """Convert a data editor result to rows."""
     if isinstance(frame, pd.DataFrame):
@@ -128,52 +100,6 @@ def render_data_editor(data: pd.DataFrame, **kwargs: Any) -> pd.DataFrame:
             category=FutureWarning,
         )
         return st.data_editor(data, **kwargs)
-
-
-def is_blank_quick_field_row(row: dict[str, Any]) -> bool:
-    """Return True when a quick-edit row is effectively empty."""
-    return not any(
-        [
-            str(row.get("name", "")).strip(),
-            str(row.get("type", "")).strip(),
-            str(row.get("description", "")).strip(),
-            bool(row.get("required", False)),
-        ]
-    )
-
-
-def is_blank_quality_row(row: dict[str, Any]) -> bool:
-    """Return True when a quality row is effectively empty."""
-    return not any(
-        [
-            str(row.get("rule_name", "")).strip(),
-            str(row.get("condition", "")).strip(),
-            str(row.get("column", "")).strip(),
-        ]
-    )
-
-
-def rule_condition(rule: dict[str, Any]) -> tuple[str, str]:
-    """Resolve a readable condition field for a quality rule."""
-    for key in ("condition", "mustBe", "mustBeGreaterThan", "mustBeLessThan", "query", "rule"):
-        if key in rule:
-            value = rule.get(key)
-            return key, "" if value is None else str(value)
-    return "condition", ""
-
-
-def optional_int(value: Any) -> int | None:
-    """Convert a nullable dataframe value to an int."""
-    if value is None:
-        return None
-    if isinstance(value, str) and not value.strip():
-        return None
-    if pd.isna(value):
-        return None
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
 
 
 def selectbox_index(options: list[str], value: str) -> int:

@@ -1,28 +1,37 @@
-"""Shared constants for the ContractHub Streamlit editor."""
+"""Compatibility re-export for shared ContractHub constants."""
 
 from __future__ import annotations
 
-TYPE_OPTIONS = ["string", "int", "bigint", "decimal", "boolean", "timestamp"]
-LIFECYCLE_OPTIONS = ["draft", "active", "deprecated"]
-CONTRACT_STATUS_OPTIONS = ["draft", "active", "deprecated", "retired"]
-QUALITY_TYPE_OPTIONS = ["GE", "SQL"]
-QUALITY_SEVERITY_OPTIONS = ["warning", "error"]
-CHANGE_FILTER_OPTIONS = ["ALL", "BREAKING", "ADDED", "MODIFIED", "DEPRECATED"]
-TABLE_RULE_COLUMN = "__table__"
+from contracthub.constants import (
+    BUSINESS_PROPERTY_KEYS,
+    CHANGE_FILTER_OPTIONS,
+    CONTRACT_STATUS_OPTIONS,
+    DEFAULT_QUALITY_SEVERITY,
+    DEFAULT_QUALITY_TYPE,
+    EDITABLE_PROPERTY_FIELDS,
+    EDITABLE_SCHEMA_FIELDS,
+    LIFECYCLE_OPTIONS,
+    QUALITY_SEVERITY_OPTIONS,
+    QUALITY_TYPE_OPTIONS,
+    READ_ONLY_CONTRACT_FIELDS,
+    TABLE_RULE_COLUMN,
+    TECHNICAL_PROPERTY_KEYS,
+    TYPE_OPTIONS,
+)
 
-# ODCS v3.1.0 treats typing, nullability, and nested structure as technical schema metadata.
-TECHNICAL_PROPERTY_KEYS = {
-    "name",
-    "physicalName",
-    "logicalType",
-    "physicalType",
-    "required",
-    "items",
-    "additionalProperties",
-    "logicalTypeOptions",
-    "format",
-    "pattern",
-}
-
-# Business-facing metadata remains editable in the editor.
-BUSINESS_PROPERTY_KEYS = {"businessName", "description", "examples", "tags"}
+__all__ = [
+    "BUSINESS_PROPERTY_KEYS",
+    "CHANGE_FILTER_OPTIONS",
+    "CONTRACT_STATUS_OPTIONS",
+    "DEFAULT_QUALITY_SEVERITY",
+    "DEFAULT_QUALITY_TYPE",
+    "EDITABLE_PROPERTY_FIELDS",
+    "EDITABLE_SCHEMA_FIELDS",
+    "LIFECYCLE_OPTIONS",
+    "QUALITY_SEVERITY_OPTIONS",
+    "QUALITY_TYPE_OPTIONS",
+    "READ_ONLY_CONTRACT_FIELDS",
+    "TABLE_RULE_COLUMN",
+    "TECHNICAL_PROPERTY_KEYS",
+    "TYPE_OPTIONS",
+]

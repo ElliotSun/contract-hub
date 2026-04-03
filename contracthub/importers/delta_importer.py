@@ -59,7 +59,6 @@ def _build_imported_contract(
         contract_id = _to_contract_id(dataset_name)
 
     schema_objects: List[SchemaObject] = []
-    versions: List[str] = []
     contract_description: Optional[str] = None
 
     for table_uri in table_uris:
@@ -72,8 +71,6 @@ def _build_imported_contract(
         table_name = _derive_dataset_name(table_uri)
         table_id = _to_contract_id(table_name)
         delta_version = str(table.version())
-        versions.append(delta_version)
-
         metadata = table.metadata()
         description = _extract_table_description(metadata)
         partition_positions = _extract_partition_positions(metadata)
@@ -102,7 +99,7 @@ def _build_imported_contract(
         )
 
     if contract_version is None:
-        contract_version = versions[0] if len(versions) == 1 else "1.0.0"
+        contract_version = "1.0.0"
 
     contract_model = OpenDataContractStandard(
         apiVersion="v3.1.0",
@@ -264,7 +261,11 @@ def _extract_partition_positions(metadata: Any) -> Dict[str, int]:
 
 def _extract_delta_fields(table: DeltaTable, partition_positions: Dict[str, int]) -> List[SchemaProperty]:
     schema_obj = table.schema()
-    schema_json = schema_obj.json() if hasattr(schema_obj, "json") else None
+    schema_json = None
+    if hasattr(schema_obj, "to_json"):
+        schema_json = schema_obj.to_json()
+    elif hasattr(schema_obj, "json"):
+        schema_json = schema_obj.json()
 
     if isinstance(schema_json, str):
         schema_payload = json.loads(schema_json)

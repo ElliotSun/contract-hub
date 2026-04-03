@@ -1,0 +1,108 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: nested-types
+name: nested-types
+version: 1.0.0
+status: active
+domain: operations
+dataProduct: nested-types
+description:
+  purpose: Covers nested object, array, and map-like ODCS structures.
+schema:
+  - id: nested_table
+    name: nested_payloads
+    physicalName: nested_payloads
+    physicalType: table
+    customProperties:
+      - property: lifecycleStatus
+        value: active
+    properties:
+      - id: payload
+        name: payload
+        physicalName: payload
+        logicalType: object
+        physicalType: STRUCT
+        customProperties:
+          - property: lifecycleStatus
+            value: active
+        properties:
+          - id: source
+            name: source
+            physicalName: source
+            logicalType: string
+            physicalType: STRING
+          - id: event_ts
+            name: event_ts
+            physicalName: event_ts
+            logicalType: timestamp
+            physicalType: TIMESTAMP
+            format: date-time
+          - id: metrics
+            name: metrics
+            physicalName: metrics
+            logicalType: object
+            physicalType: STRUCT
+            properties:
+              - id: count
+                name: count
+                physicalName: count
+                logicalType: integer
+                physicalType: INT
+              - id: score
+                name: score
+                physicalName: score
+                logicalType: number
+                physicalType: DOUBLE
+      - id: events
+        name: events
+        physicalName: events
+        logicalType: array
+        physicalType: "ARRAY<STRUCT<event_id: STRING, event_ts: TIMESTAMP>>"
+        customProperties:
+          - property: lifecycleStatus
+            value: active
+        items:
+          name: event_item
+          logicalType: object
+          physicalType: STRUCT
+          properties:
+            - id: event_id
+              name: event_id
+              physicalName: event_id
+              logicalType: string
+              physicalType: STRING
+            - id: event_ts
+              name: event_ts
+              physicalName: event_ts
+              logicalType: timestamp
+              physicalType: TIMESTAMP
+              format: date-time
+      - id: attributes
+        name: attributes
+        physicalName: attributes
+        logicalType: object
+        physicalType: "MAP<STRING, ARRAY<STRUCT<k: STRING, v: STRING>>>"
+        customProperties:
+          - property: lifecycleStatus
+            value: active
+        logicalTypeOptions:
+          keyType: string
+        items:
+          name: attribute_values
+          logicalType: array
+          physicalType: "ARRAY<STRUCT<k: STRING, v: STRING>>"
+          items:
+            name: attribute_entry
+            logicalType: object
+            physicalType: STRUCT
+            properties:
+              - id: k
+                name: k
+                physicalName: k
+                logicalType: string
+                physicalType: STRING
+              - id: v
+                name: v
+                physicalName: v
+                logicalType: string
+                physicalType: STRING

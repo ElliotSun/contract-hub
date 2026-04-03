@@ -157,7 +157,13 @@ class ContractPipeline:
         base_contract: OpenDataContractStandard,
         merged_contract: OpenDataContractStandard,
     ) -> PolicyEvaluation:
-        """Evaluate lifecycle policy on the merged contract result."""
+        """Evaluate lifecycle policy on the merged contract result.
+
+        Current root-level governance rules:
+        - contract `id` is immutable after the governed contract is created
+        - contract `version` is release-managed and must not change in the
+          normal import/merge pipeline
+        """
         return evaluate_merge_policy(base_contract, merged_contract)
 
     def prepare_ci_cd_artifacts(
@@ -194,6 +200,8 @@ class ContractPipeline:
         manifest = {
             "valid": validation.valid,
             "policyValid": policy_evaluation.valid,
+            "idViolation": policy_evaluation.id_violation,
+            "versionViolation": policy_evaluation.version_violation,
             "issues": [asdict(issue) for issue in validation.issues],
             "breakingChanges": [asdict(change) for change in policy_evaluation.breaking_changes],
             "conflicts": [asdict(conflict) for conflict in merge_result.conflicts],
@@ -270,12 +278,9 @@ class ContractPipeline:
             raise ValueError(f"Merged contract validation failed: {message}")
 
         policy_evaluation = self.evaluate_policy(business_contract, merge_result.contract)
-        version_violation = getattr(policy_evaluation, "version_violation", None)
-        if version_violation is None:
-            version_violation = any(
-                getattr(change, "requires_version_bump", False) for change in policy_evaluation.breaking_changes
-            )
-        if not policy_evaluation.valid and version_violation:
+        id_violation = getattr(policy_evaluation, "id_violation", False)
+        version_violation = getattr(policy_evaluation, "version_violation", False)
+        if not policy_evaluation.valid and (id_violation or version_violation):
             message = "; ".join(f"{item.path}: {item.message}" for item in policy_evaluation.breaking_changes)
             raise ValueError(f"Lifecycle policy validation failed: {message}")
 

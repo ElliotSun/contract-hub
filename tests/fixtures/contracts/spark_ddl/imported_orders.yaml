@@ -1,0 +1,50 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: orders
+name: orders
+version: 1.0.0
+status: active
+domain: sales
+dataProduct: orders
+description:
+  purpose: Spark SQL DDL imported contract
+schema:
+  - id: orders_external
+    name: orders
+    physicalName: orders_external
+    physicalType: external-table
+    description: Orders external table
+    customProperties:
+      - property: contracthub.table.external
+        value: 'true'
+      - property: contracthub.table.format
+        value: DELTA
+      - property: contracthub.table.location
+        value: abfss://silver@mydatalake.dfs.core.windows.net/orders_external
+    properties:
+      - id: id
+        name: id
+        physicalName: id
+        logicalType: integer
+        physicalType: BIGINT
+        required: true
+        description: Order id
+      - id: amount
+        name: amount
+        physicalName: amount
+        logicalType: number
+        physicalType: DECIMAL(18,2)
+        logicalTypeOptions:
+          precision: 18
+          scale: 2
+      - id: payload
+        name: payload
+        physicalName: payload
+        logicalType: object
+        physicalType: STRUCT
+        properties:
+          - id: source
+            name: source
+            physicalName: source
+            logicalType: string
+            physicalType: STRING

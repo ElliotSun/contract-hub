@@ -32,6 +32,12 @@ API intent:
   read the actor's draft or initialize it from the main contract
 - ``save_draft(contract, user)``:
   validate and persist the actor's draft without modifying the main contract
+
+Representation boundary:
+- dicts are still returned to the UI because Streamlit session_state and data
+  editors work naturally with mapping payloads
+- inside the service, contract semantics should prefer ODCS models unless a
+  plain metadata record is sufficient
 """
 
 from __future__ import annotations
@@ -41,13 +47,27 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from open_data_contract_standard.model import OpenDataContractStandard
+
+from contracthub.core.draft_normalizer import normalize_draft_contract
 from contracthub.core import validator as contract_validator
-from contracthub.utils.yaml_utils import dump_yaml, list_yaml_documents, load_yaml, load_yaml_metadata, read_yaml_text
+from contracthub.interfaces.streamlit.services import governance_service
+from contracthub.utils.schema_utils import contract_to_dict, contract_to_model
+from contracthub.utils.yaml_utils import (
+    dump_yaml,
+    dump_yaml_text,
+    list_yaml_documents,
+    load_yaml,
+    load_yaml_metadata,
+    parse_yaml_text,
+    read_yaml_text,
+)
 
 
 DEFAULT_CONTRACTS_DIR = Path("contracts")
 DEFAULT_DRAFTS_DIR = Path(".contracthub/drafts")
 DEFAULT_SAMPLE_CONTRACT_PATH = Path("sample_odcs.yaml")
+ContractInput = OpenDataContractStandard | dict[str, Any]
 
 
 @dataclass(slots=True)
@@ -87,6 +107,14 @@ class ContractService:
         """Return the configured sample ODCS YAML text."""
         return read_yaml_text(self.sample_contract_path)
 
+    def parse_contract_yaml(self, source_yaml: str) -> dict[str, Any]:
+        """Parse YAML text into a contract mapping for UI/editor flows."""
+        return parse_yaml_text(source_yaml)
+
+    def serialize_contract_yaml(self, contract: ContractInput) -> str:
+        """Serialize a contract back to YAML text."""
+        return dump_yaml_text(contract_to_dict(contract))
+
     def list_contracts(self, user: Any) -> list[dict[str, Any]]:
         """Load lightweight contract metadata for the catalog.
 
@@ -119,7 +147,7 @@ class ContractService:
         This method does not require `user` because it only reads the main
         contract and does not evaluate draft ownership.
         """
-        return load_yaml(self._get_contract_path(contract_id))
+        return contract_to_dict(self._get_contract_model(contract_id))
 
     def get_draft(self, contract_id: str, user: Any) -> dict[str, Any]:
         """Load an existing draft or initialize one from the main contract.
@@ -129,7 +157,7 @@ class ContractService:
         - resolving the user-scoped draft path
         """
         try:
-            main_contract = self.get_contract(contract_id)
+            main_contract = self._get_contract_model(contract_id)
         except FileNotFoundError:
             raise
         except OSError as exc:
@@ -138,23 +166,35 @@ class ContractService:
 
         draft_path = self._get_draft_path(contract_id, user)
         if draft_path.exists():
-            return load_yaml(draft_path)
-        return dict(main_contract)
+            return contract_to_dict(contract_to_model(load_yaml(draft_path)))
+        return contract_to_dict(main_contract)
 
-    def save_draft(self, contract: dict[str, Any], user: Any) -> dict[str, Any]:
+    def save_draft(self, contract: ContractInput, user: Any) -> dict[str, Any]:
         """Validate and persist a user draft without modifying the main contract.
 
         `user` is required for:
         - edit permission checks
         - resolving the user-scoped draft path
         """
-        contract_id = _contract_id(contract)
-        main_contract = self.get_contract(contract_id)
+        draft_contract = contract_to_model(contract)
+        contract_id = _contract_id(draft_contract)
+        main_contract = self._get_contract_model(contract_id)
         _ensure_can_edit(user, main_contract, contract_id)
 
-        self._validate_contract(contract)
-        dump_yaml(contract, self._get_draft_path(contract_id, user))
-        return contract
+        normalized_draft = normalize_draft_contract(draft_contract, main_contract)
+        self._validate_contract(normalized_draft)
+        dump_yaml(normalized_draft, self._get_draft_path(contract_id, user))
+        return normalized_draft
+
+    def analyze_draft(self, contract: ContractInput, user: Any) -> Any:
+        """Analyze a working draft against the canonical main contract."""
+        draft_contract = contract_to_model(contract)
+        contract_id = _contract_id(draft_contract)
+        main_contract = self._get_contract_model(contract_id)
+        _ensure_can_edit(user, main_contract, contract_id)
+
+        normalized_draft = normalize_draft_contract(draft_contract, main_contract)
+        return governance_service.analyze_contracts(contract_to_model(normalized_draft), main_contract)
 
     def _get_contract_path(self, contract_id: str) -> str:
         """Return the configured YAML path for a contract identifier.
@@ -178,7 +218,11 @@ class ContractService:
         """Return YAML contract paths from the configured storage root."""
         return list_yaml_documents(self.contracts_dir)
 
-    def _validate_contract(self, contract: dict[str, Any]) -> None:
+    def _get_contract_model(self, contract_id: str) -> OpenDataContractStandard:
+        """Load and return the canonical main contract as an ODCS model."""
+        return contract_to_model(load_yaml(self._get_contract_path(contract_id)))
+
+    def _validate_contract(self, contract: ContractInput) -> None:
         """Validate a contract using the shared core validator."""
         report = contract_validator.validate(contract)
         if report.valid:
@@ -203,9 +247,14 @@ def get_draft(contract_id: str, user: Any) -> dict[str, Any]:
     return ContractService().get_draft(contract_id, user)
 
 
-def save_draft(contract: dict[str, Any], user: Any) -> dict[str, Any]:
+def save_draft(contract: ContractInput, user: Any) -> dict[str, Any]:
     """Convenience wrapper for draft persistence."""
     return ContractService().save_draft(contract, user)
+
+
+def analyze_draft(contract: ContractInput, user: Any) -> Any:
+    """Convenience wrapper for draft governance analysis."""
+    return ContractService().analyze_draft(contract, user)
 
 
 def load_sample_contract_yaml() -> str:
@@ -213,9 +262,22 @@ def load_sample_contract_yaml() -> str:
     return ContractService().load_sample_contract_yaml()
 
 
-def _contract_id(contract: dict[str, Any]) -> str:
+def parse_contract_yaml(source_yaml: str) -> dict[str, Any]:
+    """Convenience wrapper for editor/service-safe YAML parsing."""
+    return ContractService().parse_contract_yaml(source_yaml)
+
+
+def serialize_contract_yaml(contract: ContractInput) -> str:
+    """Convenience wrapper for editor/service-safe YAML serialization."""
+    return ContractService().serialize_contract_yaml(contract)
+
+
+def _contract_id(contract: OpenDataContractStandard | dict[str, Any]) -> str:
     """Resolve the canonical contract identifier used for file naming."""
-    contract_id = str(contract.get("id", "") or "").strip()
+    if isinstance(contract, OpenDataContractStandard):
+        contract_id = str(contract.id or "").strip()
+    else:
+        contract_id = str(contract.get("id", "") or "").strip()
     if not contract_id:
         raise ValueError("Contract must define an id")
     return contract_id
@@ -241,12 +303,24 @@ def _user_value(user: Any, field: str) -> str:
     return str(getattr(user, field, "") or "")
 
 
-def _can_edit(user: Any, contract: dict[str, Any]) -> bool:
+def _can_edit(user: Any, contract: OpenDataContractStandard | dict[str, Any]) -> bool:
     """Return True when the user can edit the target contract."""
-    return _user_value(user, "role") == "admin" or str(contract.get("tenant", "") or "") == _user_value(user, "tenant")
+    if isinstance(contract, OpenDataContractStandard):
+        contract_tenant = str(contract.tenant or "")
+    else:
+        contract_tenant = str(contract.get("tenant", "") or "")
+    if _user_value(user, "role") == "admin":
+        return True
+
+    user_tenant = _user_value(user, "tenant").strip()
+    contract_tenant = contract_tenant.strip()
+    if not contract_tenant or not user_tenant:
+        return False
+
+    return contract_tenant == user_tenant
 
 
-def _ensure_can_edit(user: Any, contract: dict[str, Any], contract_id: str) -> None:
+def _ensure_can_edit(user: Any, contract: OpenDataContractStandard | dict[str, Any], contract_id: str) -> None:
     """Raise when the user is not permitted to edit the target contract."""
     if not _can_edit(user, contract):
         raise PermissionError(f"User is not allowed to edit contract '{contract_id}'")

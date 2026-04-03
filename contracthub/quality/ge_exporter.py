@@ -104,13 +104,20 @@ def generate_expectation_suite(
     before notebook/runtime execution.
     """
     exporter = exporter_factory.create(ExportFormat.great_expectations)
-    exported = exporter.export(
-        data_contract=contract,
-        schema_name=schema_name,
-        server=None,
-        sql_server_type="auto",
-        export_args={"engine": "spark", "suite_name": suite_name},
-    )
+    try:
+        exported = exporter.export(
+            data_contract=contract,
+            schema_name=schema_name,
+            server=None,
+            sql_server_type="auto",
+            export_args={"engine": "spark", "suite_name": suite_name},
+        )
+    except ModuleNotFoundError as exc:
+        if exc.name == "pyspark":
+            raise RuntimeError(
+                "datacontract-cli Great Expectations export with engine='spark' requires pyspark to be installed"
+            ) from exc
+        raise
     suite_dict = cast(ExpectationSuiteDict, json.loads(exported))
     _validate_ge_suite_dict(suite_dict)
     return _suite_dict_to_expectation_suite(suite_dict)
@@ -119,6 +126,7 @@ def generate_expectation_suite(
 def _suite_dict_to_expectation_suite(suite_dict: ExpectationSuiteDict) -> Any:
     """Build a GE ExpectationSuite instance from exported JSON."""
     ExpectationSuite, ExpectationConfiguration = _load_ge_suite_classes()
+    get_expectation_impl = _load_ge_expectation_registry()
 
     suite_name = suite_dict.get("name") or "contracthub_suite"
     expectation_suite = _create_suite_object(ExpectationSuite, suite_name)
@@ -130,12 +138,21 @@ def _suite_dict_to_expectation_suite(suite_dict: ExpectationSuiteDict) -> Any:
         if not expectation_type:
             continue
 
-        config = ExpectationConfiguration(
+        expectation_obj = _create_expectation_object(
+            get_expectation_impl=get_expectation_impl,
             expectation_type=expectation_type,
             kwargs=expectation.get("kwargs", {}),
             meta=expectation.get("meta", {}),
+            raw_expectation=expectation,
         )
-        _add_expectation(expectation_suite, config)
+        if expectation_obj is None:
+            expectation_obj = _create_expectation_config(
+                ExpectationConfiguration,
+                expectation_type=expectation_type,
+                kwargs=expectation.get("kwargs", {}),
+                meta=expectation.get("meta", {}),
+            )
+        _add_expectation(expectation_suite, expectation_obj)
 
     return expectation_suite
 
@@ -185,14 +202,73 @@ def _create_suite_object(ExpectationSuite: Any, suite_name: str) -> Any:
         return ExpectationSuite(name=suite_name)
 
 
+def _create_expectation_config(
+    ExpectationConfiguration: Any,
+    *,
+    expectation_type: str,
+    kwargs: dict[str, Any],
+    meta: dict[str, Any],
+) -> Any:
+    """Create an expectation config across GE version differences."""
+    try:
+        return ExpectationConfiguration(
+            expectation_type=expectation_type,
+            kwargs=kwargs,
+            meta=meta,
+        )
+    except TypeError:
+        try:
+            return ExpectationConfiguration(
+                type=expectation_type,
+                kwargs=kwargs,
+                meta=meta,
+            )
+        except TypeError:
+            return ExpectationConfiguration(expectation_type, kwargs, meta)
+
+
+def _create_expectation_object(
+    *,
+    get_expectation_impl: Any,
+    expectation_type: str,
+    kwargs: dict[str, Any],
+    meta: dict[str, Any],
+    raw_expectation: dict[str, Any],
+) -> Any | None:
+    """Create a runtime expectation object when the installed GE version expects it."""
+    try:
+        expectation_impl = get_expectation_impl(expectation_type)
+    except Exception:
+        return None
+
+    if not callable(expectation_impl):
+        return None
+
+    init_kwargs = dict(kwargs)
+    if meta:
+        init_kwargs["meta"] = meta
+
+    for key in ("notes", "description", "severity", "success_on_last_run", "id", "rendered_content"):
+        if key in raw_expectation:
+            init_kwargs[key] = raw_expectation[key]
+
+    try:
+        return expectation_impl(**init_kwargs)
+    except Exception:
+        return None
+
+
 def _add_expectation(expectation_suite: Any, config: Any) -> None:
     if hasattr(expectation_suite, "add_expectation"):
         try:
             expectation_suite.add_expectation(expectation_configuration=config)
             return
-        except TypeError:
-            expectation_suite.add_expectation(config)
-            return
+        except Exception:
+            try:
+                expectation_suite.add_expectation(config)
+                return
+            except Exception:
+                pass
 
     expectations = getattr(expectation_suite, "expectations", None)
     if isinstance(expectations, list):

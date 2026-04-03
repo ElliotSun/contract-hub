@@ -6,11 +6,10 @@ from typing import Any
 
 import pandas as pd
 import streamlit as st
-from contracthub.interfaces.streamlit.services import governance_service
+from contracthub.interfaces.streamlit.services.contract_service import analyze_draft
 from contracthub.lifecycle.merge_engine import MergeAnalysis, MergeConflict
 
 from .constants import CHANGE_FILTER_OPTIONS
-from .contract_model import contract_to_yaml
 from .styles import section_title
 
 def render_analysis_results() -> None:
@@ -88,19 +87,10 @@ else:
         render_analysis_results()
 
 
-def run_analysis(contract: dict[str, Any]) -> None:
-    """Run governance analysis against the editor baseline contract."""
-    target_yaml = str(st.session_state.get("editor_baseline_yaml", ""))
-    if not target_yaml.strip():
-        st.session_state["editor_warning"] = "Analysis baseline is not available for this editor session."
-        st.session_state["editor_error"] = None
-        return
-
+def run_analysis(contract: dict[str, Any], user: Any) -> None:
+    """Run governance analysis for the current draft against its main contract."""
     try:
-        raw_result = governance_service.analyze(
-            source_yaml=contract_to_yaml(contract),
-            target_yaml=target_yaml,
-        )
+        raw_result = analyze_draft(contract, user)
     except Exception as exc:
         st.session_state["editor_error"] = f"Analysis failed: {exc}"
         st.session_state["editor_warning"] = None

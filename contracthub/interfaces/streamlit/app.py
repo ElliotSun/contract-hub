@@ -303,8 +303,8 @@ def _open_contract(entry: dict[str, Any], *, edit_mode: bool) -> None:
     st.session_state["editor_baseline_yaml"] = contract_to_yaml(main_contract)
     st.session_state["editor_analysis_result"] = None
     st.session_state["editor_analysis_visible"] = False
-    st.session_state["editor_selected_schema_index"] = 0
-    st.session_state["editor_selected_field_index"] = 0
+    st.session_state["editor_selected_schema_name"] = ""
+    st.session_state["editor_selected_field_name"] = ""
     ensure_selected_schema(working_contract)
     ensure_selected_field(working_contract)
     sync_contract_inputs(working_contract, force=True)
@@ -319,7 +319,7 @@ def _handle_analyze() -> None:
     contract = st.session_state.get("contract")
     if not isinstance(contract, dict):
         return
-    run_analysis(contract)
+    run_analysis(contract, _current_user())
     st.session_state["editor_analysis_visible"] = isinstance(st.session_state.get("editor_analysis_result"), dict)
 
 

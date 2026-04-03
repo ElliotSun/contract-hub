@@ -1,0 +1,20 @@
+{
+  "type": "struct",
+  "fields": [
+    {"name": "id", "type": "long", "nullable": false, "metadata": {}},
+    {"name": "amount", "type": "decimal(10,2)", "nullable": true, "metadata": {}},
+    {
+      "name": "payload",
+      "type": {
+        "type": "struct",
+        "fields": [
+          {"name": "source", "type": "string", "nullable": true, "metadata": {}}
+        ]
+      },
+      "nullable": true,
+      "metadata": {}
+    },
+    {"name": "events", "type": "array<struct<event_id:string,event_ts:timestamp>>", "nullable": true, "metadata": {}},
+    {"name": "attributes", "type": "map<string,string>", "nullable": true, "metadata": {}}
+  ]
+}

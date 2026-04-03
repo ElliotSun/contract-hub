@@ -24,11 +24,9 @@ Precedence rule:
 from __future__ import annotations
 
 import logging
-from copy import deepcopy
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
-import yaml
 from datacontract.export.exporter import ExportFormat
 from datacontract.export.exporter_factory import exporter_factory
 from open_data_contract_standard.model import (
@@ -39,6 +37,7 @@ from open_data_contract_standard.model import (
     SchemaProperty,
     Server,
 )
+from contracthub.utils.schema_utils import contract_to_model
 
 ContractInput = Union[OpenDataContractStandard, Dict[str, Any], str, Path]
 
@@ -130,17 +129,7 @@ def export_contract_to_spark_sql(
 
 
 def _load_contract_model(contract: ContractInput) -> OpenDataContractStandard:
-    if isinstance(contract, OpenDataContractStandard):
-        return OpenDataContractStandard.model_validate(contract.model_dump(by_alias=True, exclude_none=True))
-
-    if isinstance(contract, dict):
-        return OpenDataContractStandard.model_validate(deepcopy(contract))
-
-    path = Path(contract).expanduser().resolve()
-    payload = yaml.safe_load(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise ValueError("Contract file must contain a YAML mapping object")
-    return OpenDataContractStandard.model_validate(payload)
+    return contract_to_model(contract)
 
 
 def _prepare_for_sql_export(

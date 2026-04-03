@@ -1,34 +1,46 @@
 import json
 
+import pandas as pd
+from deltalake import write_deltalake
+
 import contracthub.importers.delta_importer as delta_importer
 
 
-def test_delta_importer_builds_odcs_contract(monkeypatch):
+def test_delta_importer_builds_odcs_contract_from_real_local_delta_table(tmp_path):
+    table_path = tmp_path / "finance_transactions"
+    data = pd.DataFrame(
+        {
+            "id": pd.Series([1, 2], dtype="int64"),
+            "amount": pd.Series([10.5, 22.75], dtype="float64"),
+            "processed_at": pd.to_datetime(["2026-04-03T10:00:00Z", "2026-04-03T10:01:00Z"], utc=True),
+        }
+    )
+    write_deltalake(str(table_path), data, mode="overwrite")
+
+    importer = delta_importer.DeltaTableImporter("delta")
+    contract = importer.import_source(str(table_path), {})
+
+    assert contract.name == "finance_transactions"
+    assert contract.version == "1.0.0"
+    assert contract.schema_ is not None
+    table = contract.schema_[0]
+    assert table.id == "finance_transactions"
+    assert table.properties is not None
+    fields = {item.name: item for item in table.properties if item.name}
+    assert fields["id"].logicalType == "integer"
+    assert fields["amount"].logicalType == "number"
+    assert fields["processed_at"].logicalType == "timestamp"
+
+    table_cp = {item.property: item.value for item in table.customProperties or []}
+    assert table_cp["contracthub.delta.uri"] == str(table_path)
+    assert table_cp["contracthub.delta.version"] == "0"
+
+
+def test_delta_importer_builds_odcs_contract(monkeypatch, delta_finance_transactions_schema_path):
     class FakeSchema:
         @staticmethod
         def json():
-            return json.dumps(
-                {
-                    "type": "struct",
-                    "fields": [
-                        {"name": "id", "type": "long", "nullable": False, "metadata": {}},
-                        {"name": "amount", "type": "decimal(10,2)", "nullable": True, "metadata": {}},
-                        {
-                            "name": "payload",
-                            "type": {
-                                "type": "struct",
-                                "fields": [
-                                    {"name": "source", "type": "string", "nullable": True, "metadata": {}}
-                                ],
-                            },
-                            "nullable": True,
-                            "metadata": {},
-                        },
-                        {"name": "events", "type": "array<struct<event_id:string,event_ts:timestamp>>", "nullable": True, "metadata": {}},
-                        {"name": "attributes", "type": "map<string,string>", "nullable": True, "metadata": {}},
-                    ],
-                }
-            )
+            return delta_finance_transactions_schema_path.read_text(encoding="utf-8")
 
     class FakeMetadata:
         description = "Finance transactions"
@@ -56,7 +68,7 @@ def test_delta_importer_builds_odcs_contract(monkeypatch):
     contract = importer.import_source("s3://lake/silver/finance_transactions", {})
 
     assert contract.name == "finance_transactions"
-    assert contract.version == "12"
+    assert contract.version == "1.0.0"
     assert contract.description is not None
     assert contract.description.usage == "Finance transactions"
     assert contract.schema_ is not None
@@ -88,18 +100,11 @@ def test_delta_importer_builds_odcs_contract(monkeypatch):
     assert table_cp["contracthub.delta.partitionColumns"] == ["id"]
 
 
-def test_delta_importer_supports_multiple_tables(monkeypatch):
+def test_delta_importer_supports_multiple_tables(monkeypatch, delta_minimal_schema_path):
     class FakeSchema:
         @staticmethod
         def json():
-            return json.dumps(
-                {
-                    "type": "struct",
-                    "fields": [
-                        {"name": "id", "type": "long", "nullable": False, "metadata": {}},
-                    ],
-                }
-            )
+            return delta_minimal_schema_path.read_text(encoding="utf-8")
 
     class FakeMetadata:
         description = None

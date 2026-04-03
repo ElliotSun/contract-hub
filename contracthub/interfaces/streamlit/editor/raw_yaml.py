@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import streamlit as st
-import yaml
 
 from .contract_model import parse_yaml_payload
 from .state import ensure_selected_field, ensure_selected_schema, sync_contract_inputs, sync_field_inputs, sync_schema_inputs
@@ -16,9 +15,6 @@ def apply_raw_yaml(raw_yaml: str) -> None:
         return
     try:
         payload = parse_yaml_payload(raw_yaml)
-    except yaml.YAMLError as exc:
-        st.session_state["editor_error"] = f"Invalid YAML: {exc}"
-        return
     except Exception as exc:
         st.session_state["editor_error"] = f"Failed to load YAML: {exc}"
         return
@@ -43,9 +39,6 @@ def validate_raw_yaml(raw_yaml: str) -> None:
         return
     try:
         parse_yaml_payload(raw_yaml)
-    except yaml.YAMLError as exc:
-        st.session_state["editor_error"] = f"Invalid YAML: {exc}"
-        return
     except Exception as exc:
         st.session_state["editor_error"] = f"Validation failed: {exc}"
         return

@@ -1,0 +1,53 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: narrowing-cases
+name: narrowing-cases
+version: 1.0.0
+status: active
+domain: finance
+dataProduct: narrowing-cases
+schema:
+  - id: narrow_table
+    name: narrowing_table
+    physicalName: narrowing_table
+    physicalType: table
+    customProperties:
+      - property: lifecycleStatus
+        value: active
+    properties:
+      - id: short_code
+        name: short_code
+        physicalName: short_code
+        logicalType: string
+        physicalType: VARCHAR(32)
+        customProperties:
+          - property: lifecycleStatus
+            value: active
+      - id: payload_hash
+        name: payload_hash
+        physicalName: payload_hash
+        logicalType: binary
+        physicalType: VARBINARY(64)
+        customProperties:
+          - property: lifecycleStatus
+            value: active
+      - id: quantity
+        name: quantity
+        physicalName: quantity
+        logicalType: integer
+        physicalType: BIGINT
+        customProperties:
+          - property: lifecycleStatus
+            value: active
+      - id: status_code
+        name: status_code
+        physicalName: status_code
+        logicalType: string
+        physicalType: VARCHAR(16)
+        customProperties:
+          - property: lifecycleStatus
+            value: active
+        enum:
+          - ACTIVE
+          - INACTIVE
+          - PENDING

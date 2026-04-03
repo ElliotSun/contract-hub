@@ -82,16 +82,13 @@ class MergeAnalysis:
 class ContractMergeEngine:
     """Merge ODCS contracts while preserving business metadata and quality rules."""
 
-    def merge(
+    def analyze(
         self,
         base_contract: OpenDataContractStandard,
         business_contract: OpenDataContractStandard,
-        *,
-        fail_on_conflict: bool = False,
-    ) -> MergeResult:
-        # source_model = newly generated technical contract
+    ) -> MergeAnalysis:
+        """Analyze a source contract against the governed business contract."""
         source_model = _to_odcs_model(base_contract)
-        # target_model = existing business contract in Git
         target_model = _to_odcs_model(business_contract)
 
         if _is_retired_contract(target_model):
@@ -101,7 +98,19 @@ class ContractMergeEngine:
                 message="Retired contract cannot be modified",
             )
 
-        analysis = self._analyze_merge(target_model=target_model, source_model=source_model)
+        return self._analyze_merge(target_model=target_model, source_model=source_model)
+
+    def merge(
+        self,
+        base_contract: OpenDataContractStandard,
+        business_contract: OpenDataContractStandard,
+        *,
+        fail_on_conflict: bool = False,
+    ) -> MergeResult:
+        # source_model = newly generated technical contract
+        source_model = _to_odcs_model(base_contract)
+        target_model = _to_odcs_model(business_contract)
+        analysis = self.analyze(source_model, target_model)
         if fail_on_conflict and analysis.conflicts:
             rules = ", ".join({c.rule for c in analysis.conflicts})
             raise ValueError(f"Merge conflicts detected: {rules}")
@@ -118,11 +127,7 @@ class ContractMergeEngine:
         base_contract: OpenDataContractStandard,
         business_contract: OpenDataContractStandard,
     ) -> list[MergeConflict]:
-        # source_model = newly generated technical contract
-        source_model = _to_odcs_model(base_contract)
-        # target_model = existing business contract in Git
-        target_model = _to_odcs_model(business_contract)
-        return self._analyze_merge(target_model=target_model, source_model=source_model).conflicts
+        return self.analyze(base_contract, business_contract).conflicts
 
     def _analyze_merge(
         self,
@@ -254,9 +259,11 @@ class ContractMergeEngine:
 
         # source_model = newly generated technical contract
         # target_model = existing business contract in Git
-        # Technical updates come from source model at contract level, except schema which is merged separately.
+        # Technical updates come from source model at contract level, except:
+        # - schema/quality/customProperties, which are merged separately
+        # - root id/version, which stay anchored to the governed contract
         for field_name in OpenDataContractStandard.model_fields:
-            if field_name in {"schema_", "quality", "customProperties"}:
+            if field_name in {"id", "version", "schema_", "quality", "customProperties"}:
                 continue
             source_value = getattr(source_model, field_name, None)
             if source_value is not None:

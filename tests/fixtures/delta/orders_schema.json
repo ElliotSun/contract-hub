@@ -1,0 +1,8 @@
+{
+  "type": "struct",
+  "fields": [
+    {"name": "id", "type": "long", "nullable": false, "metadata": {}},
+    {"name": "amount", "type": "decimal(18,2)", "nullable": true, "metadata": {}},
+    {"name": "processed_at", "type": "timestamp", "nullable": true, "metadata": {}}
+  ]
+}

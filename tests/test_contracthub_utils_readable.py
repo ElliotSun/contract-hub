@@ -7,7 +7,7 @@ import pytest
 import contracthub.core.loader as contract_loader
 import contracthub.utils.yaml_utils as yaml_utils
 from contracthub.utils.schema_utils import contract_to_dict, contract_to_model, ensure_schema_key
-from contracthub.utils.yaml_utils import dump_yaml, list_yaml_documents, load_yaml
+from contracthub.utils.yaml_utils import dump_yaml, dump_yaml_text, list_yaml_documents, load_yaml, parse_yaml_text
 
 
 def test_yaml_utils_can_load_and_dump_sample_contract(sample_odcs_dict, tmp_path):
@@ -17,6 +17,14 @@ def test_yaml_utils_can_load_and_dump_sample_contract(sample_odcs_dict, tmp_path
     assert output_path.exists()
     assert reloaded["id"] == sample_odcs_dict["id"]
     assert len(reloaded["schema"]) == len(sample_odcs_dict["schema"])
+
+
+def test_yaml_utils_parse_and_dump_yaml_text_use_odcs_contract_shape(sample_odcs_dict):
+    rendered = dump_yaml_text(sample_odcs_dict)
+    reparsed = parse_yaml_text(rendered)
+
+    assert reparsed["id"] == sample_odcs_dict["id"]
+    assert len(reparsed["schema"]) == len(sample_odcs_dict["schema"])
 
 
 def test_yaml_utils_rejects_non_mapping_yaml(tmp_path):
@@ -86,11 +94,43 @@ def test_yaml_utils_load_yaml_metadata_supports_adls2_file(monkeypatch):
     }
 
 
+def test_yaml_utils_load_yaml_metadata_handles_quoted_colons_multiline_and_comments(tmp_path):
+    contract_file = tmp_path / "metadata.yaml"
+    contract_file.write_text(
+        """
+id: "orders:au"
+dataProduct: >-
+  seller:payments
+version: '1.0.0'
+status: active # inline comment should not leak into value
+tenant: "tenant:a"
+description:
+  purpose: ignored nested mapping
+""".strip(),
+        encoding="utf-8",
+    )
+
+    metadata = yaml_utils.load_yaml_metadata(
+        contract_file,
+        keys=["id", "dataProduct", "version", "status", "tenant"],
+    )
+
+    assert metadata == {
+        "id": "orders:au",
+        "dataProduct": "seller:payments",
+        "version": "1.0.0",
+        "status": "active",
+        "tenant": "tenant:a",
+    }
+
+
 def test_schema_utils_convert_sample_contract_between_input_types(sample_odcs_dict, sample_odcs_path, sample_odcs_model):
+    model_from_dict = contract_to_model(sample_odcs_dict)
     model_from_path = contract_to_model(sample_odcs_path)
     model_from_string_path = contract_to_model(str(sample_odcs_path))
     dict_from_model = contract_to_dict(sample_odcs_model)
 
+    assert model_from_dict.id == sample_odcs_dict["id"]
     assert model_from_path.id == sample_odcs_dict["id"]
     assert model_from_string_path.id == sample_odcs_dict["id"]
     assert dict_from_model["id"] == sample_odcs_dict["id"]

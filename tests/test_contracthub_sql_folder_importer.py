@@ -1,35 +1,9 @@
 from contracthub.importers.sql_importer import SQLFolderImporter
 
 
-def test_sql_folder_importer_parses_real_sparksql_external_table_ddl(tmp_path):
-    product_dir = tmp_path / "adls2_product"
-    product_dir.mkdir()
-
-    (product_dir / "orders_external.sql").write_text(
-        """
-        CREATE EXTERNAL TABLE orders_external (
-          id BIGINT NOT NULL COMMENT 'Order id',
-          amount DECIMAL(18,2),
-          is_active BOOLEAN,
-          event_date DATE,
-          event_ts TIMESTAMP,
-          payload STRUCT<
-            source: STRING,
-            metrics: STRUCT<count: INT, score: DOUBLE>,
-            labels: MAP<STRING, STRING>
-          >,
-          events ARRAY<STRUCT<event_id: STRING, event_ts: TIMESTAMP>>,
-          attributes MAP<STRING, ARRAY<STRUCT<k: STRING, v: STRING>>>,
-          raw BINARY
-        )
-        USING DELTA
-        LOCATION 'abfss://silver@mydatalake.dfs.core.windows.net/orders_external';
-        """,
-        encoding="utf-8",
-    )
-
+def test_sql_folder_importer_parses_real_sparksql_external_table_ddl(spark_ddl_adls2_product_dir):
     importer = SQLFolderImporter("sql-folder")
-    contract = importer.import_source(str(product_dir), {})
+    contract = importer.import_source(str(spark_ddl_adls2_product_dir), {})
 
     assert contract.name == "adls2_product"
     assert contract.schema_ is not None
@@ -68,41 +42,9 @@ def test_sql_folder_importer_parses_real_sparksql_external_table_ddl(tmp_path):
     assert attributes_field.items.logicalType == "array"
 
 
-def test_sql_folder_importer_multiple_files_generate_one_contract_with_all_tables(tmp_path):
-    product_dir = tmp_path / "finance_product"
-    product_dir.mkdir()
-
-    (product_dir / "accounts.sql").write_text(
-        """
-        CREATE TABLE accounts (
-          account_id STRING NOT NULL,
-          opened_at TIMESTAMP
-        );
-        """,
-        encoding="utf-8",
-    )
-    (product_dir / "transactions.sql").write_text(
-        """
-        CREATE TABLE transactions (
-          txn_id STRING NOT NULL,
-          account_id STRING NOT NULL,
-          amount DECIMAL(10,2)
-        );
-        """,
-        encoding="utf-8",
-    )
-    (product_dir / "balances.sql").write_text(
-        """
-        CREATE TABLE balances (
-          account_id STRING NOT NULL,
-          balance DECIMAL(18,2)
-        );
-        """,
-        encoding="utf-8",
-    )
-
+def test_sql_folder_importer_multiple_files_generate_one_contract_with_all_tables(spark_ddl_finance_product_dir):
     importer = SQLFolderImporter("sql-folder")
-    contract = importer.import_source(str(product_dir), {})
+    contract = importer.import_source(str(spark_ddl_finance_product_dir), {})
 
     # One import call should produce one ODCS contract containing all table schemas.
     assert contract.name == "finance_product"
@@ -114,27 +56,8 @@ def test_sql_folder_importer_multiple_files_generate_one_contract_with_all_table
     assert table_names == {"accounts", "transactions", "balances"}
 
 
-def test_sql_folder_importer_extracts_primary_key_unique_and_partition_metadata(tmp_path):
-    product_dir = tmp_path / "risk_product"
-    product_dir.mkdir()
-
-    (product_dir / "events.sql").write_text(
-        """
-        CREATE TABLE events (
-          event_id STRING NOT NULL,
-          event_date DATE,
-          source STRING,
-          CONSTRAINT pk_events PRIMARY KEY (event_id),
-          CONSTRAINT uq_events UNIQUE (source)
-        )
-        USING DELTA
-        COMMENT 'Event fact table'
-        PARTITIONED BY (event_date);
-        """,
-        encoding="utf-8",
-    )
-
-    contract = SQLFolderImporter("sql-folder").import_source(str(product_dir), {})
+def test_sql_folder_importer_extracts_primary_key_unique_and_partition_metadata(spark_ddl_risk_product_dir):
+    contract = SQLFolderImporter("sql-folder").import_source(str(spark_ddl_risk_product_dir), {})
     assert contract.schema_ is not None
     table = contract.schema_[0]
 

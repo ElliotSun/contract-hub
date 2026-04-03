@@ -1,0 +1,47 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: enum-types
+name: enum-types
+version: 1.0.0
+status: active
+domain: reference
+dataProduct: enum-types
+description:
+  purpose: Covers enum-style fields and constrained string values.
+schema:
+  - id: enum_table
+    name: reference_codes
+    physicalName: reference_codes
+    physicalType: table
+    customProperties:
+      - property: lifecycleStatus
+        value: active
+    properties:
+      - id: status_code
+        name: status_code
+        physicalName: status_code
+        logicalType: string
+        physicalType: VARCHAR(16)
+        required: true
+        customProperties:
+          - property: lifecycleStatus
+            value: active
+        enum:
+          - ACTIVE
+          - INACTIVE
+          - PENDING
+        examples:
+          - ACTIVE
+      - id: region_code
+        name: region_code
+        physicalName: region_code
+        logicalType: string
+        physicalType: CHAR(2)
+        required: true
+        customProperties:
+          - property: lifecycleStatus
+            value: active
+        pattern: "^[A-Z]{2}$"
+        examples:
+          - AU
+          - US

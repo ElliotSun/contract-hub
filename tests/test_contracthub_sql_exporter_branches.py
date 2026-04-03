@@ -157,3 +157,14 @@ def test_export_contract_rejects_unity_catalog_for_non_databricks_target():
             unity_schema="silver",
             sql_server_type="postgres",
         )
+
+
+def test_export_contract_uses_constraint_friendly_quality_fixture(sample_constraint_quality_contract_path):
+    ddl = exporter_mod.export_contract_to_spark_sql(sample_constraint_quality_contract_path)
+
+    assert "ALTER COLUMN country_code SET NOT NULL" in ddl
+    assert "ADD CONSTRAINT chk_quality_rules_country_code_pattern" in ddl
+    assert "CHECK (country_code RLIKE '^[A-Z]{2}$')" in ddl
+    assert "ADD CONSTRAINT chk_quality_rules_status_code_valid_values" in ddl
+    assert "CHECK (status_code IN ('ACTIVE', 'INACTIVE', 'PENDING'))" in ddl
+    assert "ALTER COLUMN processed_at SET NOT NULL" in ddl

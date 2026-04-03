@@ -5,8 +5,24 @@ from typing import Any
 from urllib.parse import urlparse
 
 import yaml
+from open_data_contract_standard.model import OpenDataContractStandard
 
 from contracthub.core import loader as contract_loader
+
+
+def parse_yaml_text(source_yaml: str) -> dict[str, Any]:
+    """Parse ODCS YAML text into a canonical contract mapping."""
+    try:
+        model = OpenDataContractStandard.from_string(source_yaml)
+    except TypeError as exc:
+        raise ValueError("YAML content must be a mapping object") from exc
+    return model.model_dump(by_alias=True, exclude_none=True)
+
+
+def dump_yaml_text(payload: dict[str, Any]) -> str:
+    """Serialize a contract mapping through the ODCS model definition."""
+    model = OpenDataContractStandard.model_validate(payload)
+    return model.to_yaml()
 
 
 def read_yaml_text(path: str | Path) -> str:
@@ -43,21 +59,20 @@ def load_yaml_metadata(path: str | Path, keys: list[str] | tuple[str, ...]) -> d
     wanted = {str(key) for key in keys}
     metadata: dict[str, str] = {}
 
-    for raw_line in read_yaml_text(path).splitlines():
-        if not raw_line or raw_line.startswith((" ", "\t", "#")):
-            continue
-        if ":" not in raw_line:
+    document = yaml.compose(read_yaml_text(path))
+    if not isinstance(document, yaml.nodes.MappingNode):
+        return metadata
+
+    for key_node, value_node in document.value:
+        if not isinstance(key_node, yaml.nodes.ScalarNode):
             continue
 
-        key, raw_value = raw_line.split(":", 1)
-        key = key.strip()
+        key = str(key_node.value)
         if key not in wanted or key in metadata:
             continue
 
-        value = raw_value.strip()
-        if value.startswith(("'", '"')) and value.endswith(("'", '"')) and len(value) >= 2:
-            value = value[1:-1]
-        metadata[key] = value
+        if isinstance(value_node, yaml.nodes.ScalarNode):
+            metadata[key] = str(value_node.value)
 
         if len(metadata) == len(wanted):
             break
