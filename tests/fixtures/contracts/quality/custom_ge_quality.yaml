@@ -1,0 +1,27 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: orders-ge
+name: orders-ge
+version: 1.0.0
+status: active
+domain: sales
+dataProduct: orders-ge
+schema:
+  - id: orders
+    name: orders
+    physicalName: orders
+    physicalType: table
+    properties:
+      - id: id
+        name: id
+        physicalName: id
+        logicalType: string
+        physicalType: STRING
+        quality:
+          - id: id_not_null_ge
+            type: custom
+            engine: greatExpectations
+            implementation: |
+              type: expect_column_values_to_not_be_null
+              kwargs:
+                column: id

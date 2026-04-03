@@ -152,6 +152,35 @@ ContractHub currently assumes:
 
 The system may temporarily work with Python `dict` objects at boundaries, but normalization should converge back to ODCS objects or ODCS-shaped mappings.
 
+## Root Contract Governance
+
+At the top level of the contract, ContractHub currently treats these fields specially:
+
+- `id`
+  - immutable once the governed/main contract exists
+  - importer-generated IDs are only used when a contract is first created outside ContractHub
+- `version`
+  - release-managed
+  - must not change in the normal import/merge pipeline
+  - technical source versions such as Delta table versions must not overwrite the governed contract version
+
+Current behavior:
+
+- `contracthub.lifecycle.merge_engine` preserves governed `id` and `version`
+- `contracthub.lifecycle.policy` flags root `id` changes as `id_violation`
+- `contracthub.lifecycle.policy` flags root version changes as `version_violation`
+- `contracthub.orchestrator.pipeline` blocks on `id_violation` and `version_violation`
+
+This means ContractHub currently supports:
+
+- technical schema refresh through import/merge
+- governed metadata preservation
+
+It does not yet implement:
+
+- release-tag-driven version bump workflow
+- promotion workflow that intentionally advances contract version
+
 ## Draft Workflow
 
 Current draft workflow:

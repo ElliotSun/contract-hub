@@ -1,0 +1,6 @@
+{
+  "type": "struct",
+  "fields": [
+    {"name": "id", "type": "long", "nullable": false, "metadata": {}}
+  ]
+}

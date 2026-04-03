@@ -1,0 +1,40 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: orders
+name: orders
+version: '12'
+status: active
+domain: sales
+dataProduct: orders
+description:
+  purpose: delta-rs imported contract
+schema:
+  - id: orders_delta
+    name: orders
+    physicalName: orders
+    physicalType: table
+    customProperties:
+      - property: contracthub.delta.uri
+        value: s3://lake/silver/orders
+      - property: contracthub.delta.version
+        value: '12'
+      - property: contracthub.delta.partitionColumns
+        value:
+          - id
+    properties:
+      - id: id
+        name: id
+        physicalName: id
+        logicalType: integer
+        physicalType: long
+        required: true
+        partitioned: true
+        partitionKeyPosition: 1
+      - id: amount
+        name: amount
+        physicalName: amount
+        logicalType: number
+        physicalType: decimal(10,2)
+        logicalTypeOptions:
+          precision: 10
+          scale: 2

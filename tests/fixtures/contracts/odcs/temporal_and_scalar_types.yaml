@@ -1,0 +1,88 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: temporal-scalars
+name: temporal-scalars
+version: 1.0.0
+status: active
+domain: operations
+dataProduct: temporal-scalars
+description:
+  purpose: Covers temporal, boolean, and binary field shapes for ODCS fixtures.
+schema:
+  - id: temporal_table
+    name: temporal_events
+    physicalName: temporal_events
+    physicalType: table
+    description: Temporal and scalar datatype coverage table
+    customProperties:
+      - property: lifecycleStatus
+        value: active
+    properties:
+      - id: business_date
+        name: business_date
+        physicalName: business_date
+        logicalType: date
+        physicalType: DATE
+        format: date
+        required: true
+        customProperties:
+          - property: lifecycleStatus
+            value: active
+        examples:
+          - "2026-04-02"
+      - id: event_time
+        name: event_time
+        physicalName: event_time
+        logicalType: string
+        physicalType: TIME
+        format: time
+        required: false
+        customProperties:
+          - property: lifecycleStatus
+            value: active
+        examples:
+          - "13:45:12"
+      - id: event_ts
+        name: event_ts
+        physicalName: event_ts
+        logicalType: timestamp
+        physicalType: TIMESTAMP
+        format: date-time
+        required: true
+        partitioned: true
+        partitionKeyPosition: 1
+        customProperties:
+          - property: lifecycleStatus
+            value: active
+        examples:
+          - "2026-04-02T13:45:12Z"
+      - id: event_ts_ntz
+        name: event_ts_ntz
+        physicalName: event_ts_ntz
+        logicalType: timestamp
+        physicalType: TIMESTAMP_NTZ
+        format: date-time
+        required: false
+        customProperties:
+          - property: lifecycleStatus
+            value: active
+        examples:
+          - "2026-04-02T13:45:12"
+      - id: is_active
+        name: is_active
+        physicalName: is_active
+        logicalType: boolean
+        physicalType: BOOLEAN
+        required: true
+        customProperties:
+          - property: lifecycleStatus
+            value: active
+      - id: raw_payload
+        name: raw_payload
+        physicalName: raw_payload
+        logicalType: binary
+        physicalType: BINARY
+        required: false
+        customProperties:
+          - property: lifecycleStatus
+            value: active

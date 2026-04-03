@@ -122,3 +122,31 @@ def test_validator_treats_metric_without_type_as_library_rule():
     )
 
     assert issues == []
+
+
+def test_validator_accepts_additional_contract_fixtures(
+    sample_spark_ddl_contract_model,
+    sample_delta_rs_contract_model,
+    sample_unity_contract_model,
+    sample_custom_ge_quality_contract_model,
+    sample_temporal_types_contract_model,
+    sample_nested_types_contract_model,
+    sample_numeric_precision_contract_model,
+    sample_constraint_quality_contract_model,
+    sample_enum_constraint_contract_model,
+    sample_type_narrowing_base_contract_model,
+    sample_type_narrowing_target_contract_model,
+):
+    validator = ContractValidator()
+
+    assert validator.validate(sample_spark_ddl_contract_model).valid is True
+    assert validator.validate(sample_delta_rs_contract_model).valid is True
+    assert validator.validate(sample_unity_contract_model).valid is True
+    assert validator.validate(sample_custom_ge_quality_contract_model).valid is True
+    assert validator.validate(sample_temporal_types_contract_model).valid is True
+    assert validator.validate(sample_nested_types_contract_model).valid is True
+    assert validator.validate(sample_numeric_precision_contract_model).valid is True
+    assert validator.validate(sample_constraint_quality_contract_model).valid is True
+    assert validator.validate(sample_enum_constraint_contract_model).valid is True
+    assert validator.validate(sample_type_narrowing_base_contract_model).valid is True
+    assert validator.validate(sample_type_narrowing_target_contract_model).valid is True

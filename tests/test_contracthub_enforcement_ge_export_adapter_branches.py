@@ -60,6 +60,20 @@ def test_validate_ge_suite_dict_requires_expectations_list(monkeypatch):
         ge_adapter._validate_ge_suite_dict({"expectations": {}})  # noqa: SLF001
 
 
+def test_validate_ge_suite_dict_accepts_real_ge_expectation_class():
+    ge_adapter._validate_ge_suite_dict(  # noqa: SLF001
+        {
+            "expectations": [
+                {
+                    "type": "expect_column_values_to_not_be_null",
+                    "kwargs": {"column": "id"},
+                    "meta": {},
+                }
+            ]
+        }
+    )
+
+
 def test_create_suite_object_falls_back_to_name_kwarg():
     class FallbackSuite:
         def __init__(self, **kwargs):
@@ -69,6 +83,24 @@ def test_create_suite_object_falls_back_to_name_kwarg():
 
     suite = ge_adapter._create_suite_object(FallbackSuite, "suite.alt")  # noqa: SLF001
     assert suite.name == "suite.alt"
+
+
+def test_create_expectation_config_supports_type_keyword_fallback():
+    class FallbackExpectationConfiguration:
+        def __init__(self, *, type, kwargs, meta):  # noqa: A002
+            self.type = type
+            self.kwargs = kwargs
+            self.meta = meta
+
+    config = ge_adapter._create_expectation_config(  # noqa: SLF001
+        FallbackExpectationConfiguration,
+        expectation_type="expect_column_values_to_not_be_null",
+        kwargs={"column": "id"},
+        meta={},
+    )
+
+    assert config.type == "expect_column_values_to_not_be_null"
+    assert config.kwargs == {"column": "id"}
 
 
 def test_add_expectation_fallback_to_positional():
@@ -144,3 +176,15 @@ def test_load_ge_suite_classes_primary_import_path_success():
     suite_cls, config_cls = ge_adapter._load_ge_suite_classes()  # noqa: SLF001
     assert suite_cls is not None
     assert config_cls is not None
+
+
+def test_generate_expectation_suite_surfaces_clear_error_when_pyspark_is_missing(monkeypatch):
+    class FakeExporter:
+        @staticmethod
+        def export(*args, **kwargs):  # noqa: ANN002, ANN003
+            raise ModuleNotFoundError("No module named 'pyspark'", name="pyspark")
+
+    monkeypatch.setattr(ge_adapter.exporter_factory, "create", lambda _: FakeExporter())
+
+    with pytest.raises(RuntimeError, match="requires pyspark"):
+        ge_adapter.generate_expectation_suite(contract=object(), schema_name="all")

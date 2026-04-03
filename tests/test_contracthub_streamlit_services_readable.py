@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import yaml
 
 import contracthub.interfaces.streamlit.services.contract_service as contract_service_module
@@ -260,6 +261,57 @@ def test_contract_service_save_draft_rejects_unauthorized_user(sample_odcs_dict,
         assert "seller-payments" in str(exc)
     else:
         raise AssertionError("Expected save_draft to reject an unauthorized user")
+
+
+def test_contract_service_rejects_non_admin_edit_when_contract_tenant_is_missing(sample_odcs_dict, tmp_path):
+    contracts_dir = tmp_path / "contracts"
+    main_contract = dict(sample_odcs_dict)
+    main_contract["id"] = "seller-payments"
+    main_contract.pop("tenant", None)
+    dump_yaml(main_contract, contracts_dir / "seller-payments.yaml")
+
+    service = ContractService(contracts_dir=contracts_dir, drafts_dir=tmp_path / ".contracthub" / "drafts")
+
+    with pytest.raises(PermissionError, match="seller-payments"):
+        service.get_draft("seller-payments", user={"tenant": "tenant-a", "role": "editor", "id": "alice"})
+
+
+def test_contract_service_allows_admin_edit_when_contract_tenant_is_missing(sample_odcs_dict, tmp_path):
+    contracts_dir = tmp_path / "contracts"
+    main_contract = dict(sample_odcs_dict)
+    main_contract["id"] = "seller-payments"
+    main_contract.pop("tenant", None)
+    dump_yaml(main_contract, contracts_dir / "seller-payments.yaml")
+
+    service = ContractService(contracts_dir=contracts_dir, drafts_dir=tmp_path / ".contracthub" / "drafts")
+
+    draft = service.get_draft("seller-payments", user={"tenant": "", "role": "admin", "id": "alice"})
+    assert draft["id"] == "seller-payments"
+
+
+def test_contract_service_list_contracts_marks_tenantless_contract_as_not_editable_for_non_admin(
+    sample_odcs_dict, tmp_path
+):
+    contracts_dir = tmp_path / "contracts"
+    contract = dict(sample_odcs_dict)
+    contract["id"] = "tenantless-contract"
+    contract["dataProduct"] = "tenantless contract"
+    contract.pop("tenant", None)
+    dump_yaml(contract, contracts_dir / "tenantless-contract.yaml")
+
+    service = ContractService(contracts_dir=contracts_dir, drafts_dir=tmp_path / ".contracthub" / "drafts")
+    contracts = service.list_contracts(user={"tenant": "tenant-a", "role": "editor"})
+
+    assert contracts == [
+        {
+            "id": "tenantless-contract",
+            "name": "tenantless contract",
+            "version": str(contract["version"]),
+            "status": str(contract["status"]),
+            "tenant": "",
+            "editable": False,
+        }
+    ]
 
 
 def test_contract_service_save_draft_preserves_technical_fields_after_schema_and_property_reordering(

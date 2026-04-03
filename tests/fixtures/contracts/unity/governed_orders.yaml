@@ -1,0 +1,43 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: orders
+name: orders
+version: 1.0.0
+status: active
+domain: sales
+dataProduct: orders
+tenant: ClimateQuantumInc
+description:
+  purpose: Unity Catalog governed orders contract
+servers:
+  - server: contracthub_target
+    type: databricks
+    catalog: main
+    schema: silver
+schema:
+  - id: orders_uc
+    name: orders
+    physicalName: orders
+    physicalType: table
+    businessName: Orders
+    description: Governed Unity Catalog orders table
+    properties:
+      - id: id
+        name: id
+        physicalName: id
+        logicalType: integer
+        physicalType: BIGINT
+        required: true
+        businessName: Order Id
+        description: Business order identifier
+      - id: amount
+        name: amount
+        physicalName: amount
+        logicalType: number
+        physicalType: DECIMAL(18,2)
+        businessName: Order Amount
+        description: Order amount in settlement currency
+    quality:
+      - id: orders_row_count
+        metric: rowCount
+        mustBeGreaterThan: 0

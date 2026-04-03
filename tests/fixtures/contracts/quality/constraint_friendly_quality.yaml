@@ -1,0 +1,54 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: constraint-quality
+name: constraint-quality
+version: 1.0.0
+status: active
+domain: reference
+dataProduct: constraint-quality
+description:
+  purpose: Covers ODCS quality rules that can be compiled into Databricks constraints.
+schema:
+  - id: quality_table
+    name: quality_rules
+    physicalName: quality_rules
+    physicalType: table
+    properties:
+      - id: country_code
+        name: country_code
+        physicalName: country_code
+        logicalType: string
+        physicalType: STRING
+        quality:
+          - id: country_required
+            metric: nullValues
+            mustBe: 0
+          - id: country_pattern
+            metric: invalidValues
+            mustBe: 0
+            arguments:
+              pattern: "^[A-Z]{2}$"
+      - id: status_code
+        name: status_code
+        physicalName: status_code
+        logicalType: string
+        physicalType: STRING
+        quality:
+          - id: status_enum
+            metric: invalidValues
+            mustBe: 0
+            arguments:
+              validValues:
+                - ACTIVE
+                - INACTIVE
+                - PENDING
+      - id: processed_at
+        name: processed_at
+        physicalName: processed_at
+        logicalType: timestamp
+        physicalType: TIMESTAMP
+        format: date-time
+        quality:
+          - id: processed_required
+            metric: nullValues
+            mustBe: 0

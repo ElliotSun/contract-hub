@@ -259,9 +259,11 @@ class ContractMergeEngine:
 
         # source_model = newly generated technical contract
         # target_model = existing business contract in Git
-        # Technical updates come from source model at contract level, except schema which is merged separately.
+        # Technical updates come from source model at contract level, except:
+        # - schema/quality/customProperties, which are merged separately
+        # - root id/version, which stay anchored to the governed contract
         for field_name in OpenDataContractStandard.model_fields:
-            if field_name in {"schema_", "quality", "customProperties"}:
+            if field_name in {"id", "version", "schema_", "quality", "customProperties"}:
                 continue
             source_value = getattr(source_model, field_name, None)
             if source_value is not None:

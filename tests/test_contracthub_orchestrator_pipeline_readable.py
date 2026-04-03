@@ -4,14 +4,17 @@ import json
 from types import SimpleNamespace
 
 import pytest
+import pandas as pd
 
 from datacontract.data_contract import DataContract
 from open_data_contract_standard.model import OpenDataContractStandard
+import contracthub.importers.delta_importer as delta_importer
 from contracthub.core.validator import ValidationIssue, ValidationReport
 from contracthub.devops.audit import AuditMetadata
 from contracthub.lifecycle.merge_engine import MergeConflict, MergeResult
 from contracthub.lifecycle.policy import BreakingChange, PolicyEvaluation
 from contracthub.orchestrator.pipeline import ContractPipeline
+from deltalake import write_deltalake
 
 
 def test_pipeline_import_schema_supports_delta_and_sql(monkeypatch):
@@ -111,6 +114,8 @@ def test_pipeline_prepare_ci_cd_artifacts_writes_manifest_and_outputs(monkeypatc
     assert artifacts.ci_manifest_path.exists()
     assert manifest["valid"] is True
     assert manifest["policyValid"] is True
+    assert manifest["idViolation"] is False
+    assert manifest["versionViolation"] is False
     assert manifest["audit"]["last_merge_actor"] == "tester"
 
 
@@ -321,3 +326,248 @@ def test_pipeline_run_returns_artifacts_on_success(monkeypatch, sample_odcs_mode
     )
 
     assert artifacts == expected_artifacts
+
+
+def test_pipeline_run_executes_real_merge_validation_and_policy_with_minimal_mocking(
+    monkeypatch,
+    sample_spark_ddl_contract_model,
+    sample_unity_contract_dict,
+    tmp_path,
+):
+    business_contract_path = tmp_path / "business.yaml"
+    business_payload = sample_unity_contract_dict
+    business_contract_path.write_text(
+        OpenDataContractStandard.model_validate(business_payload).to_yaml(),
+        encoding="utf-8",
+    )
+
+    imported_contract = sample_spark_ddl_contract_model.model_copy(deep=True)
+    imported_contract.schema_[0].physicalName = "orders"
+
+    monkeypatch.setattr(
+        DataContract,
+        "import_from_source",
+        staticmethod(lambda format, source=None, **kwargs: imported_contract),
+    )
+
+    def fake_export_to_path(self, contract, output_path, *, schema_name="all", suite_name=None):  # noqa: ANN001
+        path = tmp_path / "suite.json"
+        path.write_text('{"expectations": []}', encoding="utf-8")
+        return path
+
+    monkeypatch.setattr("contracthub.orchestrator.pipeline.GreatExpectationsExporter.export_to_path", fake_export_to_path)
+
+    artifacts = ContractPipeline().run(
+        source_type="sql",
+        source="sql_folder",
+        business_contract_path=str(business_contract_path),
+        merged_contract_output_path=str(tmp_path / "merged.yaml"),
+        ge_suite_output_path=str(tmp_path / "suite.json"),
+        ci_manifest_output_path=str(tmp_path / "manifest.json"),
+    )
+
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    merged_contract = OpenDataContractStandard.from_file(str(artifacts.merged_contract_path))
+    merged_schema = merged_contract.schema_[0]
+    merged_id = next(prop for prop in (merged_schema.properties or []) if prop.name == "id")
+
+    assert artifacts.merged_contract_path.exists()
+    assert artifacts.ge_suite_path.exists()
+    assert artifacts.ci_manifest_path.exists()
+    assert manifest["valid"] is True
+    assert manifest["policyValid"] is True
+    assert merged_contract.id == "orders"
+    assert merged_schema.description == "Orders external table"
+    assert merged_id.description == "Order id"
+    assert str(merged_id.physicalType).lower() == "bigint"
+
+
+def test_pipeline_run_executes_real_sql_folder_workflow(
+    monkeypatch,
+    spark_ddl_orders_product_dir,
+    sample_unity_contract_path,
+    tmp_path,
+):
+    def fake_export_to_path(self, contract, output_path, *, schema_name="all", suite_name=None):  # noqa: ANN001
+        path = tmp_path / "suite.json"
+        path.write_text('{"expectations": []}', encoding="utf-8")
+        return path
+
+    monkeypatch.setattr("contracthub.orchestrator.pipeline.GreatExpectationsExporter.export_to_path", fake_export_to_path)
+
+    artifacts = ContractPipeline().run(
+        source_type="sql-folder",
+        source=str(spark_ddl_orders_product_dir),
+        business_contract_path=str(sample_unity_contract_path),
+        merged_contract_output_path=str(tmp_path / "merged.yaml"),
+        ge_suite_output_path=str(tmp_path / "suite.json"),
+        ci_manifest_output_path=str(tmp_path / "manifest.json"),
+    )
+
+    merged_contract = OpenDataContractStandard.from_file(str(artifacts.merged_contract_path))
+    merged_schema = merged_contract.schema_[0]
+    merged_props = {prop.name: prop for prop in (merged_schema.properties or [])}
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+
+    assert artifacts.merged_contract_path.exists()
+    assert manifest["valid"] is True
+    assert manifest["policyValid"] is True
+    assert merged_contract.id == "orders"
+    assert merged_schema.name == "orders"
+    assert "processed_at" in merged_props
+    assert str(merged_props["processed_at"].physicalType).lower() == "timestamp"
+
+
+def test_pipeline_run_executes_real_delta_workflow(
+    monkeypatch,
+    sample_unity_contract_path,
+    tmp_path,
+):
+    table_path = tmp_path / "orders"
+    data = pd.DataFrame(
+        {
+            "id": pd.Series([1, 2], dtype="int64"),
+            "amount": pd.Series([10.5, 22.75], dtype="float64"),
+            "processed_at": pd.to_datetime(["2026-04-03T10:00:00Z", "2026-04-03T10:01:00Z"], utc=True),
+        }
+    )
+    write_deltalake(str(table_path), data, mode="overwrite")
+
+    def fake_export_to_path(self, contract, output_path, *, schema_name="all", suite_name=None):  # noqa: ANN001
+        path = tmp_path / "suite.json"
+        path.write_text('{"expectations": []}', encoding="utf-8")
+        return path
+
+    monkeypatch.setattr("contracthub.orchestrator.pipeline.GreatExpectationsExporter.export_to_path", fake_export_to_path)
+
+    artifacts = ContractPipeline().run(
+        source_type="delta",
+        source=str(table_path),
+        business_contract_path=str(sample_unity_contract_path),
+        merged_contract_output_path=str(tmp_path / "merged.yaml"),
+        ge_suite_output_path=str(tmp_path / "suite.json"),
+        ci_manifest_output_path=str(tmp_path / "manifest.json"),
+    )
+
+    merged_contract = OpenDataContractStandard.from_file(str(artifacts.merged_contract_path))
+    merged_schema = merged_contract.schema_[0]
+    merged_props = {prop.name: prop for prop in (merged_schema.properties or [])}
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+
+    assert artifacts.merged_contract_path.exists()
+    assert manifest["valid"] is True
+    assert manifest["policyValid"] is True
+    assert merged_contract.version == "1.0.0"
+    assert "processed_at" in merged_props
+    assert merged_props["id"].logicalType == "integer"
+
+
+def test_pipeline_run_executes_real_unity_workflow(
+    monkeypatch,
+    sample_unity_contract_path,
+    sample_unity_contract_model,
+    tmp_path,
+):
+    imported_contract = sample_unity_contract_model.model_copy(deep=True)
+    assert imported_contract.schema_ is not None
+    assert imported_contract.schema_[0].properties is not None
+    imported_contract.schema_[0].description = "Imported Unity orders table"
+    imported_contract.schema_[0].properties.append(
+        imported_contract.schema_[0].properties[0].model_copy(
+            update={
+                "id": "processed_at",
+                "name": "processed_at",
+                "physicalName": "processed_at",
+                "logicalType": "timestamp",
+                "physicalType": "TIMESTAMP",
+                "required": False,
+                "description": "Processing timestamp",
+                "businessName": None,
+            }
+        )
+    )
+
+    def fake_import_from_source(format, source=None, **kwargs):  # noqa: ANN001
+        assert format == "unity"
+        assert kwargs["unity_table_full_name"] == ["main.silver.orders"]
+        return imported_contract
+
+    def fake_export_to_path(self, contract, output_path, *, schema_name="all", suite_name=None):  # noqa: ANN001
+        path = tmp_path / "suite.json"
+        path.write_text('{"expectations": []}', encoding="utf-8")
+        return path
+
+    monkeypatch.setattr(DataContract, "import_from_source", staticmethod(fake_import_from_source))
+    monkeypatch.setattr("contracthub.orchestrator.pipeline.GreatExpectationsExporter.export_to_path", fake_export_to_path)
+
+    artifacts = ContractPipeline().run(
+        source_type="uc",
+        source="main.silver.orders",
+        business_contract_path=str(sample_unity_contract_path),
+        merged_contract_output_path=str(tmp_path / "merged.yaml"),
+        ge_suite_output_path=str(tmp_path / "suite.json"),
+        ci_manifest_output_path=str(tmp_path / "manifest.json"),
+        uc_workspace_url="https://adb.example",
+        uc_token="token",
+    )
+
+    merged_contract = OpenDataContractStandard.from_file(str(artifacts.merged_contract_path))
+    merged_schema = merged_contract.schema_[0]
+    merged_props = {prop.name: prop for prop in (merged_schema.properties or [])}
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+
+    assert artifacts.merged_contract_path.exists()
+    assert manifest["valid"] is True
+    assert manifest["policyValid"] is True
+    assert merged_schema.description == "Imported Unity orders table"
+    assert "processed_at" in merged_props
+
+
+def test_pipeline_run_blocks_root_version_change_outside_release_flow(monkeypatch, sample_odcs_model):
+    pipeline = ContractPipeline()
+    changed_version_contract = sample_odcs_model.model_copy(deep=True)
+    changed_version_contract.version = "9.9.9"
+
+    monkeypatch.setattr(ContractPipeline, "import_schema", lambda self, *args, **kwargs: sample_odcs_model)
+    monkeypatch.setattr(type(pipeline.loader), "load", lambda self, _: sample_odcs_model)
+    monkeypatch.setattr(
+        ContractPipeline,
+        "merge_contract_updates",
+        lambda self, *args, **kwargs: MergeResult(contract=changed_version_contract, conflicts=[]),
+    )
+    monkeypatch.setattr(ContractPipeline, "validate_contract", lambda self, _: ValidationReport(valid=True, issues=[]))
+
+    with pytest.raises(ValueError, match="Lifecycle policy validation failed"):
+        pipeline.run(
+            source_type="sql",
+            source="sql_folder",
+            business_contract_path="sample_odcs.yaml",
+            merged_contract_output_path="/tmp/merged.yaml",
+            ge_suite_output_path="/tmp/suite.json",
+            ci_manifest_output_path="/tmp/manifest.json",
+        )
+
+
+def test_pipeline_run_blocks_root_id_change_after_contract_creation(monkeypatch, sample_odcs_model):
+    pipeline = ContractPipeline()
+    changed_id_contract = sample_odcs_model.model_copy(deep=True)
+    changed_id_contract.id = "another-guid"
+
+    monkeypatch.setattr(ContractPipeline, "import_schema", lambda self, *args, **kwargs: sample_odcs_model)
+    monkeypatch.setattr(type(pipeline.loader), "load", lambda self, _: sample_odcs_model)
+    monkeypatch.setattr(
+        ContractPipeline,
+        "merge_contract_updates",
+        lambda self, *args, **kwargs: MergeResult(contract=changed_id_contract, conflicts=[]),
+    )
+    monkeypatch.setattr(ContractPipeline, "validate_contract", lambda self, _: ValidationReport(valid=True, issues=[]))
+
+    with pytest.raises(ValueError, match="Lifecycle policy validation failed"):
+        pipeline.run(
+            source_type="sql",
+            source="sql_folder",
+            business_contract_path="sample_odcs.yaml",
+            merged_contract_output_path="/tmp/merged.yaml",
+            ge_suite_output_path="/tmp/suite.json",
+            ci_manifest_output_path="/tmp/manifest.json",
+        )

@@ -22,6 +22,8 @@ class PolicyEvaluation:
 
     valid: bool
     breaking_changes: list[BreakingChange] = field(default_factory=list)
+    id_violation: bool = False
+    version_violation: bool = False
 
 
 def evaluate_merge_policy(
@@ -37,6 +39,27 @@ def evaluate_merge_policy(
         return PolicyEvaluation(valid=True)
 
     breaks: list[BreakingChange] = []
+    id_violation = False
+    version_violation = False
+
+    if _root_id_changed(base_contract, merged_contract):
+        id_violation = True
+        breaks.append(
+            BreakingChange(
+                path="id",
+                message="Contract id changed after the governed contract was created",
+            )
+        )
+
+    if _root_version_changed(base_contract, merged_contract):
+        version_violation = True
+        breaks.append(
+            BreakingChange(
+                path="version",
+                message="Contract version changed outside the release workflow",
+            )
+        )
+
     merged_schema_index = _schema_index(merged_contract)
 
     for schema in schema_items(base_contract):
@@ -75,7 +98,34 @@ def evaluate_merge_policy(
                 )
             )
 
-    return PolicyEvaluation(valid=not breaks, breaking_changes=breaks)
+    return PolicyEvaluation(
+        valid=not breaks,
+        breaking_changes=breaks,
+        id_violation=id_violation,
+        version_violation=version_violation,
+    )
+
+
+def _root_id_changed(
+    base_contract: OpenDataContractStandard,
+    merged_contract: OpenDataContractStandard,
+) -> bool:
+    base_id = str(base_contract.id or "").strip()
+    merged_id = str(merged_contract.id or "").strip()
+    if not base_id and not merged_id:
+        return False
+    return base_id != merged_id
+
+
+def _root_version_changed(
+    base_contract: OpenDataContractStandard,
+    merged_contract: OpenDataContractStandard,
+) -> bool:
+    base_version = str(base_contract.version or "").strip()
+    merged_version = str(merged_contract.version or "").strip()
+    if not base_version and not merged_version:
+        return False
+    return base_version != merged_version
 
 
 def _schema_key(schema: SchemaObject) -> str:

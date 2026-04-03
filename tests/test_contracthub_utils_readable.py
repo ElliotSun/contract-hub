@@ -94,6 +94,36 @@ def test_yaml_utils_load_yaml_metadata_supports_adls2_file(monkeypatch):
     }
 
 
+def test_yaml_utils_load_yaml_metadata_handles_quoted_colons_multiline_and_comments(tmp_path):
+    contract_file = tmp_path / "metadata.yaml"
+    contract_file.write_text(
+        """
+id: "orders:au"
+dataProduct: >-
+  seller:payments
+version: '1.0.0'
+status: active # inline comment should not leak into value
+tenant: "tenant:a"
+description:
+  purpose: ignored nested mapping
+""".strip(),
+        encoding="utf-8",
+    )
+
+    metadata = yaml_utils.load_yaml_metadata(
+        contract_file,
+        keys=["id", "dataProduct", "version", "status", "tenant"],
+    )
+
+    assert metadata == {
+        "id": "orders:au",
+        "dataProduct": "seller:payments",
+        "version": "1.0.0",
+        "status": "active",
+        "tenant": "tenant:a",
+    }
+
+
 def test_schema_utils_convert_sample_contract_between_input_types(sample_odcs_dict, sample_odcs_path, sample_odcs_model):
     model_from_dict = contract_to_model(sample_odcs_dict)
     model_from_path = contract_to_model(sample_odcs_path)

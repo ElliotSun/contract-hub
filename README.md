@@ -81,6 +81,10 @@ GreatExpectationsExporter().export_to_path(merged.contract, "./artifacts/orders_
 - Importers are pure Python and Spark-free.
 - ContractHub registers custom importers (`delta`, `sql-folder`) into datacontract-cli's importer factory.
 - Merge and lifecycle policy logic are isolated in `contracthub.lifecycle`.
+- Root contract `id` is immutable after the governed contract exists.
+- Root contract `version` is release-managed and is not updated by normal importer/merge runs.
+- Technical source versions, including Delta table versions, are stored as technical metadata and do not overwrite contract `version`.
+- Lifecycle policy explicitly flags root `id` and `version` changes, and the automation pipeline blocks on those violations.
 - Draft normalization and editor-safe contract mutation helpers live in `contracthub.core`.
 - Great Expectations suite generation uses datacontract-cli exporter APIs.
 - Databricks/Spark SQL deployment DDL generation lives in `contracthub.exporters.sql_exporter`.

@@ -309,7 +309,15 @@ def _can_edit(user: Any, contract: OpenDataContractStandard | dict[str, Any]) ->
         contract_tenant = str(contract.tenant or "")
     else:
         contract_tenant = str(contract.get("tenant", "") or "")
-    return _user_value(user, "role") == "admin" or contract_tenant == _user_value(user, "tenant")
+    if _user_value(user, "role") == "admin":
+        return True
+
+    user_tenant = _user_value(user, "tenant").strip()
+    contract_tenant = contract_tenant.strip()
+    if not contract_tenant or not user_tenant:
+        return False
+
+    return contract_tenant == user_tenant
 
 
 def _ensure_can_edit(user: Any, contract: OpenDataContractStandard | dict[str, Any], contract_id: str) -> None:
