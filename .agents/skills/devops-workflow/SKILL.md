@@ -17,7 +17,9 @@ RULES
 
 - MAIN contract updated only via merge
 - CI/CD validates contracts before merge
-- version increment happens after merge
+- `required_bump` is computed PER CONTRACT, not per repo
+- feature -> main determines `required_bump` but does NOT change contract version
+- release flow applies the explicit version/tag per contract after merge
 
 ------------------------------------------------
 FUTURE

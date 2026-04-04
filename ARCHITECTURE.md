@@ -181,6 +181,36 @@ It does not yet implement:
 - release-tag-driven version bump workflow
 - promotion workflow that intentionally advances contract version
 
+## Release Governance Direction
+
+Current release-version governance is intentionally **per contract**, not per repo.
+
+This supports both:
+
+- one-contract-per-repo setups
+- centralized repos containing many governed contracts
+
+Current intended flow:
+
+1. `feature -> main`
+   - validate and analyze one changed contract
+   - compute `required_bump` for that contract
+   - do **not** change contract `version`
+2. `main -> release`
+   - re-evaluate the release candidate for that contract
+   - apply an explicit `release_tag`
+   - update contract `version` through the release path only
+
+Current bump rules:
+
+- `none`
+  - descriptive-only metadata changes
+- `minor`
+  - additive or non-breaking structural changes
+  - newly introduced schema/property deprecations
+- `major`
+  - lifecycle-breaking changes
+
 ## Draft Workflow
 
 Current draft workflow:

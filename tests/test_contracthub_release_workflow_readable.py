@@ -1,0 +1,143 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+from open_data_contract_standard.model import CustomProperty, SchemaProperty
+
+from contracthub.core.release import (
+    classify_contract_change,
+    classify_version_bump,
+    parse_release_tag_version,
+    prepare_release_candidate,
+)
+from contracthub.interfaces.streamlit.services.contract_service import ContractService
+from contracthub.utils.yaml_utils import dump_yaml
+
+
+def test_release_classification_returns_none_for_description_only_change(sample_odcs_model):
+    base = sample_odcs_model.model_copy(deep=True)
+    candidate = sample_odcs_model.model_copy(deep=True)
+    assert candidate.description is not None
+    candidate.description.usage = "Updated descriptive text only"
+
+    result = classify_contract_change(base, candidate)
+
+    assert result.has_changes is True
+    assert result.required_bump == "none"
+
+
+def test_release_classification_returns_minor_for_added_property(sample_odcs_model):
+    base = sample_odcs_model.model_copy(deep=True)
+    candidate = sample_odcs_model.model_copy(deep=True)
+    candidate.schema_[0].properties.append(  # type: ignore[index,union-attr]
+        SchemaProperty(
+            name="new_optional_column",
+            logicalType="string",
+            physicalType="STRING",
+            required=False,
+        )
+    )
+
+    result = classify_contract_change(base, candidate)
+
+    assert result.required_bump == "minor"
+    assert any("minor version bump" in reason for reason in result.reasons)
+
+
+def test_release_classification_treats_deprecation_as_minor(sample_odcs_model):
+    base = sample_odcs_model.model_copy(deep=True)
+    candidate = sample_odcs_model.model_copy(deep=True)
+    candidate.schema_[0].properties[0].customProperties = [  # type: ignore[index,union-attr]
+        CustomProperty(property="lifecycleStatus", value="deprecated")
+    ]
+
+    result = classify_contract_change(base, candidate)
+
+    assert result.required_bump == "minor"
+
+
+def test_release_classification_returns_major_for_breaking_change(sample_odcs_model):
+    base = sample_odcs_model.model_copy(deep=True)
+    candidate = sample_odcs_model.model_copy(deep=True)
+    candidate.schema_[0].properties[0].required = True  # type: ignore[index,union-attr]
+
+    result = classify_contract_change(base, candidate)
+
+    assert result.required_bump == "major"
+    assert result.breaking_changes
+
+
+def test_release_tag_helpers_parse_and_classify_versions():
+    assert parse_release_tag_version("orders/v1.2.3") == "1.2.3"
+    assert parse_release_tag_version("v2.0.0") == "2.0.0"
+    assert classify_version_bump("1.0.0", "1.0.1") == "patch"
+    assert classify_version_bump("1.0.0", "1.1.0") == "minor"
+    assert classify_version_bump("1.0.0", "2.0.0") == "major"
+
+
+def test_prepare_release_candidate_applies_explicit_release_tag(sample_odcs_model):
+    base = sample_odcs_model.model_copy(deep=True)
+    candidate = sample_odcs_model.model_copy(deep=True)
+    candidate.description.usage = "Updated descriptive text only"  # type: ignore[union-attr]
+
+    result = prepare_release_candidate(base, candidate, "orders/v1.1.1")
+
+    assert result.current_version == str(base.version)
+    assert result.target_version == "1.1.1"
+    assert result.actual_bump == "patch"
+    assert result.contract.version == "1.1.1"
+    assert result.contract.id == base.id
+
+
+def test_prepare_release_candidate_rejects_insufficient_bump(sample_odcs_model):
+    base = sample_odcs_model.model_copy(deep=True)
+    candidate = sample_odcs_model.model_copy(deep=True)
+    candidate.schema_[0].properties.append(  # type: ignore[index,union-attr]
+        SchemaProperty(
+            name="new_optional_column",
+            logicalType="string",
+            physicalType="STRING",
+            required=False,
+        )
+    )
+
+    with pytest.raises(ValueError, match="requires at least a minor bump"):
+        prepare_release_candidate(base, candidate, "orders/v1.1.1")
+
+
+def test_contract_service_promote_draft_is_per_contract_and_preserves_governed_identity(
+    sample_odcs_model,
+    tmp_path,
+):
+    main_contract = sample_odcs_model.model_copy(deep=True)
+    draft_contract = sample_odcs_model.model_copy(deep=True)
+    draft_contract.id = "tampered-id"
+    draft_contract.version = "999.0.0"
+    draft_contract.schema_[0].properties.append(  # type: ignore[index,union-attr]
+        SchemaProperty(
+            name="new_optional_column",
+            logicalType="string",
+            physicalType="STRING",
+            required=False,
+        )
+    )
+
+    contracts_dir = tmp_path / "contracts"
+    drafts_dir = tmp_path / "drafts"
+    contract_id = str(main_contract.id)
+    user = {"id": "alice", "role": "editor", "tenant": str(main_contract.tenant or "")}
+
+    dump_yaml(main_contract, contracts_dir / f"{contract_id}.yaml")
+    draft_path = Path(drafts_dir) / "alice" / f"{contract_id}.yaml"
+    dump_yaml(draft_contract, draft_path)
+
+    service = ContractService(contracts_dir=contracts_dir, drafts_dir=drafts_dir)
+    assessment = service.classify_draft_change(contract_id, user)
+    promotion = service.promote_draft(contract_id, user, "orders/v1.2.0")
+
+    assert assessment.required_bump == "minor"
+    assert promotion.required_bump == "minor"
+    assert promotion.contract.id == main_contract.id
+    assert promotion.contract.version == "1.2.0"
+    assert promotion.current_version == str(main_contract.version)

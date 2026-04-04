@@ -59,6 +59,9 @@ contracthub import --type unity --source main.silver.orders --workspace-url http
   --output ./contracts/orders.yaml
 contracthub merge --base ./generated.yaml --business ./contracts/orders.yaml --output ./contracts/orders.merged.yaml
 contracthub export-ge --contract ./contracts/orders.yaml --output ./artifacts/orders_suite.json
+contracthub release classify --base ./contracts/orders.main.yaml --candidate ./contracts/orders.feature.yaml
+contracthub release prepare --base ./contracts/orders.main.yaml --candidate ./contracts/orders.release.yaml \
+  --release-tag orders/v1.2.0 --output ./artifacts/orders.promoted.yaml
 contracthub create-pr --organization org --project proj --repository-id repo --pat-token $ADO_PAT \
   --repo-path . --source-branch contracthub/update-orders --target-branch main \
   --commit-message "Update orders contract" --title "Update orders contract" --description "Automated update"
@@ -85,6 +88,9 @@ GreatExpectationsExporter().export_to_path(merged.contract, "./artifacts/orders_
 - Root contract `version` is release-managed and is not updated by normal importer/merge runs.
 - Technical source versions, including Delta table versions, are stored as technical metadata and do not overwrite contract `version`.
 - Lifecycle policy explicitly flags root `id` and `version` changes, and the automation pipeline blocks on those violations.
+- Required version bump is computed per contract, not per repo.
+- `feature -> main` should classify the required bump for each changed contract.
+- `main/release` is the path that applies an explicit release tag and updates contract `version`.
 - Draft normalization and editor-safe contract mutation helpers live in `contracthub.core`.
 - Great Expectations suite generation uses datacontract-cli exporter APIs.
 - Databricks/Spark SQL deployment DDL generation lives in `contracthub.exporters.sql_exporter`.

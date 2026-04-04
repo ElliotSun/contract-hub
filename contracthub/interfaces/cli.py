@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import asdict
 import json
 import os
 from pathlib import Path
@@ -8,6 +9,7 @@ from typing import Any
 
 from open_data_contract_standard.model import OpenDataContractStandard
 from contracthub.core.loader import ContractLoader
+from contracthub.core.release import classify_contract_change, prepare_release_candidate
 from datacontract.data_contract import DataContract
 from contracthub.devops.pr_creator import AzureDevOpsConfig, PullRequestCreator
 import contracthub.importers  # ensure custom importers are registered
@@ -73,6 +75,27 @@ def _build_parser() -> argparse.ArgumentParser:
     pr_parser.add_argument("--description", required=True)
     pr_parser.add_argument("--paths", nargs="*")
     pr_parser.add_argument("--push", action="store_true")
+
+    release_parser = subparsers.add_parser("release", help="Per-contract release workflow helpers")
+    release_subparsers = release_parser.add_subparsers(dest="release_command", required=True)
+
+    release_classify_parser = release_subparsers.add_parser(
+        "classify",
+        help="Classify the required version bump for one contract change set",
+    )
+    release_classify_parser.add_argument("--base", required=True)
+    release_classify_parser.add_argument("--candidate", required=True)
+    release_classify_parser.add_argument("--runtime-context", default="auto")
+
+    release_prepare_parser = release_subparsers.add_parser(
+        "prepare",
+        help="Prepare one promoted contract candidate using an explicit release tag",
+    )
+    release_prepare_parser.add_argument("--base", required=True)
+    release_prepare_parser.add_argument("--candidate", required=True)
+    release_prepare_parser.add_argument("--release-tag", required=True)
+    release_prepare_parser.add_argument("--output", required=True)
+    release_prepare_parser.add_argument("--runtime-context", default="auto")
 
     return parser
 
@@ -209,6 +232,43 @@ def _run_create_pr(args: argparse.Namespace) -> dict[str, Any]:
     )
 
 
+def _run_release_classify(args: argparse.Namespace) -> dict[str, Any]:
+    loader = ContractLoader(runtime_context=args.runtime_context)
+    base_contract = loader.load(args.base)
+    candidate_contract = loader.load(args.candidate)
+
+    assessment = classify_contract_change(base_contract, candidate_contract)
+    return {
+        "contractId": str(base_contract.id or ""),
+        "currentVersion": str(base_contract.version or ""),
+        "candidateVersion": str(candidate_contract.version or ""),
+        "hasChanges": assessment.has_changes,
+        "requiredBump": assessment.required_bump,
+        "reasons": assessment.reasons,
+        "breakingChanges": [asdict(change) for change in assessment.breaking_changes],
+    }
+
+
+def _run_release_prepare(args: argparse.Namespace) -> dict[str, Any]:
+    loader = ContractLoader(runtime_context=args.runtime_context)
+    base_contract = loader.load(args.base)
+    candidate_contract = loader.load(args.candidate)
+
+    result = prepare_release_candidate(base_contract, candidate_contract, args.release_tag)
+    output_path = dump_yaml(contract_to_dict(result.contract), args.output)
+    return {
+        "contractId": str(result.contract.id or ""),
+        "currentVersion": result.current_version,
+        "targetVersion": result.target_version,
+        "requiredBump": result.required_bump,
+        "actualBump": result.actual_bump,
+        "releaseTag": result.release_tag,
+        "reasons": result.reasons,
+        "breakingChanges": [asdict(change) for change in result.breaking_changes],
+        "output": str(output_path),
+    }
+
+
 def main() -> int:
     parser = _build_parser()
     args = parser.parse_args()
@@ -232,6 +292,16 @@ def main() -> int:
         payload = _run_create_pr(args)
         print(json.dumps(payload, indent=2, sort_keys=True))
         return 0
+
+    if args.command == "release":
+        if args.release_command == "classify":
+            payload = _run_release_classify(args)
+            print(json.dumps(payload, indent=2, sort_keys=True))
+            return 0
+        if args.release_command == "prepare":
+            payload = _run_release_prepare(args)
+            print(json.dumps(payload, indent=2, sort_keys=True))
+            return 0
 
     parser.error(f"Unknown command: {args.command}")
     return 2

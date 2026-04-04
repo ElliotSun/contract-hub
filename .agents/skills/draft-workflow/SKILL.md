@@ -52,6 +52,8 @@ PROMOTION
 
 - compare main vs draft
 - run governance checks
+- classify required version bump PER CONTRACT
+- require an explicit `release_tag`
 - create PR (future)
 
 ------------------------------------------------

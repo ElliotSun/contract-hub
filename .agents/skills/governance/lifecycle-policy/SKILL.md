@@ -161,6 +161,13 @@ A change is considered **breaking** if:
 - Decimal scale reduction
 - Required tightening (`optional → required`)
 
+Version governance derived from lifecycle policy:
+
+- breaking changes require a **major** version bump
+- newly introduced schema/property deprecations require a **minor** version bump
+- descriptive-only changes require **no required bump**
+- bump calculation is **per contract**, not per repo
+
 ---
 
 ## 5.1 Decimal Rules

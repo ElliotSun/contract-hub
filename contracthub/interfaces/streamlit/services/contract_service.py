@@ -32,6 +32,10 @@ API intent:
   read the actor's draft or initialize it from the main contract
 - ``save_draft(contract, user)``:
   validate and persist the actor's draft without modifying the main contract
+- ``classify_draft_change(contract_id, user)``:
+  compute the required version bump for one saved draft contract
+- ``promote_draft(contract_id, user, release_tag)``:
+  prepare one promoted contract candidate using an explicit release tag
 
 Representation boundary:
 - dicts are still returned to the UI because Streamlit session_state and data
@@ -50,6 +54,12 @@ from typing import Any
 from open_data_contract_standard.model import OpenDataContractStandard
 
 from contracthub.core.draft_normalizer import normalize_draft_contract
+from contracthub.core.release import (
+    ContractChangeAssessment,
+    PromotionResult,
+    classify_contract_change,
+    prepare_release_candidate,
+)
 from contracthub.core import validator as contract_validator
 from contracthub.interfaces.streamlit.services import governance_service
 from contracthub.utils.schema_utils import contract_to_dict, contract_to_model
@@ -196,6 +206,37 @@ class ContractService:
         normalized_draft = normalize_draft_contract(draft_contract, main_contract)
         return governance_service.analyze_contracts(contract_to_model(normalized_draft), main_contract)
 
+    def classify_draft_change(self, contract_id: str, user: Any) -> ContractChangeAssessment:
+        """Classify required bump for one saved draft contract."""
+        main_contract = self._get_contract_model(contract_id)
+        _ensure_can_edit(user, main_contract, contract_id)
+
+        draft_path = self._get_draft_path(contract_id, user)
+        if not draft_path.exists():
+            raise FileNotFoundError(f"Draft for contract '{contract_id}' does not exist")
+
+        draft_contract = contract_to_model(load_yaml(draft_path))
+        normalized_draft = contract_to_model(normalize_draft_contract(draft_contract, main_contract))
+        normalized_draft.id = main_contract.id
+        normalized_draft.version = main_contract.version
+        return classify_contract_change(main_contract, normalized_draft)
+
+    def promote_draft(self, contract_id: str, user: Any, release_tag: str) -> PromotionResult:
+        """Prepare a promoted contract candidate for one saved draft contract."""
+        main_contract = self._get_contract_model(contract_id)
+        _ensure_can_edit(user, main_contract, contract_id)
+
+        draft_path = self._get_draft_path(contract_id, user)
+        if not draft_path.exists():
+            raise FileNotFoundError(f"Draft for contract '{contract_id}' does not exist")
+
+        draft_contract = contract_to_model(load_yaml(draft_path))
+        normalized_draft = contract_to_model(normalize_draft_contract(draft_contract, main_contract))
+        normalized_draft.id = main_contract.id
+        normalized_draft.version = main_contract.version
+        self._validate_contract(normalized_draft)
+        return prepare_release_candidate(main_contract, normalized_draft, release_tag)
+
     def _get_contract_path(self, contract_id: str) -> str:
         """Return the configured YAML path for a contract identifier.
 
@@ -255,6 +296,16 @@ def save_draft(contract: ContractInput, user: Any) -> dict[str, Any]:
 def analyze_draft(contract: ContractInput, user: Any) -> Any:
     """Convenience wrapper for draft governance analysis."""
     return ContractService().analyze_draft(contract, user)
+
+
+def classify_draft_change(contract_id: str, user: Any) -> ContractChangeAssessment:
+    """Convenience wrapper for per-contract required bump classification."""
+    return ContractService().classify_draft_change(contract_id, user)
+
+
+def promote_draft(contract_id: str, user: Any, release_tag: str) -> PromotionResult:
+    """Convenience wrapper for preparing a promoted contract candidate."""
+    return ContractService().promote_draft(contract_id, user, release_tag)
 
 
 def load_sample_contract_yaml() -> str:
