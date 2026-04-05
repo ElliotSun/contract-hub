@@ -66,6 +66,9 @@ contracthub release create-pr --base ./contracts/orders.main.yaml --candidate ./
   --release-tag orders/v1.2.0 --repo-path . --contract-path contracts/orders.yaml \
   --source-branch release/orders-v1.2.0 --target-branch release \
   --organization org --project proj --repository-id repo --pat-token $ADO_PAT --push
+contracthub release classify-repo --base-root ./contracts-main --candidate-root ./contracts-feature
+contracthub release create-prs --manifest ./artifacts/release_manifest.json --repo-path . \
+  --organization org --project proj --repository-id repo --pat-token $ADO_PAT --push
 contracthub create-pr --organization org --project proj --repository-id repo --pat-token $ADO_PAT \
   --repo-path . --source-branch contracthub/update-orders --target-branch main \
   --commit-message "Update orders contract" --title "Update orders contract" --description "Automated update"
@@ -95,6 +98,8 @@ GreatExpectationsExporter().export_to_path(merged.contract, "./artifacts/orders_
 - Required version bump is computed per contract, not per repo.
 - `feature -> main` should classify the required bump for each changed contract.
 - `main/release` is the path that applies an explicit release tag and updates contract `version`.
+- `release classify-repo` is a repo-level batching helper only; it does not make the repo a versioning unit.
+- `release create-prs` expects an explicit per-contract manifest because each contract may have its own release tag/version.
 - Draft normalization and editor-safe contract mutation helpers live in `contracthub.core`.
 - Great Expectations suite generation uses datacontract-cli exporter APIs.
 - Databricks/Spark SQL deployment DDL generation lives in `contracthub.exporters.sql_exporter`.

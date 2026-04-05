@@ -4,7 +4,13 @@ import json
 
 from contracthub.core.release import prepare_release_candidate
 from contracthub.devops.pr_creator import AzureDevOpsConfig
-from contracthub.devops.release_workflow import build_release_pr_plan, create_release_pull_request
+from contracthub.devops.release_workflow import (
+    BatchReleaseTask,
+    build_release_pr_plan,
+    classify_contracts_in_repo,
+    create_release_pull_request,
+    create_release_pull_requests_from_manifest,
+)
 from contracthub.interfaces import cli
 from contracthub.utils.yaml_utils import dump_yaml, load_yaml
 
@@ -128,3 +134,92 @@ def test_cli_release_create_pr_outputs_plan_and_pr_payload(sample_odcs_model, tm
     assert payload["pullRequest"]["pullRequestId"] == 77
     assert payload["promotion"]["targetVersion"] == "1.1.1"
     assert payload["plan"]["target_version"] == "1.1.1"
+
+
+def test_classify_contracts_in_repo_reports_changed_added_removed_and_unchanged(sample_odcs_model, tmp_path):
+    base_root = tmp_path / "base"
+    candidate_root = tmp_path / "candidate"
+
+    unchanged = sample_odcs_model.model_copy(deep=True)
+    changed = sample_odcs_model.model_copy(deep=True)
+    assert changed.description is not None
+    changed.description.usage = "Updated descriptive text only"
+    added = sample_odcs_model.model_copy(deep=True)
+    added.id = "new-contract"
+    added.version = "1.0.0"
+
+    dump_yaml(unchanged, base_root / "unchanged.yaml")
+    dump_yaml(unchanged, candidate_root / "unchanged.yaml")
+    dump_yaml(sample_odcs_model, base_root / "changed.yaml")
+    dump_yaml(changed, candidate_root / "changed.yaml")
+    dump_yaml(sample_odcs_model, base_root / "removed.yaml")
+    dump_yaml(added, candidate_root / "added.yaml")
+
+    results = classify_contracts_in_repo(base_root=base_root, candidate_root=candidate_root)
+    by_path = {item.contract_repo_path: item for item in results}
+
+    assert by_path["unchanged.yaml"].status == "unchanged"
+    assert by_path["changed.yaml"].status == "changed"
+    assert by_path["changed.yaml"].required_bump == "none"
+    assert by_path["added.yaml"].status == "added"
+    assert by_path["removed.yaml"].status == "removed"
+
+
+def test_create_release_pull_requests_from_manifest_runs_each_contract(sample_odcs_model, tmp_path, monkeypatch):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    base_a = sample_odcs_model.model_copy(deep=True)
+    candidate_a = sample_odcs_model.model_copy(deep=True)
+    assert candidate_a.description is not None
+    candidate_a.description.usage = "Updated descriptive text only"
+
+    base_b = sample_odcs_model.model_copy(deep=True)
+    base_b.id = "payments"
+    candidate_b = base_b.model_copy(deep=True)
+    assert candidate_b.description is not None
+    candidate_b.description.usage = "Payments description"
+
+    base_a_path = dump_yaml(base_a, tmp_path / "base-a.yaml")
+    candidate_a_path = dump_yaml(candidate_a, tmp_path / "candidate-a.yaml")
+    base_b_path = dump_yaml(base_b, tmp_path / "base-b.yaml")
+    candidate_b_path = dump_yaml(candidate_b, tmp_path / "candidate-b.yaml")
+
+    calls: list[str] = []
+
+    def fake_create_update_pr(self, **kwargs):  # noqa: ANN001
+        calls.append(kwargs["paths"][0])
+        return {"pullRequestId": len(calls)}
+
+    monkeypatch.setattr("contracthub.devops.release_workflow.PullRequestCreator.create_update_pr", fake_create_update_pr)
+
+    results = create_release_pull_requests_from_manifest(
+        config=AzureDevOpsConfig(
+            organization="org",
+            project="proj",
+            repository_id="repo",
+            pat_token="token",
+        ),
+        repo_path=str(repo_path),
+        tasks=[
+            BatchReleaseTask(
+                base=str(base_a_path),
+                candidate=str(candidate_a_path),
+                contract_path="contracts/orders.yaml",
+                release_tag="orders/v1.1.1",
+                source_branch="release/orders-v1.1.1",
+                target_branch="release",
+            ),
+            BatchReleaseTask(
+                base=str(base_b_path),
+                candidate=str(candidate_b_path),
+                contract_path="contracts/payments.yaml",
+                release_tag="payments/v1.1.1",
+                source_branch="release/payments-v1.1.1",
+                target_branch="release",
+            ),
+        ],
+        push=False,
+    )
+
+    assert len(results) == 2
+    assert calls == ["contracts/orders.yaml", "contracts/payments.yaml"]

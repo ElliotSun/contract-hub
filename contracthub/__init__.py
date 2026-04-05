@@ -3,7 +3,15 @@
 from contracthub.core.loader import ContractLoader, load_contract
 from contracthub.core.validator import ContractValidator
 from contracthub.devops.pr_creator import AzureDevOpsConfig, PullRequestCreator
-from contracthub.devops.release_workflow import ReleasePullRequestPlan, build_release_pr_plan, create_release_pull_request
+from contracthub.devops.release_workflow import (
+    BatchReleaseTask,
+    ReleasePullRequestPlan,
+    RepositoryContractChange,
+    build_release_pr_plan,
+    create_release_pull_request,
+    create_release_pull_requests_from_manifest,
+    load_batch_release_tasks,
+)
 from contracthub.exporters.sql_exporter import SparkSqlContractExporter, export_contract_to_spark_sql
 from contracthub.importers.delta_importer import DeltaTableImporter
 from contracthub.importers.sql_importer import SQLFolderImporter
@@ -26,9 +34,13 @@ __all__ = [
     "ContractPipeline",
     "PullRequestCreator",
     "AzureDevOpsConfig",
+    "BatchReleaseTask",
     "ReleasePullRequestPlan",
+    "RepositoryContractChange",
     "build_release_pr_plan",
     "create_release_pull_request",
+    "create_release_pull_requests_from_manifest",
+    "load_batch_release_tasks",
     "load_contract",
     "run_contract_tests",
 ]

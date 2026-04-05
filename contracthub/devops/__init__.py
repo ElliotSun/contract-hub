@@ -1,7 +1,15 @@
 from contracthub.devops.audit import AuditMetadata, build_audit_metadata
 from contracthub.devops.ci_cd import CIDecision, evaluate_ci_gate, write_ci_summary
 from contracthub.devops.pr_creator import AzureDevOpsConfig, PullRequestCreator
-from contracthub.devops.release_workflow import ReleasePullRequestPlan, build_release_pr_plan, create_release_pull_request
+from contracthub.devops.release_workflow import (
+    BatchReleaseTask,
+    ReleasePullRequestPlan,
+    RepositoryContractChange,
+    build_release_pr_plan,
+    create_release_pull_request,
+    create_release_pull_requests_from_manifest,
+    load_batch_release_tasks,
+)
 
 __all__ = [
     "AuditMetadata",
@@ -11,7 +19,11 @@ __all__ = [
     "write_ci_summary",
     "AzureDevOpsConfig",
     "PullRequestCreator",
+    "BatchReleaseTask",
     "ReleasePullRequestPlan",
+    "RepositoryContractChange",
     "build_release_pr_plan",
     "create_release_pull_request",
+    "create_release_pull_requests_from_manifest",
+    "load_batch_release_tasks",
 ]

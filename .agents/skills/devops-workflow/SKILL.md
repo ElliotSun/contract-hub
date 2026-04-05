@@ -20,6 +20,8 @@ RULES
 - `required_bump` is computed PER CONTRACT, not per repo
 - feature -> main determines `required_bump` but does NOT change contract version
 - release flow applies the explicit version/tag per contract after merge
+- repo-level automation may batch many contracts, but it must orchestrate them as independent per-contract release units
+- multi-contract release automation should use an explicit manifest because each contract may carry its own release tag/version
 
 ------------------------------------------------
 FUTURE

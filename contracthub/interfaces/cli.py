@@ -12,7 +12,16 @@ from contracthub.core.loader import ContractLoader
 from contracthub.core.release import classify_contract_change, prepare_release_candidate
 from datacontract.data_contract import DataContract
 from contracthub.devops.pr_creator import AzureDevOpsConfig, PullRequestCreator
-from contracthub.devops.release_workflow import build_release_pr_plan, create_release_pull_request, release_plan_to_dict
+from contracthub.devops.release_workflow import (
+    batch_task_to_dict,
+    build_release_pr_plan,
+    classify_contracts_in_repo,
+    create_release_pull_request,
+    create_release_pull_requests_from_manifest,
+    load_batch_release_tasks,
+    release_plan_to_dict,
+    repository_change_to_dict,
+)
 import contracthub.importers  # ensure custom importers are registered
 from contracthub.lifecycle.merge_engine import ContractMergeEngine
 from contracthub.quality.ge_exporter import GreatExpectationsExporter
@@ -88,6 +97,13 @@ def _build_parser() -> argparse.ArgumentParser:
     release_classify_parser.add_argument("--candidate", required=True)
     release_classify_parser.add_argument("--runtime-context", default="auto")
 
+    release_classify_repo_parser = release_subparsers.add_parser(
+        "classify-repo",
+        help="Classify per-contract required bumps across two contract roots",
+    )
+    release_classify_repo_parser.add_argument("--base-root", required=True)
+    release_classify_repo_parser.add_argument("--candidate-root", required=True)
+
     release_prepare_parser = release_subparsers.add_parser(
         "prepare",
         help="Prepare one promoted contract candidate using an explicit release tag",
@@ -118,6 +134,18 @@ def _build_parser() -> argparse.ArgumentParser:
     release_pr_parser.add_argument("--commit-message")
     release_pr_parser.add_argument("--push", action="store_true")
     release_pr_parser.add_argument("--runtime-context", default="auto")
+
+    release_prs_parser = release_subparsers.add_parser(
+        "create-prs",
+        help="Run explicit per-contract release PR automation from a batch manifest",
+    )
+    release_prs_parser.add_argument("--manifest", required=True)
+    release_prs_parser.add_argument("--repo-path", required=True)
+    release_prs_parser.add_argument("--organization", required=True)
+    release_prs_parser.add_argument("--project", required=True)
+    release_prs_parser.add_argument("--repository-id", required=True)
+    release_prs_parser.add_argument("--pat-token", required=True)
+    release_prs_parser.add_argument("--push", action="store_true")
 
     return parser
 
@@ -291,6 +319,16 @@ def _run_release_prepare(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def _run_release_classify_repo(args: argparse.Namespace) -> dict[str, Any]:
+    results = classify_contracts_in_repo(
+        base_root=args.base_root,
+        candidate_root=args.candidate_root,
+    )
+    return {
+        "contracts": [repository_change_to_dict(item) for item in results],
+    }
+
+
 def _run_release_create_pr(args: argparse.Namespace) -> dict[str, Any]:
     loader = ContractLoader(runtime_context=args.runtime_context)
     base_contract = loader.load(args.base)
@@ -330,6 +368,26 @@ def _run_release_create_pr(args: argparse.Namespace) -> dict[str, Any]:
     return payload
 
 
+def _run_release_create_prs(args: argparse.Namespace) -> dict[str, Any]:
+    config = AzureDevOpsConfig(
+        organization=args.organization,
+        project=args.project,
+        repository_id=args.repository_id,
+        pat_token=args.pat_token,
+    )
+    tasks = load_batch_release_tasks(args.manifest)
+    payload = create_release_pull_requests_from_manifest(
+        config=config,
+        repo_path=args.repo_path,
+        tasks=tasks,
+        push=args.push,
+    )
+    return {
+        "tasks": [batch_task_to_dict(item) for item in tasks],
+        "results": payload,
+    }
+
+
 def main() -> int:
     parser = _build_parser()
     args = parser.parse_args()
@@ -359,12 +417,20 @@ def main() -> int:
             payload = _run_release_classify(args)
             print(json.dumps(payload, indent=2, sort_keys=True))
             return 0
+        if args.release_command == "classify-repo":
+            payload = _run_release_classify_repo(args)
+            print(json.dumps(payload, indent=2, sort_keys=True))
+            return 0
         if args.release_command == "prepare":
             payload = _run_release_prepare(args)
             print(json.dumps(payload, indent=2, sort_keys=True))
             return 0
         if args.release_command == "create-pr":
             payload = _run_release_create_pr(args)
+            print(json.dumps(payload, indent=2, sort_keys=True))
+            return 0
+        if args.release_command == "create-prs":
+            payload = _run_release_create_prs(args)
             print(json.dumps(payload, indent=2, sort_keys=True))
             return 0
 
