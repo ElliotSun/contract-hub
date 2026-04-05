@@ -62,6 +62,10 @@ contracthub export-ge --contract ./contracts/orders.yaml --output ./artifacts/or
 contracthub release classify --base ./contracts/orders.main.yaml --candidate ./contracts/orders.feature.yaml
 contracthub release prepare --base ./contracts/orders.main.yaml --candidate ./contracts/orders.release.yaml \
   --release-tag orders/v1.2.0 --output ./artifacts/orders.promoted.yaml
+contracthub release create-pr --base ./contracts/orders.main.yaml --candidate ./contracts/orders.release.yaml \
+  --release-tag orders/v1.2.0 --repo-path . --contract-path contracts/orders.yaml \
+  --source-branch release/orders-v1.2.0 --target-branch release \
+  --organization org --project proj --repository-id repo --pat-token $ADO_PAT --push
 contracthub create-pr --organization org --project proj --repository-id repo --pat-token $ADO_PAT \
   --repo-path . --source-branch contracthub/update-orders --target-branch main \
   --commit-message "Update orders contract" --title "Update orders contract" --description "Automated update"
