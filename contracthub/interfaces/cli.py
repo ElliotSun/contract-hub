@@ -13,7 +13,9 @@ from contracthub.core.release import classify_contract_change, prepare_release_c
 from datacontract.data_contract import DataContract
 from contracthub.devops.pr_creator import AzureDevOpsConfig, PullRequestCreator
 from contracthub.devops.release_workflow import (
+    batch_manifest_build_to_dict,
     batch_task_to_dict,
+    build_batch_release_manifest,
     build_release_pr_plan,
     classify_contracts_in_repo,
     create_release_pull_request,
@@ -103,6 +105,16 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     release_classify_repo_parser.add_argument("--base-root", required=True)
     release_classify_repo_parser.add_argument("--candidate-root", required=True)
+
+    release_build_manifest_parser = release_subparsers.add_parser(
+        "build-manifest",
+        help="Build an editable per-contract release manifest from two contract roots",
+    )
+    release_build_manifest_parser.add_argument("--base-root", required=True)
+    release_build_manifest_parser.add_argument("--candidate-root", required=True)
+    release_build_manifest_parser.add_argument("--output", required=True)
+    release_build_manifest_parser.add_argument("--target-branch", default="release")
+    release_build_manifest_parser.add_argument("--source-branch-prefix", default="release/")
 
     release_prepare_parser = release_subparsers.add_parser(
         "prepare",
@@ -329,6 +341,24 @@ def _run_release_classify_repo(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def _run_release_build_manifest(args: argparse.Namespace) -> dict[str, Any]:
+    build = build_batch_release_manifest(
+        base_root=args.base_root,
+        candidate_root=args.candidate_root,
+        target_branch=args.target_branch,
+        source_branch_prefix=args.source_branch_prefix,
+    )
+    output_path = Path(args.output).expanduser().resolve()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        json.dumps([batch_task_to_dict(item) for item in build.tasks], indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    payload = batch_manifest_build_to_dict(build)
+    payload["output"] = str(output_path)
+    return payload
+
+
 def _run_release_create_pr(args: argparse.Namespace) -> dict[str, Any]:
     loader = ContractLoader(runtime_context=args.runtime_context)
     base_contract = loader.load(args.base)
@@ -419,6 +449,10 @@ def main() -> int:
             return 0
         if args.release_command == "classify-repo":
             payload = _run_release_classify_repo(args)
+            print(json.dumps(payload, indent=2, sort_keys=True))
+            return 0
+        if args.release_command == "build-manifest":
+            payload = _run_release_build_manifest(args)
             print(json.dumps(payload, indent=2, sort_keys=True))
             return 0
         if args.release_command == "prepare":

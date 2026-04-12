@@ -187,3 +187,39 @@ def test_cli_release_create_prs_outputs_batch_payload(sample_odcs_model, tmp_pat
     assert exit_code == 0
     assert payload["results"][0]["pullRequest"]["pullRequestId"] == 88
     assert payload["tasks"][0]["release_tag"] == "orders/v1.1.1"
+
+
+def test_cli_release_build_manifest_writes_json_array_and_summary(sample_odcs_model, tmp_path, capsys, monkeypatch):
+    base_root = tmp_path / "base"
+    candidate_root = tmp_path / "candidate"
+    output_path = tmp_path / "release_manifest.json"
+
+    docs_only = sample_odcs_model.model_copy(deep=True)
+    assert docs_only.description is not None
+    docs_only.description.usage = "Updated descriptive text only"
+    dump_yaml(sample_odcs_model, base_root / "orders.yaml")
+    dump_yaml(docs_only, candidate_root / "orders.yaml")
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "contracthub",
+            "release",
+            "build-manifest",
+            "--base-root",
+            str(base_root),
+            "--candidate-root",
+            str(candidate_root),
+            "--output",
+            str(output_path),
+        ],
+    )
+
+    exit_code = cli.main()
+    payload = json.loads(capsys.readouterr().out)
+    manifest = json.loads(output_path.read_text(encoding="utf-8"))
+
+    assert exit_code == 0
+    assert payload["output"] == str(output_path.resolve())
+    assert payload["tasks"][0]["contract_path"] == "orders.yaml"
+    assert manifest[0]["release_tag"].endswith("/v1.1.1")

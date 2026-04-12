@@ -67,6 +67,8 @@ contracthub release create-pr --base ./contracts/orders.main.yaml --candidate ./
   --source-branch release/orders-v1.2.0 --target-branch release \
   --organization org --project proj --repository-id repo --pat-token $ADO_PAT --push
 contracthub release classify-repo --base-root ./contracts-main --candidate-root ./contracts-feature
+contracthub release build-manifest --base-root ./contracts-main --candidate-root ./contracts-feature \
+  --output ./artifacts/release_manifest.json
 contracthub release create-prs --manifest ./artifacts/release_manifest.json --repo-path . \
   --organization org --project proj --repository-id repo --pat-token $ADO_PAT --push
 contracthub create-pr --organization org --project proj --repository-id repo --pat-token $ADO_PAT \
@@ -86,6 +88,54 @@ merged = ContractMergeEngine().merge(contract, "./contracts/orders.yaml")
 GreatExpectationsExporter().export_to_path(merged.contract, "./artifacts/orders_suite.json")
 ```
 
+## Suggested CI Flow
+
+### Feature -> Main
+
+Use per-contract bump classification without changing contract versions:
+
+```bash
+contracthub release classify \
+  --base ./contracts/orders.main.yaml \
+  --candidate ./contracts/orders.feature.yaml
+```
+
+For multi-contract repos:
+
+```bash
+contracthub release classify-repo \
+  --base-root ./contracts-main \
+  --candidate-root ./contracts-feature
+```
+
+### Main -> Release
+
+Build an editable per-contract manifest, review or adjust tags, then create
+release PRs:
+
+```bash
+contracthub release build-manifest \
+  --base-root ./contracts-main \
+  --candidate-root ./contracts-release \
+  --output ./artifacts/release_manifest.json
+
+contracthub release create-prs \
+  --manifest ./artifacts/release_manifest.json \
+  --repo-path . \
+  --organization org \
+  --project proj \
+  --repository-id repo \
+  --pat-token $ADO_PAT \
+  --push
+```
+
+The generated manifest is still per contract. Review it before creating PRs,
+especially for:
+
+- added contracts
+- removed contracts
+- contracts whose suggested release tag needs adjustment
+
 ## Notes
 
 - Importers are pure Python and Spark-free.
@@ -99,6 +149,7 @@ GreatExpectationsExporter().export_to_path(merged.contract, "./artifacts/orders_
 - `feature -> main` should classify the required bump for each changed contract.
 - `main/release` is the path that applies an explicit release tag and updates contract `version`.
 - `release classify-repo` is a repo-level batching helper only; it does not make the repo a versioning unit.
+- `release build-manifest` creates an editable per-contract JSON array for batch release PR automation.
 - `release create-prs` expects an explicit per-contract manifest because each contract may have its own release tag/version.
 - Draft normalization and editor-safe contract mutation helpers live in `contracthub.core`.
 - Great Expectations suite generation uses datacontract-cli exporter APIs.

@@ -22,6 +22,22 @@ RULES
 - release flow applies the explicit version/tag per contract after merge
 - repo-level automation may batch many contracts, but it must orchestrate them as independent per-contract release units
 - multi-contract release automation should use an explicit manifest because each contract may carry its own release tag/version
+- a healthy repo-level flow is: `classify-repo -> build-manifest -> create-prs`
+
+------------------------------------------------
+PREFERRED AUTOMATION
+
+Feature -> Main:
+
+- run `release classify` for single-contract repos
+- run `release classify-repo` for multi-contract repos
+- fail or warn based on the returned per-contract `required_bump`
+
+Main -> Release:
+
+- run `release build-manifest`
+- review or edit the generated per-contract manifest
+- run `release create-prs`
 
 ------------------------------------------------
 FUTURE

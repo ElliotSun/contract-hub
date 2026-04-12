@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -9,6 +10,8 @@ from contracthub.core.release import ContractChangeAssessment, PromotionResult, 
 from contracthub.devops.pr_creator import AzureDevOpsConfig, PullRequestCreator
 from contracthub.utils.schema_utils import contract_to_model
 from contracthub.utils.yaml_utils import dump_yaml, list_yaml_documents, load_yaml
+
+SEMVER_RE = re.compile(r"v?(\d+)\.(\d+)\.(\d+)")
 
 
 @dataclass(slots=True)
@@ -55,6 +58,14 @@ class BatchReleaseTask:
     title: str | None = None
     description: str | None = None
     commit_message: str | None = None
+
+
+@dataclass(slots=True)
+class BatchReleaseManifestBuild:
+    """Generated batch manifest plus skipped contract summary."""
+
+    tasks: list[BatchReleaseTask]
+    skipped: list[RepositoryContractChange]
 
 
 def build_release_pr_plan(
@@ -270,6 +281,54 @@ def create_release_pull_requests_from_manifest(
     return results
 
 
+def build_batch_release_manifest(
+    *,
+    base_root: str | Path,
+    candidate_root: str | Path,
+    target_branch: str = "release",
+    source_branch_prefix: str = "release/",
+) -> BatchReleaseManifestBuild:
+    """Build an editable batch manifest from repo-level contract changes.
+
+    Only changed contracts produce manifest tasks. Added and removed contracts
+    are skipped because initial releases/removals need explicit handling.
+    """
+    changes = classify_contracts_in_repo(
+        base_root=base_root,
+        candidate_root=candidate_root,
+    )
+    base_root_path = Path(base_root).expanduser().resolve()
+    candidate_root_path = Path(candidate_root).expanduser().resolve()
+
+    tasks: list[BatchReleaseTask] = []
+    skipped: list[RepositoryContractChange] = []
+    for change in changes:
+        if change.status != "changed":
+            skipped.append(change)
+            continue
+
+        contract_key = _contract_release_key(change)
+        next_version = _suggest_next_version(
+            current_version=str(change.current_version or "0.0.0"),
+            required_bump=str(change.required_bump or "none"),
+        )
+        release_tag = f"{contract_key}/v{next_version}"
+        source_branch = f"{source_branch_prefix}{_branch_safe_name(contract_key)}-v{next_version}"
+
+        tasks.append(
+            BatchReleaseTask(
+                base=str(base_root_path / change.contract_repo_path),
+                candidate=str(candidate_root_path / change.contract_repo_path),
+                contract_path=change.contract_repo_path,
+                release_tag=release_tag,
+                source_branch=source_branch,
+                target_branch=target_branch,
+            )
+        )
+
+    return BatchReleaseManifestBuild(tasks=tasks, skipped=skipped)
+
+
 def load_batch_release_tasks(path: str | Path) -> list[BatchReleaseTask]:
     """Load a JSON batch manifest for per-contract release orchestration."""
     manifest_path = Path(path).expanduser().resolve()
@@ -289,8 +348,44 @@ def batch_task_to_dict(task: BatchReleaseTask) -> dict[str, Any]:
     return asdict(task)
 
 
+def batch_manifest_build_to_dict(build: BatchReleaseManifestBuild) -> dict[str, Any]:
+    """Serialize manifest build result for CLI/JSON output."""
+    return {
+        "tasks": [batch_task_to_dict(task) for task in build.tasks],
+        "skipped": [repository_change_to_dict(change) for change in build.skipped],
+    }
+
+
 def _relative_contract_index(root: Path) -> dict[str, Path]:
     if not root.exists():
         return {}
     documents = [Path(path) for path in list_yaml_documents(root)]
     return {str(path.relative_to(root)): path for path in documents}
+
+
+def _contract_release_key(change: RepositoryContractChange) -> str:
+    contract_id = str(change.contract_id or "").strip()
+    if contract_id:
+        return contract_id
+    return Path(change.contract_repo_path).stem
+
+
+def _suggest_next_version(*, current_version: str, required_bump: str) -> str:
+    major, minor, patch = _parse_semver(current_version)
+    if required_bump == "major":
+        return f"{major + 1}.0.0"
+    if required_bump == "minor":
+        return f"{major}.{minor + 1}.0"
+    return f"{major}.{minor}.{patch + 1}"
+
+
+def _parse_semver(version: str) -> tuple[int, int, int]:
+    match = SEMVER_RE.fullmatch(str(version or "").strip())
+    if not match:
+        raise ValueError(f"Version '{version}' must be a semantic version like 1.2.3")
+    return tuple(int(item) for item in match.groups())
+
+
+def _branch_safe_name(value: str) -> str:
+    cleaned = "".join(char if char.isalnum() or char in {"-", "_"} else "-" for char in value.strip())
+    return cleaned.strip("-") or "contract"

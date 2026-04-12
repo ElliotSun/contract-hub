@@ -232,6 +232,9 @@ Current repo-level commands:
   - compare two contract roots
   - report per-contract statuses such as `changed`, `unchanged`, `added`, and `removed`
   - report `required_bump` for changed contracts only
+- `contracthub release build-manifest`
+  - generate an editable JSON array of per-contract release tasks
+  - suggest release tags and source branches from each contract's current version and `required_bump`
 - `contracthub release create-prs`
   - consume an explicit batch manifest
   - run independent per-contract release preparation and PR creation
@@ -240,6 +243,17 @@ Important rule:
 
 - the repository is a batching boundary only
 - each contract still owns its own identity, version, release tag, and release decision
+
+Recommended repo-level flow:
+
+1. `contracthub release classify-repo`
+   - inspect changed contracts
+2. `contracthub release build-manifest`
+   - generate an editable per-contract release task list
+3. review and adjust the manifest
+   - especially release tags and branch names
+4. `contracthub release create-prs`
+   - create one PR per contract release task
 
 ## Draft Workflow
 

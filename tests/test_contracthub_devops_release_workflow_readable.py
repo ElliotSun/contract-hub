@@ -5,6 +5,7 @@ import json
 from contracthub.core.release import prepare_release_candidate
 from contracthub.devops.pr_creator import AzureDevOpsConfig
 from contracthub.devops.release_workflow import (
+    build_batch_release_manifest,
     BatchReleaseTask,
     build_release_pr_plan,
     classify_contracts_in_repo,
@@ -223,3 +224,48 @@ def test_create_release_pull_requests_from_manifest_runs_each_contract(sample_od
 
     assert len(results) == 2
     assert calls == ["contracts/orders.yaml", "contracts/payments.yaml"]
+
+
+def test_build_batch_release_manifest_generates_editable_tasks_and_skips_manual_cases(
+    sample_odcs_model, tmp_path
+):
+    base_root = tmp_path / "base"
+    candidate_root = tmp_path / "candidate"
+
+    unchanged = sample_odcs_model.model_copy(deep=True)
+    docs_only = sample_odcs_model.model_copy(deep=True)
+    assert docs_only.description is not None
+    docs_only.description.usage = "Updated descriptive text only"
+
+    additive = sample_odcs_model.model_copy(deep=True)
+    assert additive.schema_ is not None
+    assert additive.schema_[0].properties is not None
+    additive.schema_[0].properties.append(
+        additive.schema_[0].properties[0].model_copy(update={"name": "new_optional_column", "id": "new_optional_column"})
+    )
+
+    added = sample_odcs_model.model_copy(deep=True)
+    added.id = "new-contract"
+    added.version = "1.0.0"
+
+    dump_yaml(unchanged, base_root / "unchanged.yaml")
+    dump_yaml(unchanged, candidate_root / "unchanged.yaml")
+    dump_yaml(sample_odcs_model, base_root / "docs.yaml")
+    dump_yaml(docs_only, candidate_root / "docs.yaml")
+    dump_yaml(sample_odcs_model, base_root / "additive.yaml")
+    dump_yaml(additive, candidate_root / "additive.yaml")
+    dump_yaml(sample_odcs_model, base_root / "removed.yaml")
+    dump_yaml(added, candidate_root / "added.yaml")
+
+    build = build_batch_release_manifest(base_root=base_root, candidate_root=candidate_root)
+    tasks_by_path = {task.contract_path: task for task in build.tasks}
+    skipped_by_path = {item.contract_repo_path: item for item in build.skipped}
+
+    assert tasks_by_path["docs.yaml"].release_tag.endswith("/v1.1.1")
+    assert tasks_by_path["docs.yaml"].source_branch.endswith("-v1.1.1")
+    assert tasks_by_path["additive.yaml"].release_tag.endswith("/v1.2.0")
+    assert tasks_by_path["additive.yaml"].target_branch == "release"
+    assert "unchanged.yaml" in skipped_by_path
+    assert skipped_by_path["unchanged.yaml"].status == "unchanged"
+    assert skipped_by_path["added.yaml"].status == "added"
+    assert skipped_by_path["removed.yaml"].status == "removed"
