@@ -9,7 +9,7 @@ from typing import Any
 
 from open_data_contract_standard.model import OpenDataContractStandard
 from contracthub.core.loader import ContractLoader
-from contracthub.core.release import classify_contract_change, prepare_release_candidate
+from contracthub.core.release import classify_contract_change, prepare_release_candidate, suggest_release_version
 from datacontract.data_contract import DataContract
 from contracthub.devops.pr_creator import AzureDevOpsConfig, PullRequestCreator
 from contracthub.devops.release_workflow import (
@@ -300,12 +300,18 @@ def _run_release_classify(args: argparse.Namespace) -> dict[str, Any]:
     candidate_contract = loader.load(args.candidate)
 
     assessment = classify_contract_change(base_contract, candidate_contract)
+    current_version = str(base_contract.version or "")
     return {
         "contractId": str(base_contract.id or ""),
-        "currentVersion": str(base_contract.version or ""),
+        "currentVersion": current_version,
         "candidateVersion": str(candidate_contract.version or ""),
         "hasChanges": assessment.has_changes,
         "requiredBump": assessment.required_bump,
+        "suggestedNextVersion": (
+            suggest_release_version(current_version, assessment.required_bump)
+            if assessment.has_changes and assessment.required_bump != "none"
+            else current_version
+        ),
         "reasons": assessment.reasons,
         "breakingChanges": [asdict(change) for change in assessment.breaking_changes],
     }

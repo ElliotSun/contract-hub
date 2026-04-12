@@ -138,6 +138,8 @@ def prepare_release_candidate(
     assessment = classify_contract_change(base_model, candidate_model)
     if not assessment.has_changes:
         raise ValueError("Cannot promote a contract with no changes")
+    if assessment.required_bump == "none":
+        raise ValueError("Contract changes do not require a release version bump")
 
     target_version = parse_release_tag_version(release_tag)
     actual_bump = classify_version_bump(str(base_model.version or ""), target_version)
@@ -181,6 +183,29 @@ def classify_version_bump(current_version: str, target_version: str) -> ActualVe
     if target[1] > current[1]:
         return "minor"
     return "patch"
+
+
+def suggest_release_version(
+    current_version: str,
+    required_bump: RequiredBump,
+) -> str:
+    """Suggest the next release version from the last released version.
+
+    This helper always computes from the last released contract version.
+    It does not chain intermediate unreleased bumps together.
+
+    Example:
+    - last released: 1.2.0
+    - current unreleased delta includes both a breaking removal and an additive field
+    - required bump stays `major`
+    - suggested release version stays `2.0.0`, not `2.1.0`
+    """
+    major, minor, patch = _parse_semver(current_version)
+    if required_bump == "major":
+        return f"{major + 1}.0.0"
+    if required_bump == "minor":
+        return f"{major}.{minor + 1}.0"
+    return f"{major}.{minor}.{patch}"
 
 
 def _parse_semver(version: str) -> tuple[int, int, int]:

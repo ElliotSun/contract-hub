@@ -23,6 +23,8 @@ RULES
 - repo-level automation may batch many contracts, but it must orchestrate them as independent per-contract release units
 - multi-contract release automation should use an explicit manifest because each contract may carry its own release tag/version
 - a healthy repo-level flow is: `classify-repo -> build-manifest -> create-prs`
+- suggested release versions are always computed from the last released contract version and the highest current bump requirement, not by chaining unreleased bumps
+- if `required_bump` is `none`, the contract should not be version-bumped by default and should be skipped in batch release manifests unless a team explicitly chooses otherwise
 
 ------------------------------------------------
 PREFERRED AUTOMATION

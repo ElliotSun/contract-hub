@@ -148,6 +148,9 @@ especially for:
 - Required version bump is computed per contract, not per repo.
 - `feature -> main` should classify the required bump for each changed contract.
 - `main/release` is the path that applies an explicit release tag and updates contract `version`.
+- Suggested next versions are always computed from the last released contract version plus the highest required bump since that release.
+- Unreleased changes are not bump-chained. For example, `1.2.0 -> major change -> additive change` still suggests `2.0.0`, not `2.1.0`.
+- If `required_bump` is `none`, the suggested next version stays at the current released version and the contract is skipped by default in batch release manifest generation.
 - `release classify-repo` is a repo-level batching helper only; it does not make the repo a versioning unit.
 - `release build-manifest` creates an editable per-contract JSON array for batch release PR automation.
 - `release create-prs` expects an explicit per-contract manifest because each contract may have its own release tag/version.

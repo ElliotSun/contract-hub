@@ -19,10 +19,13 @@ from contracthub.utils.yaml_utils import dump_yaml, load_yaml
 def test_build_release_pr_plan_uses_per_contract_defaults(sample_odcs_model):
     base = sample_odcs_model.model_copy(deep=True)
     candidate = sample_odcs_model.model_copy(deep=True)
-    assert candidate.description is not None
-    candidate.description.usage = "Updated descriptive text only"
+    assert candidate.schema_ is not None
+    assert candidate.schema_[0].properties is not None
+    candidate.schema_[0].properties.append(
+        candidate.schema_[0].properties[0].model_copy(update={"name": "new_optional_column", "id": "new_optional_column"})
+    )
 
-    promotion = prepare_release_candidate(base, candidate, "orders/v1.1.1")
+    promotion = prepare_release_candidate(base, candidate, "orders/v1.2.0")
     plan = build_release_pr_plan(
         promotion=promotion,
         contract_repo_path="contracts/orders.yaml",
@@ -31,8 +34,8 @@ def test_build_release_pr_plan_uses_per_contract_defaults(sample_odcs_model):
     )
 
     assert plan.contract_id == str(base.id)
-    assert plan.target_version == "1.1.1"
-    assert plan.commit_message == f"release({base.id}): prepare 1.1.1"
+    assert plan.target_version == "1.2.0"
+    assert plan.commit_message == f"release({base.id}): prepare 1.2.0"
     assert "current version" in plan.description
 
 
@@ -41,8 +44,11 @@ def test_create_release_pull_request_writes_contract_and_calls_pr_creator(sample
     repo_path.mkdir()
     base = sample_odcs_model.model_copy(deep=True)
     candidate = sample_odcs_model.model_copy(deep=True)
-    assert candidate.description is not None
-    candidate.description.usage = "Updated descriptive text only"
+    assert candidate.schema_ is not None
+    assert candidate.schema_[0].properties is not None
+    candidate.schema_[0].properties.append(
+        candidate.schema_[0].properties[0].model_copy(update={"name": "new_optional_column", "id": "new_optional_column"})
+    )
 
     captured: dict[str, object] = {}
 
@@ -63,16 +69,16 @@ def test_create_release_pull_request_writes_contract_and_calls_pr_creator(sample
         contract_repo_path="contracts/orders.yaml",
         base_contract=base,
         candidate_contract=candidate,
-        release_tag="orders/v1.1.1",
-        source_branch="release/orders-v1.1.1",
+        release_tag="orders/v1.2.0",
+        source_branch="release/orders-v1.2.0",
         target_branch="release",
         push=True,
     )
 
     written = load_yaml(repo_path / "contracts/orders.yaml")
     assert payload["pullRequest"]["pullRequestId"] == 42
-    assert payload["promotion"]["targetVersion"] == "1.1.1"
-    assert written["version"] == "1.1.1"
+    assert payload["promotion"]["targetVersion"] == "1.2.0"
+    assert written["version"] == "1.2.0"
     assert written["id"] == str(base.id)
     assert captured["kwargs"]["paths"] == ["contracts/orders.yaml"]  # type: ignore[index]
     assert captured["kwargs"]["push"] is True  # type: ignore[index]
@@ -83,8 +89,11 @@ def test_cli_release_create_pr_outputs_plan_and_pr_payload(sample_odcs_model, tm
     repo_path.mkdir()
     base = sample_odcs_model.model_copy(deep=True)
     candidate = sample_odcs_model.model_copy(deep=True)
-    assert candidate.description is not None
-    candidate.description.usage = "Updated descriptive text only"
+    assert candidate.schema_ is not None
+    assert candidate.schema_[0].properties is not None
+    candidate.schema_[0].properties.append(
+        candidate.schema_[0].properties[0].model_copy(update={"name": "new_optional_column", "id": "new_optional_column"})
+    )
 
     base_path = dump_yaml(base, tmp_path / "base.yaml")
     candidate_path = dump_yaml(candidate, tmp_path / "candidate.yaml")
@@ -92,7 +101,7 @@ def test_cli_release_create_pr_outputs_plan_and_pr_payload(sample_odcs_model, tm
     monkeypatch.setattr(
         "contracthub.interfaces.cli.create_release_pull_request",
         lambda **kwargs: {
-            "promotion": {"contractId": str(base.id), "targetVersion": "1.1.1"},
+            "promotion": {"contractId": str(base.id), "targetVersion": "1.2.0"},
             "pullRequest": {"pullRequestId": 77},
         },
     )
@@ -108,13 +117,13 @@ def test_cli_release_create_pr_outputs_plan_and_pr_payload(sample_odcs_model, tm
             "--candidate",
             str(candidate_path),
             "--release-tag",
-            "orders/v1.1.1",
+            "orders/v1.2.0",
             "--repo-path",
             str(repo_path),
             "--contract-path",
             "contracts/orders.yaml",
             "--source-branch",
-            "release/orders-v1.1.1",
+            "release/orders-v1.2.0",
             "--target-branch",
             "release",
             "--organization",
@@ -133,8 +142,8 @@ def test_cli_release_create_pr_outputs_plan_and_pr_payload(sample_odcs_model, tm
 
     assert exit_code == 0
     assert payload["pullRequest"]["pullRequestId"] == 77
-    assert payload["promotion"]["targetVersion"] == "1.1.1"
-    assert payload["plan"]["target_version"] == "1.1.1"
+    assert payload["promotion"]["targetVersion"] == "1.2.0"
+    assert payload["plan"]["target_version"] == "1.2.0"
 
 
 def test_classify_contracts_in_repo_reports_changed_added_removed_and_unchanged(sample_odcs_model, tmp_path):
@@ -162,6 +171,7 @@ def test_classify_contracts_in_repo_reports_changed_added_removed_and_unchanged(
     assert by_path["unchanged.yaml"].status == "unchanged"
     assert by_path["changed.yaml"].status == "changed"
     assert by_path["changed.yaml"].required_bump == "none"
+    assert by_path["changed.yaml"].suggested_release_version is None
     assert by_path["added.yaml"].status == "added"
     assert by_path["removed.yaml"].status == "removed"
 
@@ -171,14 +181,20 @@ def test_create_release_pull_requests_from_manifest_runs_each_contract(sample_od
     repo_path.mkdir()
     base_a = sample_odcs_model.model_copy(deep=True)
     candidate_a = sample_odcs_model.model_copy(deep=True)
-    assert candidate_a.description is not None
-    candidate_a.description.usage = "Updated descriptive text only"
+    assert candidate_a.schema_ is not None
+    assert candidate_a.schema_[0].properties is not None
+    candidate_a.schema_[0].properties.append(
+        candidate_a.schema_[0].properties[0].model_copy(update={"name": "new_optional_column", "id": "new_optional_column"})
+    )
 
     base_b = sample_odcs_model.model_copy(deep=True)
     base_b.id = "payments"
     candidate_b = base_b.model_copy(deep=True)
-    assert candidate_b.description is not None
-    candidate_b.description.usage = "Payments description"
+    assert candidate_b.schema_ is not None
+    assert candidate_b.schema_[0].properties is not None
+    candidate_b.schema_[0].properties.append(
+        candidate_b.schema_[0].properties[0].model_copy(update={"name": "new_optional_column", "id": "new_optional_column"})
+    )
 
     base_a_path = dump_yaml(base_a, tmp_path / "base-a.yaml")
     candidate_a_path = dump_yaml(candidate_a, tmp_path / "candidate-a.yaml")
@@ -206,16 +222,16 @@ def test_create_release_pull_requests_from_manifest_runs_each_contract(sample_od
                 base=str(base_a_path),
                 candidate=str(candidate_a_path),
                 contract_path="contracts/orders.yaml",
-                release_tag="orders/v1.1.1",
-                source_branch="release/orders-v1.1.1",
+                release_tag="orders/v1.2.0",
+                source_branch="release/orders-v1.2.0",
                 target_branch="release",
             ),
             BatchReleaseTask(
                 base=str(base_b_path),
                 candidate=str(candidate_b_path),
                 contract_path="contracts/payments.yaml",
-                release_tag="payments/v1.1.1",
-                source_branch="release/payments-v1.1.1",
+                release_tag="payments/v1.2.0",
+                source_branch="release/payments-v1.2.0",
                 target_branch="release",
             ),
         ],
@@ -261,10 +277,10 @@ def test_build_batch_release_manifest_generates_editable_tasks_and_skips_manual_
     tasks_by_path = {task.contract_path: task for task in build.tasks}
     skipped_by_path = {item.contract_repo_path: item for item in build.skipped}
 
-    assert tasks_by_path["docs.yaml"].release_tag.endswith("/v1.1.1")
-    assert tasks_by_path["docs.yaml"].source_branch.endswith("-v1.1.1")
     assert tasks_by_path["additive.yaml"].release_tag.endswith("/v1.2.0")
     assert tasks_by_path["additive.yaml"].target_branch == "release"
+    assert "docs.yaml" in skipped_by_path
+    assert skipped_by_path["docs.yaml"].status == "changed"
     assert "unchanged.yaml" in skipped_by_path
     assert skipped_by_path["unchanged.yaml"].status == "unchanged"
     assert skipped_by_path["added.yaml"].status == "added"

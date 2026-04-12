@@ -1,17 +1,15 @@
 from __future__ import annotations
 
 import json
-import re
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from contracthub.core.release import ContractChangeAssessment, PromotionResult, classify_contract_change, prepare_release_candidate
+from contracthub.core.release import PromotionResult, classify_contract_change, prepare_release_candidate
+from contracthub.core.release import suggest_release_version
 from contracthub.devops.pr_creator import AzureDevOpsConfig, PullRequestCreator
 from contracthub.utils.schema_utils import contract_to_model
 from contracthub.utils.yaml_utils import dump_yaml, list_yaml_documents, load_yaml
-
-SEMVER_RE = re.compile(r"v?(\d+)\.(\d+)\.(\d+)")
 
 
 @dataclass(slots=True)
@@ -42,6 +40,7 @@ class RepositoryContractChange:
     current_version: str | None = None
     candidate_version: str | None = None
     required_bump: str | None = None
+    suggested_release_version: str | None = None
     reasons: list[str] | None = None
 
 
@@ -201,6 +200,7 @@ def classify_contracts_in_repo(
                     current_version=None,
                     candidate_version=str(candidate_model.version or ""),
                     required_bump=None,
+                    suggested_release_version=None,
                     reasons=["New governed contract; initial release handled separately"],
                 )
             )
@@ -216,6 +216,7 @@ def classify_contracts_in_repo(
                     current_version=str(base_model.version or ""),
                     candidate_version=None,
                     required_bump=None,
+                    suggested_release_version=None,
                     reasons=["Governed contract missing from candidate root; manual review required"],
                 )
             )
@@ -233,6 +234,14 @@ def classify_contracts_in_repo(
                     current_version=str(base_model.version or ""),
                     candidate_version=str(candidate_model.version or ""),
                     required_bump=assessment.required_bump,
+                    suggested_release_version=(
+                        suggest_release_version(
+                            str(base_model.version or ""),
+                            assessment.required_bump,
+                        )
+                        if assessment.required_bump != "none"
+                        else None
+                    ),
                     reasons=assessment.reasons,
                 )
             )
@@ -245,6 +254,7 @@ def classify_contracts_in_repo(
                     current_version=str(base_model.version or ""),
                     candidate_version=str(candidate_model.version or ""),
                     required_bump="none",
+                    suggested_release_version=None,
                     reasons=assessment.reasons,
                 )
             )
@@ -303,14 +313,14 @@ def build_batch_release_manifest(
     tasks: list[BatchReleaseTask] = []
     skipped: list[RepositoryContractChange] = []
     for change in changes:
-        if change.status != "changed":
+        if change.status != "changed" or change.required_bump == "none":
             skipped.append(change)
             continue
 
         contract_key = _contract_release_key(change)
-        next_version = _suggest_next_version(
-            current_version=str(change.current_version or "0.0.0"),
-            required_bump=str(change.required_bump or "none"),
+        next_version = change.suggested_release_version or suggest_release_version(
+            str(change.current_version or "0.0.0"),
+            str(change.required_bump or "none"),
         )
         release_tag = f"{contract_key}/v{next_version}"
         source_branch = f"{source_branch_prefix}{_branch_safe_name(contract_key)}-v{next_version}"
@@ -368,22 +378,6 @@ def _contract_release_key(change: RepositoryContractChange) -> str:
     if contract_id:
         return contract_id
     return Path(change.contract_repo_path).stem
-
-
-def _suggest_next_version(*, current_version: str, required_bump: str) -> str:
-    major, minor, patch = _parse_semver(current_version)
-    if required_bump == "major":
-        return f"{major + 1}.0.0"
-    if required_bump == "minor":
-        return f"{major}.{minor + 1}.0"
-    return f"{major}.{minor}.{patch + 1}"
-
-
-def _parse_semver(version: str) -> tuple[int, int, int]:
-    match = SEMVER_RE.fullmatch(str(version or "").strip())
-    if not match:
-        raise ValueError(f"Version '{version}' must be a semantic version like 1.2.3")
-    return tuple(int(item) for item in match.groups())
 
 
 def _branch_safe_name(value: str) -> str:

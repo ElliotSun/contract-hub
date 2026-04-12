@@ -36,6 +36,7 @@ def test_cli_release_classify_outputs_per_contract_required_bump(sample_odcs_mod
     assert exit_code == 0
     assert payload["contractId"] == str(base_contract.id)
     assert payload["requiredBump"] == "none"
+    assert payload["suggestedNextVersion"] == str(base_contract.version)
     assert payload["hasChanges"] is True
 
 
@@ -121,6 +122,7 @@ def test_cli_release_classify_repo_outputs_per_contract_results(sample_odcs_mode
     assert exit_code == 0
     assert by_path["unchanged.yaml"]["status"] == "unchanged"
     assert by_path["changed.yaml"]["status"] == "changed"
+    assert by_path["changed.yaml"]["suggested_release_version"] is None
 
 
 def test_cli_release_create_prs_outputs_batch_payload(sample_odcs_model, tmp_path, capsys, monkeypatch):
@@ -197,8 +199,23 @@ def test_cli_release_build_manifest_writes_json_array_and_summary(sample_odcs_mo
     docs_only = sample_odcs_model.model_copy(deep=True)
     assert docs_only.description is not None
     docs_only.description.usage = "Updated descriptive text only"
+
+    additive = sample_odcs_model.model_copy(deep=True)
+    assert additive.schema_ is not None
+    assert additive.schema_[0].properties is not None
+    additive.schema_[0].properties.append(
+        SchemaProperty(
+            name="new_optional_column",
+            logicalType="string",
+            physicalType="STRING",
+            required=False,
+        )
+    )
+
     dump_yaml(sample_odcs_model, base_root / "orders.yaml")
     dump_yaml(docs_only, candidate_root / "orders.yaml")
+    dump_yaml(sample_odcs_model, base_root / "payments.yaml")
+    dump_yaml(additive, candidate_root / "payments.yaml")
 
     monkeypatch.setattr(
         "sys.argv",
@@ -221,5 +238,6 @@ def test_cli_release_build_manifest_writes_json_array_and_summary(sample_odcs_mo
 
     assert exit_code == 0
     assert payload["output"] == str(output_path.resolve())
-    assert payload["tasks"][0]["contract_path"] == "orders.yaml"
-    assert manifest[0]["release_tag"].endswith("/v1.1.1")
+    assert payload["tasks"][0]["contract_path"] == "payments.yaml"
+    assert payload["skipped"][0]["contract_repo_path"] == "orders.yaml"
+    assert manifest[0]["release_tag"].endswith("/v1.2.0")

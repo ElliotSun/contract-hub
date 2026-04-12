@@ -211,6 +211,21 @@ Current bump rules:
 - `major`
   - lifecycle-breaking changes
 
+Suggested next release versions are always computed from the last released
+contract version and the highest currently required bump. They are not
+calculated by chaining unreleased changes together.
+
+Example:
+
+- last released version: `1.2.0`
+- unreleased changes: one breaking removal, then one additive field
+- final `required_bump`: `major`
+- suggested next version: `2.0.0`
+
+If the final `required_bump` is `none`, the suggested version remains the same
+as the last released version. In that case, repo-level batch release manifest
+generation skips the contract by default.
+
 Current release tooling:
 
 - `contracthub release classify`
