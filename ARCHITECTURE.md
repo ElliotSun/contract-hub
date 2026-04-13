@@ -178,8 +178,114 @@ This means ContractHub currently supports:
 
 It does not yet implement:
 
-- release-tag-driven version bump workflow
-- promotion workflow that intentionally advances contract version
+- automatic discovery of which contracts in a repo should be released together
+- automatic git-tag lookup inside core/service layers
+
+## Release Governance Direction
+
+Current release-version governance is intentionally **per contract**, not per repo.
+
+This supports both:
+
+- one-contract-per-repo setups
+- centralized repos containing many governed contracts
+
+Current intended flow:
+
+1. `feature -> main`
+   - validate and analyze one changed contract
+   - compute `required_bump` for that contract
+   - do **not** change contract `version`
+2. `main -> release`
+   - re-evaluate the release candidate for that contract
+   - apply an explicit `release_tag`
+   - update contract `version` through the release path only
+
+Current bump rules:
+
+- `none`
+  - descriptive-only metadata changes
+- `minor`
+  - additive or non-breaking structural changes
+  - newly introduced schema/property deprecations
+- `major`
+  - lifecycle-breaking changes
+
+Suggested next release versions are always computed from the last released
+contract version and the highest currently required bump. They are not
+calculated by chaining unreleased changes together.
+
+Example:
+
+- last released version: `1.2.0`
+- unreleased changes: one breaking removal, then one additive field
+- final `required_bump`: `major`
+- suggested next version: `2.0.0`
+
+If the final `required_bump` is `none`, the suggested version remains the same
+as the last released version. In that case, repo-level batch release manifest
+generation skips the contract by default.
+
+Current release tooling:
+
+- `contracthub release classify`
+  - compute `required_bump` for one contract
+- `contracthub release prepare`
+  - prepare one promoted contract candidate with an explicit `release_tag`
+- `contracthub release create-pr`
+  - create one release PR for one contract
+
+## Repo-Level Release Orchestration
+
+Some repositories contain multiple governed contracts. ContractHub supports
+repo-level release orchestration helpers, but these helpers do **not** change
+the versioning unit.
+
+Current repo-level commands:
+
+- `contracthub release classify-repo`
+  - compare two contract roots
+  - report per-contract statuses such as `changed`, `unchanged`, `added`, and `removed`
+  - report `required_bump` for changed contracts only
+- `contracthub release build-manifest`
+  - generate an editable JSON array of per-contract release tasks
+  - suggest release tags and source branches from each contract's current version and `required_bump`
+- `contracthub release create-prs`
+  - consume an explicit batch manifest
+  - run independent per-contract release preparation and PR creation
+
+Important rule:
+
+- the repository is a batching boundary only
+- each contract still owns its own identity, version, release tag, and release decision
+
+Recommended repo-level flow:
+
+1. `contracthub release classify-repo`
+   - inspect changed contracts
+2. `contracthub release build-manifest`
+   - generate an editable per-contract release task list
+3. review and adjust the manifest
+   - especially release tags and branch names
+4. `contracthub release create-prs`
+   - create one PR per contract release task
+
+## CI Build Modes
+
+Recommended CI interpretation:
+
+1. `pr`
+   - run validation and change classification
+   - do not change `contract.version`
+   - do not create release PRs
+2. `merge`
+   - re-run validation on the merged main state
+   - keep `contract.version` unchanged
+   - publish audit or summary artifacts if needed
+3. `release`
+   - build or review a per-contract release manifest
+   - apply explicit release tags only for contracts that require a bump
+   - create release PRs per contract
 
 ## Draft Workflow
 

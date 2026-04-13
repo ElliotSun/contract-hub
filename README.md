@@ -59,6 +59,18 @@ contracthub import --type unity --source main.silver.orders --workspace-url http
   --output ./contracts/orders.yaml
 contracthub merge --base ./generated.yaml --business ./contracts/orders.yaml --output ./contracts/orders.merged.yaml
 contracthub export-ge --contract ./contracts/orders.yaml --output ./artifacts/orders_suite.json
+contracthub release classify --base ./contracts/orders.main.yaml --candidate ./contracts/orders.feature.yaml
+contracthub release prepare --base ./contracts/orders.main.yaml --candidate ./contracts/orders.release.yaml \
+  --release-tag orders/v1.2.0 --output ./artifacts/orders.promoted.yaml
+contracthub release create-pr --base ./contracts/orders.main.yaml --candidate ./contracts/orders.release.yaml \
+  --release-tag orders/v1.2.0 --repo-path . --contract-path contracts/orders.yaml \
+  --source-branch release/orders-v1.2.0 --target-branch release \
+  --organization org --project proj --repository-id repo --pat-token $ADO_PAT --push
+contracthub release classify-repo --base-root ./contracts-main --candidate-root ./contracts-feature
+contracthub release build-manifest --base-root ./contracts-main --candidate-root ./contracts-feature \
+  --output ./artifacts/release_manifest.json
+contracthub release create-prs --manifest ./artifacts/release_manifest.json --repo-path . \
+  --organization org --project proj --repository-id repo --pat-token $ADO_PAT --push
 contracthub create-pr --organization org --project proj --repository-id repo --pat-token $ADO_PAT \
   --repo-path . --source-branch contracthub/update-orders --target-branch main \
   --commit-message "Update orders contract" --title "Update orders contract" --description "Automated update"
@@ -76,6 +88,62 @@ merged = ContractMergeEngine().merge(contract, "./contracts/orders.yaml")
 GreatExpectationsExporter().export_to_path(merged.contract, "./artifacts/orders_suite.json")
 ```
 
+## Suggested CI Flow
+
+### Feature -> Main
+
+Use per-contract bump classification without changing contract versions:
+
+```bash
+contracthub release classify \
+  --base ./contracts/orders.main.yaml \
+  --candidate ./contracts/orders.feature.yaml
+```
+
+For multi-contract repos:
+
+```bash
+contracthub release classify-repo \
+  --base-root ./contracts-main \
+  --candidate-root ./contracts-feature
+```
+
+### Main -> Release
+
+Build an editable per-contract manifest, review or adjust tags, then create
+release PRs:
+
+```bash
+contracthub release build-manifest \
+  --base-root ./contracts-main \
+  --candidate-root ./contracts-release \
+  --output ./artifacts/release_manifest.json
+
+contracthub release create-prs \
+  --manifest ./artifacts/release_manifest.json \
+  --repo-path . \
+  --organization org \
+  --project proj \
+  --repository-id repo \
+  --pat-token $ADO_PAT \
+  --push
+```
+
+The generated manifest is still per contract. Review it before creating PRs,
+especially for:
+
+- added contracts
+- removed contracts
+- contracts whose suggested release tag needs adjustment
+
+Reference examples live under:
+
+- `examples/release/release-manifest.example.json`
+- `examples/ci/pr-check.example.sh`
+- `examples/ci/release.example.sh`
+- `examples/azure-devops/contracthub-pr-validation.yml`
+- `examples/azure-devops/contracthub-release.yml`
+
 ## Notes
 
 - Importers are pure Python and Spark-free.
@@ -85,6 +153,15 @@ GreatExpectationsExporter().export_to_path(merged.contract, "./artifacts/orders_
 - Root contract `version` is release-managed and is not updated by normal importer/merge runs.
 - Technical source versions, including Delta table versions, are stored as technical metadata and do not overwrite contract `version`.
 - Lifecycle policy explicitly flags root `id` and `version` changes, and the automation pipeline blocks on those violations.
+- Required version bump is computed per contract, not per repo.
+- `feature -> main` should classify the required bump for each changed contract.
+- `main/release` is the path that applies an explicit release tag and updates contract `version`.
+- Suggested next versions are always computed from the last released contract version plus the highest required bump since that release.
+- Unreleased changes are not bump-chained. For example, `1.2.0 -> major change -> additive change` still suggests `2.0.0`, not `2.1.0`.
+- If `required_bump` is `none`, the suggested next version stays at the current released version and the contract is skipped by default in batch release manifest generation.
+- `release classify-repo` is a repo-level batching helper only; it does not make the repo a versioning unit.
+- `release build-manifest` creates an editable per-contract JSON array for batch release PR automation.
+- `release create-prs` expects an explicit per-contract manifest because each contract may have its own release tag/version.
 - Draft normalization and editor-safe contract mutation helpers live in `contracthub.core`.
 - Great Expectations suite generation uses datacontract-cli exporter APIs.
 - Databricks/Spark SQL deployment DDL generation lives in `contracthub.exporters.sql_exporter`.

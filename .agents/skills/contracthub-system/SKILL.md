@@ -37,6 +37,9 @@ STRICT RULES
 - Version must NOT change during editing
 - All changes must go through draft
 - Governance analysis is mandatory before promotion
+- Version governance is PER CONTRACT, not per repo
+- Contract `id` is immutable once created
+- Contract `version` changes only through an explicit release/promotion path
 
 ------------------------------------------------
 RELATION TO ARCHITECTURE

@@ -349,14 +349,16 @@ wheels = [
 
 [[package]]
 name = "datacontract-cli"
-version = "0.11.5"
-source = { registry = "https://pypi.org/simple" }
+version = "0.11.8"
+source = { git = "https://github.com/datacontract/datacontract-cli.git?rev=main#2dc840ffdc861b0ff091e8f5f124a3caa12e4039" }
 dependencies = [
     { name = "boto3" },
     { name = "datacontract-specification" },
+    { name = "deepdiff" },
     { name = "fastjsonschema" },
     { name = "jinja-partials" },
     { name = "jinja2" },
+    { name = "jsonschema" },
     { name = "open-data-contract-standard" },
     { name = "pydantic" },
     { name = "python-dotenv" },
@@ -368,10 +370,6 @@ dependencies = [
     { name = "setuptools" },
     { name = "sqlglot" },
     { name = "typer" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/91/a1/dbe93fae969e085a311b9a7dfc637d176ef0bee6768ff1ea1ea56d6a4b8b/datacontract_cli-0.11.5.tar.gz", hash = "sha256:6bf2acc3ae66bad7fd96f29302e6ba5b5c06576295c2a96833608090a3a5a9db", size = 327822, upload-time = "2026-02-19T20:02:14.976Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/32/73/d5875a2c5a9a902338f014fd6427589783b7a798ad288f4af4557eb73a14/datacontract_cli-0.11.5-py3-none-any.whl", hash = "sha256:22801aab6defd7041dc85aa67352401adf61b848f9fb058abd7aaa9a5f35f321", size = 290433, upload-time = "2026-02-19T20:02:12.553Z" },
 ]
 
 [[package]]
@@ -407,7 +405,7 @@ dev = [
 requires-dist = [
     { name = "azure-identity", marker = "extra == 'azure'", specifier = ">=1.16.0" },
     { name = "azure-storage-file-datalake", marker = "extra == 'azure'", specifier = ">=12.16.0" },
-    { name = "datacontract-cli", specifier = ">=0.11.5" },
+    { name = "datacontract-cli", git = "https://github.com/datacontract/datacontract-cli.git?rev=main" },
     { name = "deltalake", specifier = ">=0.18.0" },
     { name = "great-expectations", specifier = ">=1.0.0" },
     { name = "oracledb", specifier = ">=2.2.0" },
@@ -435,6 +433,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/d3/a5/3ee2bc8671b08e0c350091308386d2171bb03f8255647466ddcfab8717ca/datacontract_specification-1.2.3.tar.gz", hash = "sha256:5fc612255667581321b480e3f646c76ece618632a4aca4cd6ea5f647d98cbb61", size = 16162, upload-time = "2025-09-25T14:25:49.494Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/67/0e/ec63c117fbdb5ecfd6625e7527a267b85eaf26b4227e94a144509859a3dd/datacontract_specification-1.2.3-py3-none-any.whl", hash = "sha256:3d5a998a33be33ca95a20e3681a693b4d720baf0b956ff8970f3e85a77d6f35a", size = 15231, upload-time = "2025-09-25T14:25:48.107Z" },
+]
+
+[[package]]
+name = "deepdiff"
+version = "8.6.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "orderly-set" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/89/50/767448e792d41bfb6094ee317a355c1cb221dca24b2e178e2203bbea2a77/deepdiff-8.6.2.tar.gz", hash = "sha256:186dcbd181e4d76cef11ab05f802d0056c5d6083c5a6748c1473e9d7481e183e", size = 634860, upload-time = "2026-03-18T17:16:33.785Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2b/5f/c52bd1255db763d0cdcb7084d2e90c42119cb229302c56bdf1d0aa78abd2/deepdiff-8.6.2-py3-none-any.whl", hash = "sha256:4d22034a866c3928303a9332c279362f714192d9305bac17c498720d095fd1b4", size = 91979, upload-time = "2026-03-18T17:16:32.171Z" },
 ]
 
 [[package]]
@@ -806,6 +816,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/94/ec/8c4a38020cd251572bd406ddcbde98ca052ec94b5684f9aa9ef1ddfcc68c/oracledb-3.4.2-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:d8d75e4f879b908be66cce05ba6c05791a5dbb4a15e39abc01aa25c8a2492bd9", size = 2424756, upload-time = "2026-01-28T17:26:07.35Z" },
     { url = "https://files.pythonhosted.org/packages/fa/7d/c251c2a8567151ccfcfbe3467ea9a60fb5480dc4719342e2e6b7a9679e5d/oracledb-3.4.2-cp312-cp312-win32.whl", hash = "sha256:31b7ee83c23d0439778303de8a675717f805f7e8edb5556d48c4d8343bcf14f5", size = 1453486, upload-time = "2026-01-28T17:26:08.869Z" },
     { url = "https://files.pythonhosted.org/packages/4c/78/c939f3c16fb39400c4734d5a3340db5659ba4e9dce23032d7b33ccfd3fe5/oracledb-3.4.2-cp312-cp312-win_amd64.whl", hash = "sha256:ac25a0448fc830fb7029ad50cd136cdbfcd06975d53967e269772cc5cb8c203a", size = 1794445, upload-time = "2026-01-28T17:26:10.66Z" },
+]
+
+[[package]]
+name = "orderly-set"
+version = "5.5.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/4a/88/39c83c35d5e97cc203e9e77a4f93bf87ec89cf6a22ac4818fdcc65d66584/orderly_set-5.5.0.tar.gz", hash = "sha256:e87185c8e4d8afa64e7f8160ee2c542a475b738bc891dc3f58102e654125e6ce", size = 27414, upload-time = "2025-07-10T20:10:55.885Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/12/27/fb8d7338b4d551900fa3e580acbe7a0cf655d940e164cb5c00ec31961094/orderly_set-5.5.0-py3-none-any.whl", hash = "sha256:46f0b801948e98f427b412fcabb831677194c05c3b699b80de260374baa0b1e7", size = 13068, upload-time = "2025-07-10T20:10:54.377Z" },
 ]
 
 [[package]]

@@ -8,6 +8,7 @@ import yaml
 from open_data_contract_standard.model import OpenDataContractStandard
 
 from contracthub.core import loader as contract_loader
+from contracthub.utils.schema_utils import contract_to_dict
 
 
 def parse_yaml_text(source_yaml: str) -> dict[str, Any]:
@@ -42,11 +43,11 @@ def load_yaml(path: str | Path) -> dict[str, Any]:
     return payload
 
 
-def dump_yaml(payload: dict[str, Any], path: str | Path) -> Path:
-    """Write mapping payload to YAML."""
+def dump_yaml(payload: dict[str, Any] | OpenDataContractStandard, path: str | Path) -> Path:
+    """Write ODCS mapping or model payload to YAML."""
     resolved = Path(path).expanduser().resolve()
     resolved.parent.mkdir(parents=True, exist_ok=True)
-    resolved.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+    resolved.write_text(yaml.safe_dump(contract_to_dict(payload), sort_keys=False), encoding="utf-8")
     return resolved
 
 
