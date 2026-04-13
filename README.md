@@ -136,6 +136,14 @@ especially for:
 - removed contracts
 - contracts whose suggested release tag needs adjustment
 
+Reference examples live under:
+
+- `examples/release/release-manifest.example.json`
+- `examples/ci/pr-check.example.sh`
+- `examples/ci/release.example.sh`
+- `examples/azure-devops/contracthub-pr-validation.yml`
+- `examples/azure-devops/contracthub-release.yml`
+
 ## Notes
 
 - Importers are pure Python and Spark-free.

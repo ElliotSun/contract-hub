@@ -34,12 +34,19 @@ Feature -> Main:
 - run `release classify` for single-contract repos
 - run `release classify-repo` for multi-contract repos
 - fail or warn based on the returned per-contract `required_bump`
+- do not change `contract.version`
 
 Main -> Release:
 
 - run `release build-manifest`
 - review or edit the generated per-contract manifest
 - run `release create-prs`
+
+Merge Build:
+
+- re-run validation and classification on merged main if needed
+- publish summaries or audit artifacts
+- keep `contract.version` unchanged until release
 
 ------------------------------------------------
 FUTURE

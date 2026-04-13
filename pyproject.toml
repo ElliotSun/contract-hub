@@ -12,7 +12,7 @@ dependencies = [
   "pydantic>=2.8.0",
   "PyYAML>=6.0.0",
   "SQLAlchemy>=2.0.0",
-  "datacontract-cli>=0.11.5",
+  "datacontract-cli @ git+https://github.com/datacontract/datacontract-cli.git@main",
   "deltalake>=0.18.0",
   "sqlglot>=26.0.0",
   "requests>=2.32.0",

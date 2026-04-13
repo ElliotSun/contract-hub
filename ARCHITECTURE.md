@@ -270,6 +270,23 @@ Recommended repo-level flow:
 4. `contracthub release create-prs`
    - create one PR per contract release task
 
+## CI Build Modes
+
+Recommended CI interpretation:
+
+1. `pr`
+   - run validation and change classification
+   - do not change `contract.version`
+   - do not create release PRs
+2. `merge`
+   - re-run validation on the merged main state
+   - keep `contract.version` unchanged
+   - publish audit or summary artifacts if needed
+3. `release`
+   - build or review a per-contract release manifest
+   - apply explicit release tags only for contracts that require a bump
+   - create release PRs per contract
+
 ## Draft Workflow
 
 Current draft workflow:
