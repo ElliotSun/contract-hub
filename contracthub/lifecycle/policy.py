@@ -47,7 +47,7 @@ def evaluate_merge_policy(
         breaks.append(
             BreakingChange(
                 path="id",
-                message="Contract id changed after the governed contract was created",
+                message="Contract ID mismatch. You changed the root ID of the contract, which is immutable. If you want to create a new contract, use 'contracthub import --new' or change the ID back.",
             )
         )
 
@@ -56,7 +56,7 @@ def evaluate_merge_policy(
         breaks.append(
             BreakingChange(
                 path="version",
-                message="Contract version changed outside the release workflow",
+                message="Contract version mismatch. Contract versions are release-managed and cannot be manually updated during normal import/merge. Please revert the version change and use 'contracthub release prepare'.",
             )
         )
 

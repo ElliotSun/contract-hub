@@ -281,8 +281,9 @@ class ContractPipeline:
         id_violation = getattr(policy_evaluation, "id_violation", False)
         version_violation = getattr(policy_evaluation, "version_violation", False)
         if not policy_evaluation.valid and (id_violation or version_violation):
-            message = "; ".join(f"{item.path}: {item.message}" for item in policy_evaluation.breaking_changes)
-            raise ValueError(f"Lifecycle policy validation failed: {message}")
+            violations = [item for item in policy_evaluation.breaking_changes if item.path in ("id", "version")]
+            message = "; ".join(f"❌ {item.message}" for item in violations)
+            raise ValueError(f"Policy Violation:\n{message}")
 
         return self.prepare_ci_cd_artifacts(
             merge_result.contract,

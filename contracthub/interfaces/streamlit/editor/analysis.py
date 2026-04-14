@@ -58,7 +58,24 @@ def render_analysis_body(result: dict[str, Any]) -> None:
 
     filtered_diff_rows = filter_diff_rows(diff_rows, breaking_rows, filter_value)
     section_title("Changes Overview")
-    st.dataframe(pd.DataFrame(filtered_diff_rows), width="stretch", hide_index=True)
+
+    if filtered_diff_rows:
+        for row in filtered_diff_rows:
+            change_type = str(row.get("change_type", "MODIFIED")).upper()
+            field = row.get("field", "Unknown")
+            detail = row.get("detail", "")
+
+            if change_type == "ADDED":
+                st.markdown(f"🟢 **ADDED**: `{field}` - {detail}")
+            elif change_type in ("REMOVED", "DELETED"):
+                st.markdown(f"🔴 **REMOVED**: `{field}` - {detail}")
+            elif change_type == "DEPRECATED":
+                st.markdown(f"🟡 **DEPRECATED**: `{field}` - {detail}")
+            else:
+                st.markdown(f"🔵 **CHANGED**: `{field}` - {detail}")
+    else:
+        st.info("No changes to display for the current filter.")
+
 
     with st.expander("Detailed Diff", expanded=False):
         st.json(result.get("diff", []))

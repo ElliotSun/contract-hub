@@ -52,7 +52,7 @@ def test_ci_summary_writer_persists_json_payload(tmp_path):
 
 def test_pull_request_headers_use_basic_auth_token_encoding():
     creator = _creator()
-    headers = creator._headers()  # noqa: SLF001
+    headers = creator.provider._headers()  # noqa: SLF001
 
     assert headers["Content-Type"] == "application/json"
     assert headers["Authorization"].startswith("Basic ")
