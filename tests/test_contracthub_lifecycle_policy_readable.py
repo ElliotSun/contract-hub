@@ -100,7 +100,7 @@ def test_policy_flags_root_version_change_as_release_managed(sample_odcs_model):
     assert evaluation.valid is False
     assert evaluation.version_violation is True
     assert any(item.path == "version" for item in evaluation.breaking_changes)
-    assert any("release workflow" in item.message for item in evaluation.breaking_changes)
+    assert any("Contract version mismatch" in item.message for item in evaluation.breaking_changes)
 
 
 def test_policy_flags_root_id_change_as_immutable_identity(sample_odcs_model):
@@ -115,7 +115,7 @@ def test_policy_flags_root_id_change_as_immutable_identity(sample_odcs_model):
     assert evaluation.valid is False
     assert evaluation.id_violation is True
     assert any(item.path == "id" for item in evaluation.breaking_changes)
-    assert any("Contract id changed" in item.message for item in evaluation.breaking_changes)
+    assert any("Contract ID mismatch" in item.message for item in evaluation.breaking_changes)
 
 
 def test_policy_does_not_flag_version_when_unchanged(sample_odcs_model):
