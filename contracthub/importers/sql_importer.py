@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 import sqlglot
 from datacontract.imports.importer import Importer
-from open_data_contract_standard.model import CustomProperty, OpenDataContractStandard, SchemaObject, SchemaProperty
+from open_data_contract_standard.model import CustomProperty, OpenDataContractStandard, SchemaObject, SchemaProperty, Relationship
 from sqlglot import expressions as exp
 
 class SQLFolderImporter(Importer):
@@ -85,6 +85,8 @@ def _create_schema_object_from_statement(statement: exp.Expression) -> Optional[
     if not columns:
         return None
 
+    relationships = _extract_relationships(statement)
+
     return SchemaObject(
         id=_to_contract_id(table_physical_name),
         name=table_name,
@@ -94,8 +96,70 @@ def _create_schema_object_from_statement(statement: exp.Expression) -> Optional[
         description=table_description,
         customProperties=table_custom_properties or None,
         properties=columns,
+        relationships=relationships,
     )
 
+
+
+
+def _extract_relationships(statement: exp.Create) -> Optional[List[Relationship]]:
+    relationships = []
+
+    # Process explicit ForeignKey constraints
+    for fk in statement.find_all(exp.ForeignKey):
+        columns = [i.name for i in fk.expressions if hasattr(i, "name")]
+        ref = fk.args.get("reference")
+        if not ref or not columns:
+            continue
+
+        ref_table = ref.this.this.name if isinstance(ref.this, exp.Schema) else ref.this.name
+
+        if isinstance(ref.this, exp.Schema):
+            ref_cols = [i.name for i in ref.this.expressions if hasattr(i, "name")]
+        else:
+            ref_cols = [i.name for i in ref.expressions if hasattr(i, "name")]
+
+        if not ref_table or not ref_cols:
+            continue
+
+        for i, col in enumerate(columns):
+            if i < len(ref_cols):
+                relationships.append(Relationship(
+                    type="foreign_key",
+                    from_=col,
+                    to=f"{ref_table}.{ref_cols[i]}"
+                ))
+
+    # Also support inline FOREIGN KEYs in ColumnDefs
+    for col_def in statement.find_all(exp.ColumnDef):
+        col_name = col_def.this.name if col_def.this else None
+        if not col_name:
+            continue
+
+        for ref in col_def.find_all(exp.Reference):
+            ref_table = ref.this.this.name if isinstance(ref.this, exp.Schema) else ref.this.name
+            if isinstance(ref.this, exp.Schema):
+                ref_cols = [i.name for i in ref.this.expressions if hasattr(i, "name")]
+            else:
+                ref_cols = [i.name for i in ref.expressions if hasattr(i, "name")]
+
+            if ref_table and ref_cols:
+                relationships.append(Relationship(
+                    type="foreign_key",
+                    from_=col_name,
+                    to=f"{ref_table}.{ref_cols[0]}"
+                ))
+
+    # remove duplicates
+    unique_rels = []
+    seen = set()
+    for rel in relationships:
+        key = f"{rel.from_}->{rel.to}"
+        if key not in seen:
+            seen.add(key)
+            unique_rels.append(rel)
+
+    return unique_rels if unique_rels else None
 
 def _get_table_name_info(table_expression: exp.Table) -> Tuple[str, str]:
     logical_name = table_expression.name or ""

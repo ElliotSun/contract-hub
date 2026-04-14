@@ -12,7 +12,7 @@ from datacontract.imports.importer import Importer
 from open_data_contract_standard.model import (
     CustomProperty,
     Description,
-    OpenDataContractStandard,
+    OpenDataContractStandard, Relationship,
     SchemaObject,
     SchemaProperty,
 )
@@ -78,6 +78,8 @@ def _build_imported_contract(
         if len(table_uris) == 1:
             contract_description = description
 
+        relationships = _extract_delta_relationships(metadata)
+
         schema_objects.append(
             SchemaObject(
                 id=table_id,
@@ -87,6 +89,8 @@ def _build_imported_contract(
                 physicalType="table",
                 properties=fields,
                 description=description,
+                relationships=relationships,
+
                 customProperties=[
                     CustomProperty(property="contracthub.delta.uri", value=table_uri),
                     CustomProperty(property="contracthub.delta.version", value=delta_version),
@@ -235,7 +239,37 @@ def _extract_table_description(metadata: Any) -> Optional[str]:
     return None
 
 
+
+
+def _extract_delta_relationships(metadata: Any) -> Optional[List[Relationship]]:
+    if metadata is None:
+        return None
+
+    configuration = {}
+    if isinstance(metadata, dict):
+        configuration = metadata.get("configuration", {})
+    else:
+        configuration = getattr(metadata, "configuration", {}) or {}
+
+    if not isinstance(configuration, dict):
+        return None
+
+    relationships = []
+    for key, value in configuration.items():
+        normalized_key = str(key).strip().lower()
+        if normalized_key.startswith("contracthub.fk."):
+            source_col = normalized_key[len("contracthub.fk."):]
+            target_col = str(value).strip()
+            relationships.append(Relationship(
+                type="foreign_key",
+                from_=source_col,
+                to=target_col
+            ))
+
+    return relationships if relationships else None
+
 def _extract_partition_positions(metadata: Any) -> Dict[str, int]:
+
     if metadata is None:
         return {}
 

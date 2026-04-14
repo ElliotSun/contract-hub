@@ -351,7 +351,10 @@ def _merge_schema_object_models(
         existing_obj.customProperties,
         imported_obj.customProperties,
     )
+
     merged_obj.quality = _combine_quality_rules_models(existing_obj.quality, imported_obj.quality)
+    _copy_if_provided(merged_obj, imported_obj, "relationships") # Overwrite or add links from technical source
+
     merged_obj.properties = _merge_properties_models(
         existing_props=existing_obj.properties or [],
         imported_props=imported_obj.properties or [],

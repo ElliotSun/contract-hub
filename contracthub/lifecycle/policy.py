@@ -75,7 +75,23 @@ def evaluate_merge_policy(
             breaks.append(BreakingChange(path=f"schema[{schema_key}]", message="Schema removed from active contract"))
             continue
 
+
+        base_relationships = {f"{rel.type}:{rel.from_}->{rel.to}".lower() for rel in getattr(schema, "relationships", []) or []}
+        target_relationships = {f"{rel.type}:{rel.from_}->{rel.to}".lower() for rel in getattr(target_schema, "relationships", []) or []}
+
+        for rel_key in base_relationships:
+            if rel_key and rel_key not in target_relationships:
+                breaks.append(
+                    BreakingChange(
+                        path=f"schema[{schema_key}].relationships",
+                        message=f"Relationship '{rel_key}' removed from active lifecycle scope. Downstream joins may fail."
+                    )
+                )
+
         base_props = _prop_index(schema)
+
+
+
         target_props = _prop_index(target_schema)
         for prop_key, base_prop in base_props.items():
             if _is_draft_or_deprecated(base_prop):
