@@ -297,9 +297,15 @@ def _open_contract(entry: dict[str, Any], *, edit_mode: bool) -> None:
         except Exception as exc:
             st.session_state["editor_warning"] = f"Unable to load draft for '{entry['id']}', using main contract view instead: {exc}"
 
+
     st.session_state["contract"] = working_contract
     st.session_state["selected_contract_id"] = entry["id"]
     st.session_state["view_mode"] = "detail"
+
+    # Conflict checking logic
+    if edit_mode and working_contract.get("version") != main_contract.get("version"):
+        st.session_state["editor_warning"] = "⚠️ The technical baseline has been updated since this draft was created. Your draft metadata will be preserved, but technical schema fields have been merged. Please review changes before saving."
+
     st.session_state["editor_baseline_yaml"] = contract_to_yaml(main_contract)
     st.session_state["editor_analysis_result"] = None
     st.session_state["editor_analysis_visible"] = False

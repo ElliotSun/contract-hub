@@ -5,15 +5,19 @@ import json
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional, Protocol
 
 import requests
+
+
+class GitProviderConfig(Protocol):
+    """Protocol for Git provider configuration."""
+    pass
 
 
 @dataclass(slots=True)
 class AzureDevOpsConfig:
     """Azure DevOps connection settings."""
-
     organization: str
     project: str
     repository_id: str
@@ -22,10 +26,134 @@ class AzureDevOpsConfig:
 
 
 @dataclass(slots=True)
+class GitHubConfig:
+    """GitHub connection settings."""
+    owner: str
+    repo: str
+    token: str
+
+
+class GitProvider(Protocol):
+    """Protocol for Git provider operations."""
+    def create_pull_request(
+        self,
+        *,
+        source_branch: str,
+        target_branch: str,
+        title: str,
+        description: str,
+        reviewers: list[str] | None = None,
+    ) -> dict[str, Any]:
+        ...
+
+
+class AzureDevOpsProvider:
+    def __init__(self, config: AzureDevOpsConfig):
+        self.config = config
+
+    def create_pull_request(
+        self,
+        *,
+        source_branch: str,
+        target_branch: str,
+        title: str,
+        description: str,
+        reviewers: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Create an Azure DevOps pull request via REST API."""
+        url = (
+            f"https://dev.azure.com/{self.config.organization}/{self.config.project}"
+            f"/_apis/git/repositories/{self.config.repository_id}/pullrequests"
+            f"?api-version={self.config.api_version}"
+        )
+
+        payload: dict[str, Any] = {
+            "sourceRefName": f"refs/heads/{source_branch}",
+            "targetRefName": f"refs/heads/{target_branch}",
+            "title": title,
+            "description": description,
+        }
+        if reviewers:
+            payload["reviewers"] = [{"id": reviewer} for reviewer in reviewers]
+
+        response = requests.post(url, headers=self._headers(), data=json.dumps(payload), timeout=30)
+        if not response.ok:
+            raise RuntimeError(
+                f"Failed to create PR in Azure DevOps: status={response.status_code}, body={response.text[:500]}"
+            )
+        return response.json()
+
+    def _headers(self) -> dict[str, str]:
+        token = f":{self.config.pat_token}".encode("utf-8")
+        auth = base64.b64encode(token).decode("utf-8")
+        return {
+            "Authorization": f"Basic {auth}",
+            "Content-Type": "application/json",
+        }
+
+
+class GitHubProvider:
+    def __init__(self, config: GitHubConfig):
+        self.config = config
+
+    def create_pull_request(
+        self,
+        *,
+        source_branch: str,
+        target_branch: str,
+        title: str,
+        description: str,
+        reviewers: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Create a GitHub pull request via REST API."""
+        url = f"https://api.github.com/repos/{self.config.owner}/{self.config.repo}/pulls"
+
+        payload: dict[str, Any] = {
+            "title": title,
+            "head": source_branch,
+            "base": target_branch,
+            "body": description,
+        }
+
+        response = requests.post(url, headers=self._headers(), data=json.dumps(payload), timeout=30)
+        if not response.ok:
+            raise RuntimeError(
+                f"Failed to create PR in GitHub: status={response.status_code}, body={response.text[:500]}"
+            )
+
+        pr_data = response.json()
+
+        if reviewers:
+            pr_number = pr_data.get("number")
+            if pr_number:
+                reviewers_url = f"{url}/{pr_number}/requested_reviewers"
+                reviewers_payload = {"reviewers": reviewers}
+                requests.post(reviewers_url, headers=self._headers(), data=json.dumps(reviewers_payload), timeout=30)
+
+        return pr_data
+
+    def _headers(self) -> dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self.config.token}",
+            "Accept": "application/vnd.github.v3+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+
+
+@dataclass(slots=True)
 class PullRequestCreator:
     """Manage contract commits and pull requests for GitOps workflows."""
 
-    config: AzureDevOpsConfig
+    provider: GitProvider
+
+    def __init__(self, config: GitProviderConfig | GitProvider):
+        # Support legacy init with just config
+        if isinstance(config, AzureDevOpsConfig):
+            self.provider = AzureDevOpsProvider(config)
+        elif isinstance(config, GitHubConfig):
+            self.provider = GitHubProvider(config)
+        else:
+            self.provider = config
 
     def commit_updated_contracts(
         self,
@@ -60,28 +188,14 @@ class PullRequestCreator:
         description: str,
         reviewers: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Create an Azure DevOps pull request via REST API."""
-        url = (
-            f"https://dev.azure.com/{self.config.organization}/{self.config.project}"
-            f"/_apis/git/repositories/{self.config.repository_id}/pullrequests"
-            f"?api-version={self.config.api_version}"
+        """Create a pull request using the configured provider."""
+        return self.provider.create_pull_request(
+            source_branch=source_branch,
+            target_branch=target_branch,
+            title=title,
+            description=description,
+            reviewers=reviewers,
         )
-
-        payload: dict[str, Any] = {
-            "sourceRefName": f"refs/heads/{source_branch}",
-            "targetRefName": f"refs/heads/{target_branch}",
-            "title": title,
-            "description": description,
-        }
-        if reviewers:
-            payload["reviewers"] = [{"id": reviewer} for reviewer in reviewers]
-
-        response = requests.post(url, headers=self._headers(), data=json.dumps(payload), timeout=30)
-        if not response.ok:
-            raise RuntimeError(
-                f"Failed to create PR: status={response.status_code}, body={response.text[:500]}"
-            )
-        return response.json()
 
     def create_update_pr(
         self,
@@ -139,11 +253,3 @@ class PullRequestCreator:
             return
 
         self._git(repo, ["checkout", "-b", source_branch])
-
-    def _headers(self) -> dict[str, str]:
-        token = f":{self.config.pat_token}".encode("utf-8")
-        auth = base64.b64encode(token).decode("utf-8")
-        return {
-            "Authorization": f"Basic {auth}",
-            "Content-Type": "application/json",
-        }

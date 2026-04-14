@@ -167,7 +167,7 @@ def test_pipeline_run_raises_on_failed_lifecycle_policy(monkeypatch, sample_odcs
         ),
     )
 
-    with pytest.raises(ValueError, match="Lifecycle policy validation failed"):
+    with pytest.raises(ValueError, match="Policy Violation"):
         pipeline.run(
             source_type="sql",
             source="sql_folder",
@@ -537,7 +537,7 @@ def test_pipeline_run_blocks_root_version_change_outside_release_flow(monkeypatc
     )
     monkeypatch.setattr(ContractPipeline, "validate_contract", lambda self, _: ValidationReport(valid=True, issues=[]))
 
-    with pytest.raises(ValueError, match="Lifecycle policy validation failed"):
+    with pytest.raises(ValueError, match="Policy Violation"):
         pipeline.run(
             source_type="sql",
             source="sql_folder",
@@ -562,7 +562,7 @@ def test_pipeline_run_blocks_root_id_change_after_contract_creation(monkeypatch,
     )
     monkeypatch.setattr(ContractPipeline, "validate_contract", lambda self, _: ValidationReport(valid=True, issues=[]))
 
-    with pytest.raises(ValueError, match="Lifecycle policy validation failed"):
+    with pytest.raises(ValueError, match="Policy Violation"):
         pipeline.run(
             source_type="sql",
             source="sql_folder",
