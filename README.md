@@ -170,6 +170,11 @@ Reference examples live under:
 - Great Expectations suite generation uses datacontract-cli exporter APIs.
 - Databricks/Spark SQL deployment DDL generation lives in `contracthub.exporters.sql_exporter`.
 - Databricks-only quality constraint mapping is appended only when `sql_server_type="databricks"`.
+- Unity import (`--type uc|unity`) runs a best-effort relationship enrichment step:
+  - reads Unity table metadata for foreign key constraints
+  - maps single-column FKs to property-level `relationships`
+  - maps multi-column FKs to schema-level `relationships`
+  - never blocks import if metadata is unavailable; writes fallback markers in `customProperties`
 - Great Expectations export follows a two-step validation boundary:
   - contract-level quality rule validation in `contracthub.core.validator`
   - GE-specific expectation preflight in `contracthub.quality.ge_exporter`
