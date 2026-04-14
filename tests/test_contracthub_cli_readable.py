@@ -67,6 +67,48 @@ def test_cli_import_supports_delta_ddl_alias(sample_odcs_model, tmp_path, monkey
     assert captured["format"] == "delta-ddl"
 
 
+def test_cli_import_uc_runs_unity_enrichment(sample_unity_contract_model, tmp_path, monkeypatch):
+    captured: dict[str, Any] = {}
+
+    def _fake_import_from_source(**kwargs):
+        captured["import_kwargs"] = kwargs
+        return sample_unity_contract_model.model_copy(deep=True)
+
+    def _fake_enrich(contract, **kwargs):  # noqa: ANN001
+        captured["enrich_kwargs"] = kwargs
+        return contract
+
+    monkeypatch.setattr("contracthub.interfaces.cli.DataContract.import_from_source", _fake_import_from_source)
+    monkeypatch.setattr("contracthub.interfaces.cli.enrich_unity_contract_relationships", _fake_enrich)
+    output_path = tmp_path / "out.yaml"
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "contracthub",
+            "import",
+            "--type",
+            "uc",
+            "--source",
+            "main.silver.orders",
+            "--workspace-url",
+            "https://adb.example",
+            "--token",
+            "token",
+            "--output",
+            str(output_path),
+        ],
+    )
+
+    exit_code = cli.main()
+
+    assert exit_code == 0
+    assert captured["import_kwargs"]["format"] == "unity"
+    assert captured["import_kwargs"]["unity_table_full_name"] == ["main.silver.orders"]
+    assert captured["enrich_kwargs"]["table_fqn"] == "main.silver.orders"
+    assert captured["enrich_kwargs"]["workspace_url"] == "https://adb.example"
+    assert captured["enrich_kwargs"]["token"] == "token"
+
+
 def test_cli_release_classify_outputs_per_contract_required_bump(sample_odcs_model, tmp_path, capsys, monkeypatch):
     base_contract = sample_odcs_model.model_copy(deep=True)
     candidate_contract = sample_odcs_model.model_copy(deep=True)
