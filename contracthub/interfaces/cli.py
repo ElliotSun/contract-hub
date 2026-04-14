@@ -187,7 +187,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 
-def _build_git_config(args: any) -> GitProviderConfig:
+def _build_git_config(args: "argparse.Namespace") -> GitProviderConfig:
     provider = getattr(args, "git_provider", "azure")
     if provider == "github":
         return GitHubConfig(
@@ -590,6 +590,14 @@ def main() -> int:
     if args.command == "import":
         output = _run_import(args)
         print(output)
+        return 0
+
+    if args.command == "setup":
+        _run_setup(args)
+        return 0
+
+    if args.command == "plan":
+        _run_plan(args)
         return 0
 
     if args.command == "merge":

@@ -162,6 +162,7 @@ class PullRequestCreator:
         source_branch: str,
         commit_message: str,
         paths: list[str] | None = None,
+        reviewers: list[str] | None = None,
     ) -> str:
         """Commit updated contract artifacts and return commit SHA."""
         repo = Path(repo_path).expanduser().resolve()
@@ -207,6 +208,7 @@ class PullRequestCreator:
         title: str,
         description: str,
         paths: list[str] | None = None,
+        reviewers: list[str] | None = None,
         push: bool = False,
     ) -> dict[str, Any]:
         """Commit changes and create PR in one operation."""
@@ -225,6 +227,7 @@ class PullRequestCreator:
             source_branch=source_branch,
             target_branch=target_branch,
             title=title,
+            reviewers=reviewers,
             description=description,
         )
 
