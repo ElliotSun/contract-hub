@@ -1,11 +1,70 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 from open_data_contract_standard.model import SchemaProperty
 
 from contracthub.interfaces import cli
 from contracthub.utils.yaml_utils import dump_yaml, load_yaml
+
+
+def test_cli_import_supports_delta_table_alias(sample_odcs_model, tmp_path, monkeypatch):
+    captured: dict[str, Any] = {}
+
+    def _fake_import_from_source(**kwargs):
+        captured.update(kwargs)
+        return sample_odcs_model.model_copy(deep=True)
+
+    monkeypatch.setattr("contracthub.interfaces.cli.DataContract.import_from_source", _fake_import_from_source)
+    output_path = tmp_path / "out.yaml"
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "contracthub",
+            "import",
+            "--type",
+            "delta-table",
+            "--source",
+            "abfss://container@acct.dfs.core.windows.net/table_path",
+            "--output",
+            str(output_path),
+        ],
+    )
+
+    exit_code = cli.main()
+
+    assert exit_code == 0
+    assert captured["format"] == "delta"
+
+
+def test_cli_import_supports_delta_ddl_alias(sample_odcs_model, tmp_path, monkeypatch):
+    captured: dict[str, Any] = {}
+
+    def _fake_import_from_source(**kwargs):
+        captured.update(kwargs)
+        return sample_odcs_model.model_copy(deep=True)
+
+    monkeypatch.setattr("contracthub.interfaces.cli.DataContract.import_from_source", _fake_import_from_source)
+    output_path = tmp_path / "out.yaml"
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "contracthub",
+            "import",
+            "--type",
+            "delta-ddl",
+            "--source",
+            str(tmp_path),
+            "--output",
+            str(output_path),
+        ],
+    )
+
+    exit_code = cli.main()
+
+    assert exit_code == 0
+    assert captured["format"] == "delta-ddl"
 
 
 def test_cli_release_classify_outputs_per_contract_required_bump(sample_odcs_model, tmp_path, capsys, monkeypatch):
