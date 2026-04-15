@@ -232,11 +232,6 @@ def spark_ddl_risk_product_dir() -> Path:
 
 
 @pytest.fixture
-def spark_ddl_delta_relationship_product_dir() -> Path:
-    return _fixture_path("ddl", "spark", "delta_relationship_product")
-
-
-@pytest.fixture
 def delta_finance_transactions_schema_path() -> Path:
     return _fixture_path("delta", "finance_transactions_schema.json")
 
