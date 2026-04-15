@@ -50,9 +50,9 @@ uv sync --extra dev --extra azure
 ## CLI
 
 ```bash
-contracthub import --type sql-folder --source ./sql/orders --output ./contracts/orders.yaml
+contracthub import --type delta-ddl --source ./sql/orders --output ./contracts/orders.yaml
 contracthub import --type sql --source ./ddl/orders.sql --output ./contracts/orders.yaml
-contracthub import --type delta --source abfss://container@acct.dfs.core.windows.net/orders \
+contracthub import --type delta-table --source abfss://container@acct.dfs.core.windows.net/orders \
   --tables abfss://container@acct.dfs.core.windows.net/payments \
   --output ./contracts/finance.yaml
 contracthub import --type unity --source main.silver.orders --workspace-url https://adb.example --token $DATABRICKS_TOKEN \
@@ -83,7 +83,7 @@ from datacontract.data_contract import DataContract
 from contracthub.lifecycle import ContractMergeEngine
 from contracthub.quality import GreatExpectationsExporter, run_contract_tests
 
-contract = DataContract.import_from_source(format="sql-folder", source="./sql/orders")
+contract = DataContract.import_from_source(format="delta-ddl", source="./sql/orders")
 merged = ContractMergeEngine().merge(contract, "./contracts/orders.yaml")
 GreatExpectationsExporter().export_to_path(merged.contract, "./artifacts/orders_suite.json")
 ```
@@ -147,7 +147,11 @@ Reference examples live under:
 ## Notes
 
 - Importers are pure Python and Spark-free.
-- ContractHub registers custom importers (`delta`, `sql-folder`) into datacontract-cli's importer factory.
+- ContractHub registers custom importers (`delta-table`, `delta-ddl`) into datacontract-cli's importer factory.
+- Backward-compatible aliases remain available:
+  - `delta` -> `delta-table`
+  - `sql-folder` -> `delta-ddl`
+- `delta-ddl` parses Spark/Databricks-style Delta DDL statically (no Spark runtime) and imports foreign key relationships from DDL constraints.
 - Merge and lifecycle policy logic are isolated in `contracthub.lifecycle`.
 - Root contract `id` is immutable after the governed contract exists.
 - Root contract `version` is release-managed and is not updated by normal importer/merge runs.
@@ -166,6 +170,11 @@ Reference examples live under:
 - Great Expectations suite generation uses datacontract-cli exporter APIs.
 - Databricks/Spark SQL deployment DDL generation lives in `contracthub.exporters.sql_exporter`.
 - Databricks-only quality constraint mapping is appended only when `sql_server_type="databricks"`.
+- Unity import (`--type uc|unity`) runs a best-effort relationship enrichment step:
+  - reads Unity table metadata for foreign key constraints
+  - maps single-column FKs to property-level `relationships`
+  - maps multi-column FKs to schema-level `relationships`
+  - never blocks import if metadata is unavailable; writes fallback markers in `customProperties`
 - Great Expectations export follows a two-step validation boundary:
   - contract-level quality rule validation in `contracthub.core.validator`
   - GE-specific expectation preflight in `contracthub.quality.ge_exporter`

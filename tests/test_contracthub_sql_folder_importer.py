@@ -1,3 +1,6 @@
+from datacontract.imports.importer_factory import importer_factory
+
+import contracthub.importers  # noqa: F401
 from contracthub.importers.sql_importer import SQLFolderImporter
 
 
@@ -69,3 +72,32 @@ def test_sql_folder_importer_extracts_primary_key_unique_and_partition_metadata(
     assert fields["source"].unique is True
     assert fields["event_date"].partitioned is True
     assert fields["event_date"].partitionKeyPosition == 1
+
+
+def test_sql_folder_importer_extracts_foreign_key_relationships(spark_ddl_delta_relationship_product_dir):
+    contract = SQLFolderImporter("sql-folder").import_source(str(spark_ddl_delta_relationship_product_dir), {})
+    assert contract.schema_ is not None
+    tables = {item.name: item for item in contract.schema_}
+    child = tables["children"]
+    assert child.properties is not None
+    fields = {item.name: item for item in child.properties if item.name}
+
+    assert fields["parent_id"].relationships is not None
+    assert fields["parent_id"].relationships[0].type == "foreignKey"
+    assert fields["parent_id"].relationships[0].to == "parents.id"
+
+    assert fields["inline_parent_id"].relationships is not None
+    assert fields["inline_parent_id"].relationships[0].type == "foreignKey"
+    assert fields["inline_parent_id"].relationships[0].to == "parents.id"
+
+    assert child.relationships is not None
+    assert child.relationships[0].type == "foreignKey"
+    assert child.relationships[0].from_ == ["parent_tenant", "parent_code"]
+    assert child.relationships[0].to == ["parents.tenant", "parents.code"]
+
+
+def test_delta_ddl_alias_sets_source_marker(spark_ddl_delta_relationship_product_dir):
+    importer = importer_factory.create("delta-ddl")
+    contract = importer.import_source(str(spark_ddl_delta_relationship_product_dir), {})
+    source_props = {item.property: item.value for item in contract.customProperties or []}
+    assert source_props["contracthub.source"] == "delta-ddl"

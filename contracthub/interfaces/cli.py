@@ -25,6 +25,7 @@ from contracthub.devops.release_workflow import (
     repository_change_to_dict,
 )
 import contracthub.importers  # ensure custom importers are registered
+from contracthub.importers.unity_relationships import enrich_unity_contract_relationships
 from contracthub.lifecycle.merge_engine import ContractMergeEngine
 from contracthub.quality.ge_exporter import GreatExpectationsExporter
 from contracthub.utils.schema_utils import contract_to_dict
@@ -50,7 +51,11 @@ def _build_parser() -> argparse.ArgumentParser:
     plan_parser.add_argument("--token")
 
     import_parser = subparsers.add_parser("import", help="Import contract from source")
-    import_parser.add_argument("--type", choices=["delta", "sql", "sql-folder", "uc", "unity"], required=True)
+    import_parser.add_argument(
+        "--type",
+        choices=["delta", "delta-table", "delta-ddl", "sql", "sql-folder", "uc", "unity"],
+        required=True,
+    )
     import_parser.add_argument("--source", required=True)
     import_parser.add_argument("--output", required=True)
     import_parser.add_argument("--existing")
@@ -70,7 +75,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     import_parser.add_argument(
         "--tables",
-        help="Comma-separated list of additional Delta table URIs (used with --type delta)",
+        help="Comma-separated list of additional Delta table URIs (used with --type delta or --type delta-table)",
     )
 
     merge_parser = subparsers.add_parser("merge", help="Merge base and business-edited contracts")
@@ -187,7 +192,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 
-def _build_git_config(args: "argparse.Namespace") -> GitProviderConfig:
+def _build_git_config(args: any) -> GitProviderConfig:
     provider = getattr(args, "git_provider", "azure")
     if provider == "github":
         return GitHubConfig(
@@ -342,7 +347,7 @@ def _run_import(args: argparse.Namespace) -> Path:
     if args.existing:
         existing_contract = loader.load(args.existing)
 
-    if args.type == "delta":
+    if args.type in {"delta", "delta-table"}:
         oauth_token = _resolve_adls_oauth_token(args)
         table_uris = _parse_table_uris(args.tables)
         contract = DataContract.import_from_source(
@@ -350,6 +355,11 @@ def _run_import(args: argparse.Namespace) -> Path:
             source=args.source,
             oauth_bearer_token=oauth_token,
             table_uris=table_uris,
+        )
+    elif args.type == "delta-ddl":
+        contract = DataContract.import_from_source(
+            format="delta-ddl",
+            source=args.source,
         )
     elif args.type in {"sql", "sql-folder"}:
         contract = DataContract.import_from_source(
@@ -388,10 +398,16 @@ def _import_unity_contract(
     os.environ["DATACONTRACT_DATABRICKS_SERVER_HOSTNAME"] = workspace_url
     os.environ["DATACONTRACT_DATABRICKS_TOKEN"] = token
     try:
-        return DataContract.import_from_source(
+        imported = DataContract.import_from_source(
             format="unity",
             source=None,
             unity_table_full_name=[table_fqn],
+        )
+        return enrich_unity_contract_relationships(
+            imported,
+            table_fqn=table_fqn,
+            workspace_url=workspace_url,
+            token=token,
         )
     finally:
         for key, value in env_backup.items():

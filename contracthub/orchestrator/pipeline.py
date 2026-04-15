@@ -27,6 +27,7 @@ from open_data_contract_standard.model import OpenDataContractStandard
 from datacontract.data_contract import DataContract
 
 import contracthub.importers  # ensure custom importers are registered
+from contracthub.importers.unity_relationships import enrich_unity_contract_relationships
 from contracthub.core.loader import ContractLoader
 from contracthub.core.validator import ContractValidator, ValidationReport
 from contracthub.devops.audit import AuditMetadata
@@ -329,10 +330,16 @@ def _import_unity_contract(
     os.environ["DATACONTRACT_DATABRICKS_SERVER_HOSTNAME"] = workspace_url
     os.environ["DATACONTRACT_DATABRICKS_TOKEN"] = token
     try:
-        return DataContract.import_from_source(
+        imported = DataContract.import_from_source(
             format="unity",
             source=None,
             unity_table_full_name=[table_fqn],
+        )
+        return enrich_unity_contract_relationships(
+            imported,
+            table_fqn=table_fqn,
+            workspace_url=workspace_url,
+            token=token,
         )
     finally:
         for key, value in env_backup.items():

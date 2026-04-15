@@ -56,3 +56,8 @@ TECHNICAL_PROPERTY_KEYS = {
 }
 
 BUSINESS_PROPERTY_KEYS = {"businessName", "description", "examples", "tags"}
+
+UNITY_RELATIONSHIPS_IMPORTED_KEY = "contracthub.unity.relationshipsImported"
+UNITY_RELATIONSHIPS_COUNT_KEY = "contracthub.unity.relationshipsCount"
+UNITY_RELATIONSHIPS_REASON_KEY = "contracthub.unity.relationshipsReason"
+UNITY_CONSTRAINT_NAME_KEY = "contracthub.unity.constraintName"

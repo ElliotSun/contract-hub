@@ -50,6 +50,8 @@ def test_pipeline_import_schema_requires_uc_credentials():
 
 
 def test_pipeline_import_schema_supports_uc_when_credentials_are_given(monkeypatch):
+    captured: dict[str, object] = {}
+
     def fake_import(format: str, source: str | None = None, **_kwargs):  # noqa: ANN001
         return OpenDataContractStandard.model_validate(
             {
@@ -63,7 +65,12 @@ def test_pipeline_import_schema_supports_uc_when_credentials_are_given(monkeypat
             }
         )
 
+    def fake_enrich(contract, **kwargs):  # noqa: ANN001
+        captured.update(kwargs)
+        return contract
+
     monkeypatch.setattr(DataContract, "import_from_source", staticmethod(fake_import))
+    monkeypatch.setattr("contracthub.orchestrator.pipeline.enrich_unity_contract_relationships", fake_enrich)
     pipeline = ContractPipeline()
 
     contract = pipeline.import_schema(
@@ -74,6 +81,9 @@ def test_pipeline_import_schema_supports_uc_when_credentials_are_given(monkeypat
     )
 
     assert contract.id == "uc-id"
+    assert captured["table_fqn"] == "main.silver.orders"
+    assert captured["workspace_url"] == "https://adb.example"
+    assert captured["token"] == "token"
 
 
 def test_pipeline_import_schema_rejects_unknown_source_type():
@@ -468,6 +478,8 @@ def test_pipeline_run_executes_real_unity_workflow(
     sample_unity_contract_model,
     tmp_path,
 ):
+    captured: dict[str, object] = {}
+
     imported_contract = sample_unity_contract_model.model_copy(deep=True)
     assert imported_contract.schema_ is not None
     assert imported_contract.schema_[0].properties is not None
@@ -497,8 +509,13 @@ def test_pipeline_run_executes_real_unity_workflow(
         path.write_text('{"expectations": []}', encoding="utf-8")
         return path
 
+    def fake_enrich(contract, **kwargs):  # noqa: ANN001
+        captured.update(kwargs)
+        return contract
+
     monkeypatch.setattr(DataContract, "import_from_source", staticmethod(fake_import_from_source))
     monkeypatch.setattr("contracthub.orchestrator.pipeline.GreatExpectationsExporter.export_to_path", fake_export_to_path)
+    monkeypatch.setattr("contracthub.orchestrator.pipeline.enrich_unity_contract_relationships", fake_enrich)
 
     artifacts = ContractPipeline().run(
         source_type="uc",
@@ -521,6 +538,9 @@ def test_pipeline_run_executes_real_unity_workflow(
     assert manifest["policyValid"] is True
     assert merged_schema.description == "Imported Unity orders table"
     assert "processed_at" in merged_props
+    assert captured["table_fqn"] == "main.silver.orders"
+    assert captured["workspace_url"] == "https://adb.example"
+    assert captured["token"] == "token"
 
 
 def test_pipeline_run_blocks_root_version_change_outside_release_flow(monkeypatch, sample_odcs_model):
