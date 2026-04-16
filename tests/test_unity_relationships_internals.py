@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import pytest
 from contracthub.importers.unity_relationships import _constraint_items
 
 def test_constraint_items_empty_metadata():

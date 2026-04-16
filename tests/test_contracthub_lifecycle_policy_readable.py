@@ -137,3 +137,8 @@ def test_type_narrowing_fixture_documents_current_odcs_model_enum_gap(sample_typ
     # so lifecycle enum-reduction checks are not reachable through file-backed fixtures yet.
     assert getattr(status_prop, "enum", None) is None
     assert getattr(status_prop, "enumValues", None) is None
+
+def test_policy_flags_removed_relationship_in_active_contract(relationship_base_contract_model, relationship_target_contract_model):
+    evaluation = evaluate_merge_policy(relationship_base_contract_model, relationship_target_contract_model)
+    assert evaluation.valid is False
+    assert any("Relationship 'foreignKey:orders.user_id->users.id' removed" in item.message for item in evaluation.breaking_changes)

@@ -186,7 +186,6 @@ def test_merge_engine_detects_temporal_type_changes_on_fixture(sample_temporal_t
     assert base.schema_[0].properties is not None
     assert target.schema_[0].properties is not None
 
-    base_event_ts = next(prop for prop in base.schema_[0].properties if prop.name == "event_ts")
     target_event_ts = next(prop for prop in target.schema_[0].properties if prop.name == "event_ts")
     target_event_ts.logicalType = "date"
     target_event_ts.physicalType = "DATE"

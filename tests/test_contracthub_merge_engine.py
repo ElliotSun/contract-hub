@@ -249,3 +249,26 @@ def test_merge_engine_rejects_retired_contract_modification():
 
     with pytest.raises(merge_engine.MergeConflict, match="Retired contract cannot be modified"):
         ContractMergeEngine().merge(base_contract=source, business_contract=existing)
+
+
+def test_merge_engine_hard_overwrites_relationships(
+    relationship_merge_existing_contract_model,
+    relationship_merge_missing_contract_model,
+    relationship_merge_new_contract_model,
+):
+    merged = ContractMergeEngine().merge(
+        base_contract=relationship_merge_missing_contract_model,
+        business_contract=relationship_merge_existing_contract_model,
+    ).contract
+
+    merged_prop = merged.schema_[0].properties[0]
+    assert merged_prop.relationships is None
+
+    merged = ContractMergeEngine().merge(
+        base_contract=relationship_merge_new_contract_model,
+        business_contract=relationship_merge_existing_contract_model,
+    ).contract
+
+    merged_prop = merged.schema_[0].properties[0]
+    assert len(merged_prop.relationships) == 1
+    assert getattr(merged_prop.relationships[0], "to", None) == "products.id"

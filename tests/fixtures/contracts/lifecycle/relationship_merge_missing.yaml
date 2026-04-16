@@ -1,0 +1,12 @@
+apiVersion: v3.1.0
+kind: DataContract
+version: 1.0.0
+id: orders
+name: orders
+status: active
+schema:
+  - name: orders
+    properties:
+      - name: user_id
+        logicalType: string
+        physicalType: varchar(36)

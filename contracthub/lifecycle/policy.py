@@ -77,6 +77,17 @@ def evaluate_merge_policy(
 
         base_props = _prop_index(schema)
         target_props = _prop_index(target_schema)
+
+        base_rels = _extract_relationship_hashes(schema, base_props)
+        target_rels = _extract_relationship_hashes(target_schema, target_props)
+        for rel_hash in base_rels:
+            if rel_hash not in target_rels:
+                breaks.append(
+                    BreakingChange(
+                        path=f"schema[{schema_key}].relationships",
+                        message=f"Relationship '{rel_hash}' removed from active lifecycle scope. Downstream joins may fail."
+                    )
+                )
         for prop_key, base_prop in base_props.items():
             if _is_draft_or_deprecated(base_prop):
                 continue
@@ -308,3 +319,44 @@ def _lifecycle_from_custom_properties(custom_properties: Any) -> Any:
             if key == "lifecyclestatus":
                 return item.get("value")
     return None
+
+def _extract_relationship_hashes(schema: SchemaObject, schema_properties: dict[str, SchemaProperty]) -> set[str]:
+    hashes = set()
+
+    # 1. Schema-level relationships
+    rels = getattr(schema, "relationships", None)
+    if rels:
+        for rel in rels:
+            rel_type = getattr(rel, "type", "") or "foreignKey"
+            from_val = getattr(rel, "from_", None) or getattr(rel, "from", None) or ""
+            to_val = getattr(rel, "to", None) or ""
+
+            if isinstance(from_val, list):
+                from_str = ",".join(str(x) for x in from_val)
+            else:
+                from_str = str(from_val)
+
+            if isinstance(to_val, list):
+                to_str = ",".join(str(x) for x in to_val)
+            else:
+                to_str = str(to_val)
+
+            hashes.add(f"{rel_type}:{from_str}->{to_str}")
+
+    # 2. Property-level relationships
+    for prop_key, prop in schema_properties.items():
+        prop_rels = getattr(prop, "relationships", None)
+        if prop_rels:
+            for rel in prop_rels:
+                rel_type = getattr(rel, "type", "") or "foreignKey"
+                to_val = getattr(rel, "to", None) or ""
+                # from is implicit
+                from_str = f"{schema.name or schema.id}.{prop.name or prop.id}"
+
+                if isinstance(to_val, list):
+                    to_str = ",".join(str(x) for x in to_val)
+                else:
+                    to_str = str(to_val)
+                hashes.add(f"{rel_type}:{from_str}->{to_str}")
+
+    return hashes

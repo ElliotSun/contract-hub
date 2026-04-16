@@ -1,0 +1,44 @@
+apiVersion: v3.1.0
+kind: DataContract
+id: relationship-base
+name: relationship_tests
+version: 1.0.0
+status: active
+domain: core
+dataProduct: relationships
+schema:
+  - id: users
+    name: users
+    physicalName: users
+    physicalType: table
+    customProperties:
+      - property: lifecycleStatus
+        value: active
+    properties:
+      - id: id
+        name: id
+        physicalName: id
+        logicalType: integer
+        physicalType: BIGINT
+        customProperties:
+          - property: lifecycleStatus
+            value: active
+  - id: orders
+    name: orders
+    physicalName: orders
+    physicalType: table
+    customProperties:
+      - property: lifecycleStatus
+        value: active
+    properties:
+      - id: user_id
+        name: user_id
+        physicalName: user_id
+        logicalType: integer
+        physicalType: BIGINT
+        customProperties:
+          - property: lifecycleStatus
+            value: active
+        relationships:
+          - type: foreignKey
+            to: users.id

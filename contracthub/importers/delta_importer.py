@@ -15,6 +15,7 @@ from open_data_contract_standard.model import (
     OpenDataContractStandard,
     SchemaObject,
     SchemaProperty,
+    Relationship,
 )
 import sqlglot
 from sqlglot import expressions as exp
@@ -75,6 +76,17 @@ def _build_imported_contract(
         description = _extract_table_description(metadata)
         partition_positions = _extract_partition_positions(metadata)
         fields = _extract_delta_fields(table, partition_positions)
+        property_relationships = _extract_delta_relationships(metadata)
+
+        # Attach relationships to individual properties
+        if property_relationships and fields:
+            for prop in fields:
+                prop_name = prop.name or prop.id
+                if prop_name and prop_name in property_relationships:
+                    rels = property_relationships[prop_name]
+                    if rels:
+                        prop.relationships = rels
+
         if len(table_uris) == 1:
             contract_description = description
 
@@ -211,6 +223,36 @@ def _extract_account_name_from_uri(table_uri: str) -> Optional[str]:
 def _to_contract_id(dataset_name: str) -> str:
     cleaned = re.sub(r"[^a-zA-Z0-9._-]+", "-", dataset_name).strip("-")
     return cleaned.lower() or "delta-dataset"
+
+
+def _extract_delta_relationships(metadata: Any) -> Optional[Dict[str, List[Relationship]]]:
+    if metadata is None:
+        return None
+
+    if isinstance(metadata, dict):
+        configuration = metadata.get("configuration", {})
+    else:
+        configuration = getattr(metadata, "configuration", {}) or {}
+
+    if not isinstance(configuration, dict):
+        return None
+
+    relationships = {}
+    prefix = "contracthub.fk."
+    for key, value in configuration.items():
+        if isinstance(key, str) and key.startswith(prefix):
+            from_field = key[len(prefix):]
+            to_fields = [item.strip() for item in str(value).split(",") if item.strip()]
+
+            rels = []
+            for to_field in to_fields:
+                rels.append(
+                    Relationship(type="foreignKey", to=to_field)
+                )
+            if rels:
+                relationships[from_field] = rels
+
+    return relationships if relationships else None
 
 
 def _extract_table_description(metadata: Any) -> Optional[str]:
