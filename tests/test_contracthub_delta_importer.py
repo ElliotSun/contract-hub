@@ -1,4 +1,3 @@
-import json
 
 import pandas as pd
 from deltalake import write_deltalake

@@ -8,7 +8,6 @@ import pandas as pd
 
 from datacontract.data_contract import DataContract
 from open_data_contract_standard.model import OpenDataContractStandard
-import contracthub.importers.delta_importer as delta_importer
 from contracthub.core.validator import ValidationIssue, ValidationReport
 from contracthub.devops.audit import AuditMetadata
 from contracthub.lifecycle.merge_engine import MergeConflict, MergeResult

@@ -254,3 +254,64 @@ def delta_orders_schema_path() -> Path:
 @pytest.fixture
 def spark_ddl_orders_product_dir() -> Path:
     return _fixture_path("ddl", "spark", "orders_product")
+
+@pytest.fixture
+def relationship_base_yaml_path():
+    return Path(__file__).parent / 'fixtures' / "contracts" / "lifecycle" / "relationship_base.yaml"
+
+@pytest.fixture
+def relationship_target_yaml_path():
+    return Path(__file__).parent / 'fixtures' / "contracts" / "lifecycle" / "relationship_target.yaml"
+
+@pytest.fixture
+def relationship_base_contract_model(relationship_base_yaml_path):
+    # Just parse using yaml, then load into ODCS model
+    import yaml
+    from open_data_contract_standard.model import OpenDataContractStandard
+    with open(relationship_base_yaml_path, 'r') as f:
+        data = yaml.safe_load(f)
+    return OpenDataContractStandard.model_validate(data)
+
+@pytest.fixture
+def relationship_target_contract_model(relationship_target_yaml_path):
+    import yaml
+    from open_data_contract_standard.model import OpenDataContractStandard
+    with open(relationship_target_yaml_path, 'r') as f:
+        data = yaml.safe_load(f)
+    return OpenDataContractStandard.model_validate(data)
+
+@pytest.fixture
+def relationship_merge_existing_yaml_path():
+    return Path(__file__).parent / "fixtures" / "contracts" / "lifecycle" / "relationship_merge_existing.yaml"
+
+@pytest.fixture
+def relationship_merge_missing_yaml_path():
+    return Path(__file__).parent / "fixtures" / "contracts" / "lifecycle" / "relationship_merge_missing.yaml"
+
+@pytest.fixture
+def relationship_merge_new_yaml_path():
+    return Path(__file__).parent / "fixtures" / "contracts" / "lifecycle" / "relationship_merge_new.yaml"
+
+@pytest.fixture
+def relationship_merge_existing_contract_model(relationship_merge_existing_yaml_path):
+    import yaml
+    from open_data_contract_standard.model import OpenDataContractStandard
+    with open(relationship_merge_existing_yaml_path, 'r') as f:
+        data = yaml.safe_load(f)
+    return OpenDataContractStandard.model_validate(data)
+
+@pytest.fixture
+def relationship_merge_missing_contract_model(relationship_merge_missing_yaml_path):
+    import yaml
+    from open_data_contract_standard.model import OpenDataContractStandard
+    with open(relationship_merge_missing_yaml_path, 'r') as f:
+        data = yaml.safe_load(f)
+    return OpenDataContractStandard.model_validate(data)
+
+@pytest.fixture
+def relationship_merge_new_contract_model(relationship_merge_new_yaml_path):
+    import yaml
+    from open_data_contract_standard.model import OpenDataContractStandard
+    with open(relationship_merge_new_yaml_path, 'r') as f:
+        data = yaml.safe_load(f)
+    return OpenDataContractStandard.model_validate(data)

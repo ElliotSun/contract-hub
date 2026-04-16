@@ -347,6 +347,7 @@ def _merge_schema_object_models(
     _copy_if_provided(merged_obj, imported_obj, "logicalType")
     _copy_if_provided(merged_obj, imported_obj, "dataGranularityDescription")
     _copy_if_provided(merged_obj, imported_obj, "description")
+    merged_obj.relationships = deepcopy(imported_obj.relationships) if getattr(imported_obj, "relationships", None) is not None else None
     merged_obj.customProperties = _merge_custom_properties_models(
         existing_obj.customProperties,
         imported_obj.customProperties,
@@ -421,6 +422,7 @@ def _merge_matching_property_models(existing_prop: SchemaProperty, imported_prop
     # Matching-property updates overwrite technical fields from imported source.
     for field_name in PROPERTY_OVERWRITE_FIELDS:
         _copy_if_provided(merged_prop, imported_prop, field_name)
+    merged_prop.relationships = deepcopy(imported_prop.relationships) if getattr(imported_prop, "relationships", None) is not None else None
     merged_prop.quality = _combine_quality_rules_models(existing_prop.quality, imported_prop.quality)
     merged_prop.customProperties = _sort_custom_properties(merged_prop.customProperties)
     return merged_prop
@@ -536,7 +538,7 @@ def _normalize_status(value: Any, *, default: str) -> str:
     return text or default
 
 
-def _has_removed_flag(custom_properties: Iterable[Dict[str, Any]]) -> bool:
+def _has_removed_flag(custom_properties: Iterable[dict[str, Any]]) -> bool:
     for item in custom_properties:
         if item.get("property") == REMOVED_FLAG["property"] and str(item.get("value")).lower() == "true":
             return True
