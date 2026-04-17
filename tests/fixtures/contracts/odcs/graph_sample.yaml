@@ -27,6 +27,68 @@ schema:
         logicalType: string
         relationships:
           - to: products.id
+
+  - name: order_items
+    properties:
+      - name: order_id
+        logicalType: string
+      - name: product_id
+        logicalType: string
+  - name: product_inventory
+    properties:
+      - name: order_id
+        logicalType: string
+      - name: product_id
+        logicalType: string
+
+  - name: employees
+    relationships:
+      - type: foreignKey
+        from: manager_id
+        to: employees.id
+    properties:
+      - name: id
+        logicalType: string
+      - name: manager_id
+        logicalType: string
+
+  - name: products
+    properties:
+      - name: id
+        logicalType: string
+
+  - name: complex_junction
+    customProperties:
+      - property: "graph_export.is_junction_edge"
+        value: true
+    relationships:
+      - type: foreignKey
+        from:
+          - complex_junction.order_id
+          - complex_junction.product_id
+        to:
+          - order_items.order_id
+          - order_items.product_id
+        customProperties:
+          - property: "graph_export.is_source"
+            value: true
+          - property: "graph_semantic.edge_label"
+            value: "COMPLEX_JUNCTION"
+      - type: foreignKey
+        from:
+          - complex_junction.inv_order_id
+          - complex_junction.inv_product_id
+        to:
+          - product_inventory.order_id
+          - product_inventory.product_id
+    properties:
+      - name: active
+        logicalType: boolean
+
+  - name: reversed_order_edge
+    properties:
+      - name: id
+        logicalType: string
       - name: product_id_reversed
         logicalType: string
         relationships:

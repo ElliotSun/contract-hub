@@ -11,7 +11,7 @@ def sample_graph_yaml() -> Path:
 def test_graph_exporter_nodes(sample_graph_yaml):
     nodes, edges = GraphExporter.from_yaml(sample_graph_yaml)
 
-    assert len(nodes) == 4
+    assert len(nodes) == 10
 
     node_names = {n.name for n in nodes}
     assert "users" in node_names
@@ -22,7 +22,7 @@ def test_graph_exporter_nodes(sample_graph_yaml):
 def test_graph_exporter_edges(sample_graph_yaml):
     nodes, edges = GraphExporter.from_yaml(sample_graph_yaml)
 
-    assert len(edges) == 6
+    assert len(edges) == 9
 
     # Check explicit label
     edge1 = next(e for e in edges if e.label == "PLACED_BY")
@@ -41,3 +41,8 @@ def test_graph_exporter_edges(sample_graph_yaml):
     assert edge3.source == "orders"
     assert edge3.target == "products"
     assert edge3.is_junction_edge is False
+
+    # Check schema level self reference
+    edge4 = next(e for e in edges if e.source == "employees" and e.target == "employees")
+    assert edge4.source == "employees"
+    assert edge4.label == "EMPLOYEES"
