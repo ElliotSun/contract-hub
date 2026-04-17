@@ -40,47 +40,53 @@ class GraphExporter(Exporter):
 
             nodes.append(GraphNode(name=table_name))
 
-            # Extract edges from properties
+            # Extract edges from relationships (schema and property level)
+            rels = []
+            rels.extend(schema_obj.relationships or [])
             for prop in (schema_obj.properties or []):
-                for rel in (prop.relationships or []):
-                    # Target table extraction
-                    target_table = None
-                    to_field = getattr(rel, "from_", rel.to) if not rel.to else rel.to
+                rels.extend(prop.relationships or [])
 
-                    if isinstance(to_field, str):
-                        parts = to_field.split('.')
-                        if len(parts) > 1:
-                            target_table = parts[0]
-                        else:
-                            target_table = to_field
-                    elif isinstance(to_field, list) and len(to_field) > 0:
-                        parts = to_field[0].split('.')
-                        if len(parts) > 1:
-                            target_table = parts[0]
-                        else:
-                            target_table = to_field[0]
+            for rel in rels:
+                # Target table extraction
+                target_table = None
+                to_field = rel.to
+                if not to_field:
+                    to_field = getattr(rel, "from_", None)
 
-                    if not target_table:
-                        continue
+                if isinstance(to_field, str):
+                    parts = to_field.split('.')
+                    if len(parts) > 1:
+                        target_table = parts[0]
+                    else:
+                        target_table = to_field
+                elif isinstance(to_field, list) and len(to_field) > 0:
+                    parts = to_field[0].split('.')
+                    if len(parts) > 1:
+                        target_table = parts[0]
+                    else:
+                        target_table = to_field[0]
 
-                    # Semantic Edge Label and Junction Edge extraction
-                    edge_label = target_table.upper()
-                    is_junction_edge = False
+                if not target_table:
+                    continue
 
-                    for cp in (rel.customProperties or []):
-                        if cp.property == "graph_semantic.edge_label":
-                            if isinstance(cp.value, str) and cp.value.strip():
-                                edge_label = cp.value
-                        elif cp.property == "graph_export.is_junction_edge":
-                            if cp.value is True or str(cp.value).lower() == "true":
-                                is_junction_edge = True
+                # Semantic Edge Label and Junction Edge extraction
+                edge_label = target_table.upper()
+                is_junction_edge = False
 
-                    edges.append(GraphEdge(
-                        source=table_name,
-                        target=target_table,
-                        label=edge_label,
-                        is_junction_edge=is_junction_edge
-                    ))
+                for cp in (rel.customProperties or []):
+                    if cp.property == "graph_semantic.edge_label":
+                        if isinstance(cp.value, str) and cp.value.strip():
+                            edge_label = cp.value
+                    elif cp.property == "graph_export.is_junction_edge":
+                        if cp.value is True or str(cp.value).lower() == "true":
+                            is_junction_edge = True
+
+                edges.append(GraphEdge(
+                    source=table_name,
+                    target=target_table,
+                    label=edge_label,
+                    is_junction_edge=is_junction_edge
+                ))
 
         return nodes, edges
 
