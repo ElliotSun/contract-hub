@@ -32,8 +32,12 @@ azure = [
   "azure-identity>=1.16.0",
   "azure-storage-file-datalake>=12.16.0",
 ]
+graph = [
+  "networkx>=3.0",
+]
 dev = [
   "pytest>=8.2.0",
+  "networkx>=3.0",
 ]
 
 [tool.pytest.ini_options]
