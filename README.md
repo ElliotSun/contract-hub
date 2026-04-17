@@ -59,6 +59,8 @@ contracthub import --type unity --source main.silver.orders --workspace-url http
   --output ./contracts/orders.yaml
 contracthub merge --base ./generated.yaml --business ./contracts/orders.yaml --output ./contracts/orders.merged.yaml
 contracthub export-ge --contract ./contracts/orders.yaml --output ./artifacts/orders_suite.json
+datacontract export --format graph --export-args '{"format": "cypher"}' ./contracts/orders.yaml
+datacontract export --format graph --export-args '{"format": "json"}' ./contracts/orders.yaml
 contracthub release classify --base ./contracts/orders.main.yaml --candidate ./contracts/orders.feature.yaml
 contracthub release prepare --base ./contracts/orders.main.yaml --candidate ./contracts/orders.release.yaml \
   --release-tag orders/v1.2.0 --output ./artifacts/orders.promoted.yaml
