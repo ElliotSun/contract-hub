@@ -24,7 +24,6 @@ from contracthub.devops.release_workflow import (
     release_plan_to_dict,
     repository_change_to_dict,
 )
-import contracthub.importers  # ensure custom importers are registered
 from contracthub.importers.unity_relationships import enrich_unity_contract_relationships
 from contracthub.lifecycle.merge_engine import ContractMergeEngine
 from contracthub.quality.ge_exporter import GreatExpectationsExporter
@@ -40,7 +39,11 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 
-    setup_parser = subparsers.add_parser("setup", help="Bootstrap repository with GitOps templates and CI pipelines")
+    subparsers.add_parser("setup", help="Bootstrap repository with GitOps templates and CI pipelines")
+
+    enrich_parser = subparsers.add_parser("enrich", help="Enrich data contract with semantic relationship labels via LLM")
+    enrich_parser.add_argument("--contract", required=True, help="Path to the YAML contract")
+    enrich_parser.add_argument("--concurrency", type=int, default=1, help="Max parallel LLM API calls")
 
     plan_parser = subparsers.add_parser("plan", help="Dry run and summarize changes between source and base contract")
     plan_parser.add_argument("--source", required=True)
@@ -211,7 +214,6 @@ def _build_git_config(args: any) -> GitProviderConfig:
 
 def _run_setup(args: argparse.Namespace) -> None:
     import os
-    import shutil
 
     print("🚀 Bootstrapping ContractHub repository...")
 
@@ -260,7 +262,6 @@ contract_check:
 
     # Try to initialize a default contract using datacontract-cli
     try:
-        from datacontract.cli import app as dc_app
         print("📝 Generating sample contract via datacontract-cli...")
         # Just write a basic one manually to avoid click testing issues
         sample_yaml = """
@@ -281,7 +282,7 @@ schema:
 """
         with open("contracts/sample.yaml", "w") as f:
             f.write(sample_yaml.lstrip())
-    except Exception as e:
+    except Exception:
         pass
 
     print("✅ Setup complete! You can now use GitOps for your data contracts.")
@@ -290,7 +291,6 @@ schema:
 def _run_plan(args: argparse.Namespace) -> None:
     from contracthub.orchestrator.pipeline import ContractPipeline
     from contracthub.core.release import classify_contract_change
-    from contracthub.utils.yaml_utils import load_yaml
 
     pipeline = ContractPipeline()
 
@@ -584,6 +584,13 @@ def _run_release_create_pr(args: argparse.Namespace) -> dict[str, Any]:
     return payload
 
 
+def _run_enrich(args: argparse.Namespace) -> str:
+    from contracthub.tools.enricher import ContractEnricher
+    enricher = ContractEnricher()
+    enricher.process(args.contract, max_workers=args.concurrency)
+    return f"Successfully enriched {args.contract}"
+
+
 def _run_release_create_prs(args: argparse.Namespace) -> dict[str, Any]:
     config = _build_git_config(args)
     tasks = load_batch_release_tasks(args.manifest)
@@ -602,6 +609,11 @@ def _run_release_create_prs(args: argparse.Namespace) -> dict[str, Any]:
 def main() -> int:
     parser = _build_parser()
     args = parser.parse_args()
+
+    if args.command == "enrich":
+        output = _run_enrich(args)
+        print(output)
+        return 0
 
     if args.command == "import":
         output = _run_import(args)

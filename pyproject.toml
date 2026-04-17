@@ -22,6 +22,7 @@ dependencies = [
   "streamlit>=1.32.0",
   "streamlit-tags==1.2.7",
   "pandas>=2.0.0",
+  "openai>=1.0.0",
 ]
 
 [project.scripts]
@@ -34,6 +35,7 @@ azure = [
 ]
 dev = [
   "pytest>=8.2.0",
+  "pytest-mock>=3.14.0",
 ]
 
 [tool.pytest.ini_options]
