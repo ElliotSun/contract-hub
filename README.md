@@ -74,6 +74,7 @@ contracthub release create-prs --manifest ./artifacts/release_manifest.json --re
 contracthub create-pr --organization org --project proj --repository-id repo --pat-token $ADO_PAT \
   --repo-path . --source-branch contracthub/update-orders --target-branch main \
   --commit-message "Update orders contract" --title "Update orders contract" --description "Automated update"
+contracthub enrich --contract ./contracts/orders.yaml --concurrency 2
 ```
 
 ## SDK Usage
@@ -170,6 +171,7 @@ Reference examples live under:
 - Great Expectations suite generation uses datacontract-cli exporter APIs.
 - Databricks/Spark SQL deployment DDL generation lives in `contracthub.exporters.sql_exporter`.
 - Databricks-only quality constraint mapping is appended only when `sql_server_type="databricks"`.
+- `enrich` command uses an LLM to infer relationship semantic edges and writes them back to `customProperties` of the contract in batch.
 - Unity import (`--type uc|unity`) runs a best-effort relationship enrichment step:
   - reads Unity table metadata for foreign key constraints
   - maps single-column FKs to property-level `relationships`
