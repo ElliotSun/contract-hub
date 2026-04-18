@@ -7,7 +7,7 @@ from typing import Any
 
 from contracthub.core.release import PromotionResult, classify_contract_change, prepare_release_candidate
 from contracthub.core.release import suggest_release_version
-from contracthub.devops.pr_creator import PullRequestCreator, GitProviderConfig
+from contracthub.devops.pr_creator import AzureDevOpsConfig, PullRequestCreator, GitProviderConfig
 from contracthub.utils.schema_utils import contract_to_model
 from contracthub.utils.yaml_utils import dump_yaml, list_yaml_documents, load_yaml
 
