@@ -1,9 +1,17 @@
+kind: DataContract
+apiVersion: v3.1.0
+id: my-contract
+status: active
+name: test
 version: 1.0.0
 schema:
   - name: users
     properties:
       - name: id
         logicalType: string
+      - name: email
+        logicalType: string
+        classification: pii
   - name: loyalty_members
     properties:
       - name: customer_id
