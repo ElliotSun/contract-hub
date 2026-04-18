@@ -167,7 +167,7 @@ class GraphExporter(Exporter):
 
             # Add Table Node
             table_props = {}
-            if hasattr(schema_obj, 'description') and schema_obj.description:
+            if schema_obj.description:
                 table_props["description"] = schema_obj.description
 
             nodes.append(GraphNode(name=table_name, type="Table", properties=table_props))
@@ -178,69 +178,49 @@ class GraphExporter(Exporter):
 
                 # Determine is_pii
                 is_pii = False
-                if hasattr(prop, 'classification') and prop.classification is not None:
+
+                # ODCS officially supports `classification` (e.g. pii, restricted) and `tags`
+                if prop.classification is not None:
                     cls_val = str(prop.classification).lower()
                     if 'pii' in cls_val or cls_val in ('restricted', 'confidential'):
                         is_pii = True
-                if not is_pii and hasattr(prop, 'pii') and is_truthy(getattr(prop, 'pii')):
-                    is_pii = True
-                if not is_pii and getattr(prop, 'customProperties', []):
-                    for cp in getattr(prop, 'customProperties', []):
-                        cp_prop = getattr(cp, 'property', None) or (cp.get('property') if isinstance(cp, dict) else None)
-                        cp_val = getattr(cp, 'value', None) or (cp.get('value') if isinstance(cp, dict) else None)
+
+                if not is_pii and prop.tags:
+                    if any(str(t).lower() == 'pii' for t in prop.tags):
+                        is_pii = True
+
+                # Custom Properties fallback for extensions
+                if not is_pii and prop.customProperties:
+                    for cp in prop.customProperties:
+                        cp_prop = cp.property or (cp.get('property') if isinstance(cp, dict) else None)
+                        cp_val = cp.value or (cp.get('value') if isinstance(cp, dict) else None)
                         if str(cp_prop).lower() == 'pii' and is_truthy(cp_val):
                             is_pii = True
-                if not is_pii and hasattr(prop, '__pydantic_extra__') and prop.__pydantic_extra__:
-                    if is_truthy(prop.__pydantic_extra__.get('pii')):
-                        is_pii = True
-                if not is_pii and hasattr(prop, 'model_dump'):
-                    try:
-                        d = prop.model_dump(exclude_unset=False, by_alias=True)
-                        if is_truthy(d.get('pii')) or is_truthy(d.get('classification')):
-                            is_pii = True
-                        if d.get('tags') and any(str(t).lower() == 'pii' for t in d.get('tags', [])):
-                            is_pii = True
-                    except Exception:
-                        pass
-                if not is_pii and hasattr(prop, '__dict__'):
-                    if is_truthy(prop.__dict__.get('pii')) or is_truthy(prop.__dict__.get('classification')):
-                        is_pii = True
-                    if prop.__dict__.get('tags') and any(str(t).lower() == 'pii' for t in prop.__dict__.get('tags', [])):
-                        is_pii = True
-                if not is_pii and getattr(prop, 'tags', []):
-                    tags = getattr(prop, 'tags', [])
-                    if tags and any(str(t).lower() == 'pii' for t in tags):
-                        is_pii = True
 
                 # Determine is_primary_key
                 is_pk = False
-                if hasattr(prop, 'primaryKey') and is_truthy(getattr(prop, 'primaryKey')):
-                    is_pk = True
-                elif hasattr(prop, '__pydantic_extra__') and prop.__pydantic_extra__ and is_truthy(prop.__pydantic_extra__.get('primaryKey')):
+                if prop.primaryKey is not None and is_truthy(prop.primaryKey):
                     is_pk = True
 
                 # Determine logicalType
-                logical_type = getattr(prop, 'logicalType', None)
-                if not logical_type and hasattr(prop, 'type'):
-                    logical_type = getattr(prop, 'type')
+                logical_type = prop.logicalType
 
                 # Example Value
                 example_val = None
-                examples = getattr(prop, 'examples', [])
-                if examples and isinstance(examples, list) and len(examples) > 0:
-                    example_val = examples[0]
+                if prop.examples and len(prop.examples) > 0:
+                    example_val = prop.examples[0]
 
                 col_props = {
                     "logicalType": logical_type,
                     "is_pii": is_pii,
                     "is_primary_key": is_pk,
                 }
-                if hasattr(prop, 'description') and prop.description:
+                if prop.description:
                     col_props["description"] = prop.description
-                if hasattr(prop, 'required') and prop.required is not None:
+                if prop.required is not None:
                     col_props["is_not_null"] = prop.required
-                if getattr(prop, 'tags', []):
-                    col_props["tags"] = getattr(prop, 'tags', [])
+                if prop.tags:
+                    col_props["tags"] = prop.tags
                 if example_val is not None:
                     col_props["example_value"] = str(example_val)
 
