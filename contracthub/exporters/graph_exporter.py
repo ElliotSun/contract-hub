@@ -150,13 +150,104 @@ class GraphExporter(Exporter):
         nodes: List[GraphNode] = []
         edges: List[GraphEdge] = []
 
+        def is_truthy(val) -> bool:
+            if val is True:
+                return True
+            if isinstance(val, str) and val.lower() in ('true', '1'):
+                return True
+            if isinstance(val, int) and val == 1:
+                return True
+            return False
+
         for schema_obj in (data_contract.schema_ or []):
             if schema_name != "all" and schema_obj.name != schema_name:
                 continue
 
             table_name = schema_obj.name
 
-            nodes.append(GraphNode(name=table_name))
+            # Add Table Node
+            table_props = {}
+            if hasattr(schema_obj, 'description') and schema_obj.description:
+                table_props["description"] = schema_obj.description
+
+            nodes.append(GraphNode(name=table_name, type="Table", properties=table_props))
+
+            # Add Column Nodes and Edges
+            for prop in (schema_obj.properties or []):
+                col_id = f"{table_name}.{prop.name}"
+
+                # Determine is_pii
+                is_pii = False
+                if hasattr(prop, 'classification') and prop.classification is not None:
+                    cls_val = str(prop.classification).lower()
+                    if 'pii' in cls_val or cls_val in ('restricted', 'confidential'):
+                        is_pii = True
+                if not is_pii and hasattr(prop, 'pii') and is_truthy(getattr(prop, 'pii')):
+                    is_pii = True
+                if not is_pii and getattr(prop, 'customProperties', []):
+                    for cp in getattr(prop, 'customProperties', []):
+                        cp_prop = getattr(cp, 'property', None) or (cp.get('property') if isinstance(cp, dict) else None)
+                        cp_val = getattr(cp, 'value', None) or (cp.get('value') if isinstance(cp, dict) else None)
+                        if str(cp_prop).lower() == 'pii' and is_truthy(cp_val):
+                            is_pii = True
+                if not is_pii and hasattr(prop, '__pydantic_extra__') and prop.__pydantic_extra__:
+                    if is_truthy(prop.__pydantic_extra__.get('pii')):
+                        is_pii = True
+                if not is_pii and hasattr(prop, 'model_dump'):
+                    try:
+                        d = prop.model_dump(exclude_unset=False, by_alias=True)
+                        if is_truthy(d.get('pii')) or is_truthy(d.get('classification')):
+                            is_pii = True
+                        if d.get('tags') and any(str(t).lower() == 'pii' for t in d.get('tags', [])):
+                            is_pii = True
+                    except Exception:
+                        pass
+                if not is_pii and hasattr(prop, '__dict__'):
+                    if is_truthy(prop.__dict__.get('pii')) or is_truthy(prop.__dict__.get('classification')):
+                        is_pii = True
+                    if prop.__dict__.get('tags') and any(str(t).lower() == 'pii' for t in prop.__dict__.get('tags', [])):
+                        is_pii = True
+                if not is_pii and getattr(prop, 'tags', []):
+                    tags = getattr(prop, 'tags', [])
+                    if tags and any(str(t).lower() == 'pii' for t in tags):
+                        is_pii = True
+
+                # Determine is_primary_key
+                is_pk = False
+                if hasattr(prop, 'primaryKey') and is_truthy(getattr(prop, 'primaryKey')):
+                    is_pk = True
+                elif hasattr(prop, '__pydantic_extra__') and prop.__pydantic_extra__ and is_truthy(prop.__pydantic_extra__.get('primaryKey')):
+                    is_pk = True
+
+                # Determine logicalType
+                logical_type = getattr(prop, 'logicalType', None)
+                if not logical_type and hasattr(prop, 'type'):
+                    logical_type = getattr(prop, 'type')
+
+                # Example Value
+                example_val = None
+                examples = getattr(prop, 'examples', [])
+                if examples and isinstance(examples, list) and len(examples) > 0:
+                    example_val = examples[0]
+
+                col_props = {
+                    "logicalType": logical_type,
+                    "is_pii": is_pii,
+                    "is_primary_key": is_pk,
+                }
+                if hasattr(prop, 'description') and prop.description:
+                    col_props["description"] = prop.description
+                if hasattr(prop, 'required') and prop.required is not None:
+                    col_props["is_not_null"] = prop.required
+                if getattr(prop, 'tags', []):
+                    col_props["tags"] = getattr(prop, 'tags', [])
+                if example_val is not None:
+                    col_props["example_value"] = str(example_val)
+
+                nodes.append(GraphNode(name=col_id, id=col_id, type="Column", properties=col_props))
+
+                # HAS_COLUMN edge
+                edges.append(GraphEdge(source=table_name, target=col_id, label="HAS_COLUMN"))
 
             # Extract edges from relationships (schema and property level)
             rels = []
@@ -196,7 +287,7 @@ class GraphExporter(Exporter):
                         if isinstance(cp.value, str) and cp.value.strip():
                             edge_label = cp.value
                     elif cp.property == "graph_export.is_junction_edge":
-                        if cp.value is True or str(cp.value).lower() == "true":
+                        if is_truthy(cp.value):
                             is_junction_edge = True
 
                 edges.append(GraphEdge(
