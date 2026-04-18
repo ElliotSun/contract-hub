@@ -22,6 +22,8 @@ STRICT RULES
 - UI must NOT access YAML directly
 - UI must NOT implement business logic
 - service must NOT depend on UI modules
+- Service methods MUST strictly accept and return the `OpenDataContractStandard` Pydantic model or formal Data Classes
+- Do NOT fallback to returning or manipulating raw `dict[str, Any]` to accommodate the UI (the ODCS model is the single source of truth)
 
 ------------------------------------------------
 ALLOWED DEPENDENCIES

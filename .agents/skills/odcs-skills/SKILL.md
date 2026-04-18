@@ -58,3 +58,10 @@ Load these references as needed:
 
 - Use `sample_odcs.yaml` as baseline ODCS shape.
 - Use `contracthub/lifecycle/merge_engine.py` as the lifecycle merge implementation.
+
+## Upstream Dependency Directives (CRITICAL)
+
+- **Do NOT reinvent `datacontract-cli` internals.** ContractHub is an extension layer above `datacontract-cli`.
+- **Validation:** Always use upstream validators for core ODCS schema validation (structure, types, quality rules formatting). Custom validation implemented in ContractHub should ONLY be for ContractHub-specific metadata or business constraints.
+- **Importers/Exporters:** Custom importers must subclass or conform strictly to upstream importer protocols, and must be registered via `importer_factory`.
+- **Error Handling:** Expose formal, typed custom domain exceptions for any business constraint violations so CI/CD pipelines can catch them, rather than relying on generic `ValueError` or `Exception`.
