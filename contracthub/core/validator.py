@@ -31,15 +31,46 @@ class ContractValidator:
     """Validate ODCS schema structure and quality rule completeness."""
 
     def validate(self, contract_input: OpenDataContractStandard | dict[str, Any] | str | Path) -> ValidationReport:
-        contract = _normalize_contract(contract_input)
+        from datacontract.data_contract import DataContract
+        from pydantic import ValidationError
+
         issues: list[ValidationIssue] = []
 
-        if not contract.schema_:
-            issues.append(ValidationIssue(path="schema", message="Contract must define at least one schema object"))
+        # 1. Strict ODCS Pydantic validation
+        contract = None
+        try:
+            contract = _normalize_contract(contract_input)
+        except ValidationError as e:
+            for error in e.errors():
+                loc = ".".join(str(p) for p in error["loc"])
+                issues.append(ValidationIssue(path=loc, message=error["msg"], severity="error"))
+        except Exception as e:
+            issues.append(ValidationIssue(path="pydantic", message=str(e), severity="error"))
+
+        if not contract:
             return ValidationReport(valid=False, issues=issues)
 
-        for schema_idx, schema_obj in enumerate(contract.schema_):
-            issues.extend(self._validate_schema_object(schema_idx, schema_obj))
+        # 2. Base datacontract-cli linting (fastjsonschema)
+        # We can pass the validated model directly to DataContract.
+        # This bypasses serialization issues where fastjsonschema fails on intermediate dict representations.
+        cli_dc = DataContract(data_contract=contract)
+        run_result = cli_dc.lint()
+
+        for check in run_result.checks:
+            # check.result is an enum DataContract ResultEnum
+            if check.result.name != "passed":
+                issues.append(
+                    ValidationIssue(
+                        path="datacontract-cli",
+                        message=check.reason or check.name or "Validation failed",
+                        severity="error",
+                    )
+                )
+
+        # 3. Advanced semantic checks
+        if contract and contract.schema_:
+            for schema_idx, schema_obj in enumerate(contract.schema_):
+                issues.extend(self._validate_schema_object(schema_idx, schema_obj))
 
         return ValidationReport(valid=not issues, issues=issues)
 
@@ -47,15 +78,9 @@ class ContractValidator:
         issues: list[ValidationIssue] = []
         path = f"schema[{schema_idx}]"
 
-        if not schema_obj.name:
-            issues.append(ValidationIssue(path=f"{path}.name", message="Schema object name is required"))
-
-        if not schema_obj.properties:
-            issues.append(ValidationIssue(path=f"{path}.properties", message="Schema object must define properties"))
-            return issues
-
-        for prop_idx, prop in enumerate(schema_obj.properties):
-            issues.extend(self._validate_property(f"{path}.properties[{prop_idx}]", prop))
+        if schema_obj.properties:
+            for prop_idx, prop in enumerate(schema_obj.properties):
+                issues.extend(self._validate_property(f"{path}.properties[{prop_idx}]", prop))
 
         if schema_obj.quality:
             issues.extend(self._validate_quality_rules(f"{path}.quality", schema_obj.quality))
@@ -64,17 +89,6 @@ class ContractValidator:
 
     def _validate_property(self, path: str, prop: SchemaProperty) -> list[ValidationIssue]:
         issues: list[ValidationIssue] = []
-
-        if not prop.name:
-            issues.append(ValidationIssue(path=f"{path}.name", message="Property name is required"))
-
-        if not (prop.logicalType or prop.physicalType):
-            issues.append(
-                ValidationIssue(
-                    path=path,
-                    message="Property must define logicalType or physicalType",
-                )
-            )
 
         if prop.quality:
             issues.extend(self._validate_quality_rules(f"{path}.quality", prop.quality))
