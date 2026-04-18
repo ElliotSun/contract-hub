@@ -7,10 +7,9 @@ contract structure.
 
 from __future__ import annotations
 
-from copy import deepcopy
 from typing import Any
 
-from open_data_contract_standard.model import CustomProperty, Description, OpenDataContractStandard, SchemaObject, SchemaProperty, Server
+from open_data_contract_standard.model import CustomProperty, Description, OpenDataContractStandard, SchemaProperty, Server
 
 from contracthub.constants import TYPE_OPTIONS
 from contracthub.utils.schema_utils import contract_to_model

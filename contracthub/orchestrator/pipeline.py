@@ -20,13 +20,12 @@ import json
 from dataclasses import asdict, dataclass, field
 import os
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from open_data_contract_standard.model import OpenDataContractStandard
 
 from datacontract.data_contract import DataContract
 
-import contracthub.importers  # ensure custom importers are registered
 from contracthub.importers.unity_relationships import enrich_unity_contract_relationships
 from contracthub.core.loader import ContractLoader
 from contracthub.core.validator import ContractValidator, ValidationReport

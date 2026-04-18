@@ -8,14 +8,10 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 from contracthub.core.editor_rows import (
-    is_blank_quality_row,
-    is_blank_quick_field_row,
-    optional_int,
-    rule_condition,
     tags_to_text,
     text_to_tags,
 )
-from contracthub.core.editor_semantics import normalize_tags, set_mapping_text
+from contracthub.core.editor_semantics import normalize_tags
 
 try:
     from streamlit_tags import st_tags
