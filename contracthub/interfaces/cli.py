@@ -456,12 +456,18 @@ def _run_merge(args: argparse.Namespace) -> Path:
 
 
 def _run_export_ge(args: argparse.Namespace) -> Path:
-    return GreatExpectationsExporter().export_to_path(
-        args.contract,
-        args.output,
-        schema_name=args.schema_name,
-        suite_name=args.suite_name,
-    )
+    import sys
+    try:
+        return GreatExpectationsExporter().export_to_path(
+            args.contract,
+            args.output,
+            schema_name=args.schema_name,
+            suite_name=args.suite_name,
+        )
+    except (RuntimeError, ImportError) as exc:
+        if "requires pyspark to be installed" in str(exc) or "pyspark" in str(exc):
+            sys.exit(str(exc))
+        raise
 
 
 def _run_create_pr(args: argparse.Namespace) -> dict[str, Any]:
