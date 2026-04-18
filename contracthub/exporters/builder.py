@@ -15,8 +15,17 @@ class InMemoryGraphBuilder:
     def build(self) -> Any:
         graph = self.nx.MultiDiGraph()
 
+        import logging
+        logger = logging.getLogger(__name__)
+
         for schema_obj in (self.data_contract.schema_ or []):
             table_name = schema_obj.name
+
+            # Extract relationships
+            rels: List[Relationship] = []
+            rels.extend(schema_obj.relationships or [])
+            for prop in (schema_obj.properties or []):
+                rels.extend(prop.relationships or [])
 
             # Check if this table is a junction edge
             is_junction = False
@@ -25,15 +34,25 @@ class InMemoryGraphBuilder:
                     is_junction = True
                     break
 
+            # Check N-ary junction fallback
+            if is_junction:
+                num_rels = len(rels)
+                if num_rels >= 3:
+                    logger.warning(
+                        f"Schema {table_name} marked as junction but has {num_rels} relationships. "
+                        "Property graphs do not support hyperedges. Falling back to treating it as a standard Table node."
+                    )
+                    is_junction = False
+                elif num_rels <= 1:
+                    logger.warning(
+                        f"Schema {table_name} marked as junction but has {num_rels} relationships (needs exactly 2). "
+                        "Falling back to treating it as a standard Table node."
+                    )
+                    is_junction = False
+
             if not is_junction:
                 # Add a regular node
                 graph.add_node(table_name)
-
-                # Extract relationships
-                rels: List[Relationship] = []
-                rels.extend(schema_obj.relationships or [])
-                for prop in (schema_obj.properties or []):
-                    rels.extend(prop.relationships or [])
 
                 for rel in rels:
                     # In ODCS, 'to' could be a string or list of strings
@@ -62,12 +81,24 @@ class InMemoryGraphBuilder:
                             # Default direction: Current Table -> FK Target
                             graph.add_edge(table_name, target_table, label=edge_label, is_junction_edge=False)
             else:
-                # Junction table logic
-                source_target_pairs = self._extract_junction_fks(schema_obj)
-                if not source_target_pairs:
-                    continue
+                # Junction table logic (exactly 2 relations)
+                source_fk = None
+                target_fk = None
 
-                source_fk, target_fk = source_target_pairs
+                for rel in rels:
+                    is_source = False
+                    for cp in (rel.customProperties or []):
+                        if cp.property == "graph_export.is_source" and (cp.value is True or str(cp.value).lower() == "true"):
+                            is_source = True
+                            break
+
+                    if is_source:
+                        source_fk = rel
+                    else:
+                        target_fk = rel
+
+                if not source_fk or not target_fk:
+                    continue
 
                 source_tables = self._extract_target_tables(source_fk)
                 target_tables = self._extract_target_tables(target_fk)
@@ -122,27 +153,3 @@ class InMemoryGraphBuilder:
                     tables.add(parts[0] if len(parts) > 1 else t)
         return list(tables)
 
-    def _extract_junction_fks(self, schema_obj: Any) -> Optional[tuple[Relationship, Relationship]]:
-        source_fk = None
-        target_fk = None
-
-        rels: List[Relationship] = []
-        rels.extend(schema_obj.relationships or [])
-        for prop in (schema_obj.properties or []):
-            rels.extend(prop.relationships or [])
-
-        for rel in rels:
-            is_source = False
-            for cp in (rel.customProperties or []):
-                if cp.property == "graph_export.is_source" and (cp.value is True or str(cp.value).lower() == "true"):
-                    is_source = True
-                    break
-
-            if is_source:
-                source_fk = rel
-            else:
-                target_fk = rel
-
-        if source_fk and target_fk:
-            return source_fk, target_fk
-        return None

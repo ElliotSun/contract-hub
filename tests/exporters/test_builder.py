@@ -80,6 +80,43 @@ def test_in_memory_graph_builder(sample_graph_yaml_path):
     # Verify ODCS model is unmodified
     assert len(contract.schema_ or []) == original_schema_len
 
+@pytest.fixture
+def sample_graph_nary_junction_yaml_path() -> Path:
+    return Path("tests/fixtures/contracts/odcs/graph_nary_junction.yaml")
+
+def test_nary_junction_fallback(sample_graph_nary_junction_yaml_path):
+    from contracthub.utils.schema_utils import contract_to_model
+
+    contract: OpenDataContractStandard = contract_to_model(sample_graph_nary_junction_yaml_path)
+    builder = InMemoryGraphBuilder(contract)
+    graph = builder.build()
+
+    nodes = list(graph.nodes)
+
+    # Check that N-ary junction fell back to standard node
+    assert "user_project_role" in nodes
+
+    # Ensure the edges from the N-ary junction are output correctly
+    edge_data_users = graph.get_edge_data("users", "user_project_role")
+    assert edge_data_users is not None
+    assert edge_data_users[0]["label"] == "HAS_ROLE_IN"
+
+    edge_data_projects = graph.get_edge_data("user_project_role", "projects")
+    assert edge_data_projects is not None
+    assert edge_data_projects[0]["label"] == "PROJECTS"
+
+    edge_data_roles = graph.get_edge_data("user_project_role", "roles")
+    assert edge_data_roles is not None
+    assert edge_data_roles[0]["label"] == "ROLES"
+
+    # Check that 1-ary junction fell back to standard node
+    assert "one_ary_junction" in nodes
+
+    edge_data_users_1ary = graph.get_edge_data("one_ary_junction", "users")
+    assert edge_data_users_1ary is not None
+    assert edge_data_users_1ary[0]["label"] == "USERS"
+
+
 def test_builder_raises_on_invalid_input():
     with pytest.raises(ValueError):
         InMemoryGraphBuilder({"version": "1.0.0"})

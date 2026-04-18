@@ -1,0 +1,55 @@
+version: 1.0.0
+schema:
+  - name: users
+    properties:
+      - name: id
+        logicalType: string
+  - name: projects
+    properties:
+      - name: id
+        logicalType: string
+  - name: roles
+    properties:
+      - name: id
+        logicalType: string
+  - name: user_project_role
+    customProperties:
+      - property: "graph_export.is_junction_edge"
+        value: true
+    relationships:
+      - type: foreignKey
+        from: user_id
+        to: users.id
+        customProperties:
+          - property: "graph_export.is_source"
+            value: true
+          - property: "graph_semantic.edge_label"
+            value: "HAS_ROLE_IN"
+      - type: foreignKey
+        from: project_id
+        to: projects.id
+      - type: foreignKey
+        from: role_id
+        to: roles.id
+    properties:
+      - name: id
+        logicalType: string
+      - name: user_id
+        logicalType: string
+      - name: project_id
+        logicalType: string
+      - name: role_id
+        logicalType: string
+  - name: one_ary_junction
+    customProperties:
+      - property: "graph_export.is_junction_edge"
+        value: true
+    relationships:
+      - type: foreignKey
+        from: user_id
+        to: users.id
+    properties:
+      - name: id
+        logicalType: string
+      - name: user_id
+        logicalType: string
