@@ -105,9 +105,10 @@ class SovereigntyInterceptor:
                 column_name = None
 
                 if node.properties:
-                    # check schema.name and property.name as requested
-                    table_name = node.properties.get("schema.name") or node.properties.get("table_name")
-                    column_name = node.properties.get("property.name") or node.properties.get("name")
+                    # Depending on how InMemoryGraphBuilder maps ODCS properties,
+                    # usually table name is not "schema.name", it's the node id parsing
+                    table_name = node.properties.get("table_name")
+                    column_name = node.properties.get("name")
 
                 if not table_name or not column_name:
                     parts = node.id.split('.')
