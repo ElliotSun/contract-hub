@@ -50,10 +50,14 @@ class CypherSerializer(BaseSerializer):
         formatted_props = []
         for k, v in properties.items():
             if isinstance(v, str):
-                v_escaped = v.replace("'", "\\'")
-                formatted_props.append(f"{k}: '{v_escaped}'")
+                v_escaped = json.dumps(v)
+                formatted_props.append(f"{k}: {v_escaped}")
             elif isinstance(v, bool):
                 formatted_props.append(f"{k}: {'true' if v else 'false'}")
+            elif isinstance(v, (dict, list)):
+                v_str = json.dumps(v)
+                v_escaped = json.dumps(v_str)
+                formatted_props.append(f"{k}: {v_escaped}")
             elif v is None:
                 continue
             else:
