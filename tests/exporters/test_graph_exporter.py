@@ -3,6 +3,7 @@ from pathlib import Path
 import json
 
 from contracthub.exporters.graph_exporter import GraphExporter
+from datacontract.data_contract import DataContract
 
 @pytest.fixture
 def sample_graph_yaml() -> Path:
@@ -12,20 +13,24 @@ def sample_graph_yaml() -> Path:
 def test_graph_exporter_nodes(sample_graph_yaml):
     nodes, edges = GraphExporter.from_yaml(sample_graph_yaml)
 
-    assert len(nodes) == 10
+    # 10 tables + 20 columns = 30 nodes
+    assert len(nodes) == 30
 
     node_names = {n.name for n in nodes}
     assert "users" in node_names
     assert "orders" in node_names
     assert "loyalty_members" in node_names
     assert "user_products_junction" in node_names
+    assert "users.id" in node_names
+    assert "users.email" in node_names
 
 def test_graph_exporter_edges(sample_graph_yaml):
     nodes, edges = GraphExporter.from_yaml(sample_graph_yaml)
 
-    assert len(edges) == 9
+    # 9 table semantic edges + 20 HAS_COLUMN edges = 29 edges
+    assert len(edges) == 29
 
-    # Check explicit label
+    # Check explicit label (Table to Table)
     edge1 = next(e for e in edges if e.label == "PLACED_BY")
     assert edge1.source == "orders"
     assert edge1.target == "users"
@@ -48,7 +53,11 @@ def test_graph_exporter_edges(sample_graph_yaml):
     assert edge4.source == "employees"
     assert edge4.label == "EMPLOYEES"
 
-from datacontract.data_contract import DataContract
+    # Check HAS_COLUMN edges exist
+    has_col_edges = [e for e in edges if e.label == "HAS_COLUMN"]
+    assert len(has_col_edges) == 20
+    user_id_col = next(e for e in has_col_edges if e.source == "users" and e.target == "users.id")
+    assert user_id_col is not None
 
 def test_graph_exporter_cypher_from_yaml(sample_graph_yaml):
     contract = DataContract(data_contract_file=str(sample_graph_yaml))
@@ -70,6 +79,7 @@ def test_graph_exporter_cypher_from_yaml(sample_graph_yaml):
 
     # Simple check on one of the relationships and nodes to ensure proper format was achieved
     assert "[:PLACED_BY" in result
+    assert "[:HAS_COLUMN" in result
     # Check that self referencing mapping behaves properly within output sequence
     assert "[:EMPLOYEES" in result
 
@@ -92,13 +102,13 @@ def test_graph_exporter_json_from_yaml(sample_graph_yaml):
     assert "nodes" in result
     assert "edges" in result
 
-    assert len(result["nodes"]) == 10
-    assert len(result["edges"]) == 9
+    assert len(result["nodes"]) == 30
+    assert len(result["edges"]) == 29
 
     # Assert zero indexing applies correctly
     ids = [n["id"] for n in result["nodes"]]
     assert min(ids) == 0
-    assert max(ids) == 9
+    assert max(ids) == 29
 
     # Assert mapping relationships
     placed_by_edge = next(e for e in result["edges"] if e["type"] == "PLACED_BY")
