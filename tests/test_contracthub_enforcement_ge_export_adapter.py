@@ -1,50 +1,33 @@
-import json
-
 import contracthub.quality.ge_exporter as ge_adapter
-
+from contracthub.utils.schema_utils import contract_to_model
 
 def test_generate_expectation_suite_uses_datacontract_exporter(monkeypatch):
-    class FakeExporter:
-        @staticmethod
-        def export(data_contract, schema_name, server, sql_server_type, export_args):
-            assert schema_name == "all"
-            assert export_args["engine"] == "spark"
-            return json.dumps(
-                {
-                    "name": "suite.sample",
-                    "expectations": [
-                        {
-                            "type": "expect_column_values_to_not_be_null",
-                            "kwargs": {"column": "id"},
-                            "meta": {},
-                        }
-                    ],
-                }
-            )
+    """
+    Test that the Great Expectations exporter successfully constructs the correct GE suite dictionary
+    without invoking the underlying Pandas/Spark/SQLAlchemy validation engines, by mocking pyspark.
+    """
+    from unittest.mock import MagicMock, patch
 
-    class FakeExpectationConfiguration:
-        def __init__(self, expectation_type, kwargs, meta):
-            self.expectation_type = expectation_type
-            self.kwargs = kwargs
-            self.meta = meta
+    mock_pyspark = MagicMock()
+    class MockDataFrame:
+        pass
+    mock_pyspark.DataFrame = MockDataFrame
+    mock_pyspark.pyspark = mock_pyspark
 
-    class FakeExpectationSuite:
-        def __init__(self, expectation_suite_name):
-            self.expectation_suite_name = expectation_suite_name
-            self.expectations = []
+    with patch.dict('sys.modules', {'pyspark': mock_pyspark, 'pyspark.sql': MagicMock(), 'pyspark.sql.types': MagicMock()}):
+        # Load from fixture instead of inline yaml
+        fixture_path = "tests/fixtures/contracts/quality/constraint_friendly_quality.yaml"
+        model = contract_to_model(fixture_path)
 
-        def add_expectation(self, expectation_configuration):
-            self.expectations.append(expectation_configuration)
+        suite = ge_adapter.generate_expectation_suite(contract=model, schema_name="quality_rules")
 
-    monkeypatch.setattr(ge_adapter.exporter_factory, "create", lambda _: FakeExporter())
-    monkeypatch.setattr(
-        ge_adapter,
-        "_load_ge_suite_classes",
-        lambda: (FakeExpectationSuite, FakeExpectationConfiguration),
-    )
-    monkeypatch.setattr(ge_adapter, "_load_ge_expectation_registry", lambda: lambda expectation_type: object())
+        # Assert that the exporter constructs the suite
+        suite_name = getattr(suite, "expectation_suite_name", getattr(suite, "name", None))
+        assert suite_name == "quality_rules.1.0.0"
 
-    suite = ge_adapter.generate_expectation_suite(contract=object(), schema_name="all")
-    assert suite.expectation_suite_name == "suite.sample"
-    assert len(suite.expectations) == 1
-    assert suite.expectations[0].expectation_type == "expect_column_values_to_not_be_null"
+        # Check that expectations were generated (e.g. for the columns)
+        assert len(suite.expectations) > 0
+
+        # Verify expect_table_columns_to_match_ordered_list or similar was generated
+        types = [getattr(exp, "expectation_type", getattr(exp, "type", None)) for exp in suite.expectations]
+        assert "expect_table_columns_to_match_ordered_list" in types
