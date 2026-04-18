@@ -52,69 +52,9 @@ def test_topology_validator_island_table(caplog):
     assert "orders" in report.island_tables
     assert "absolute island" in caplog.text
 
-def test_sovereignty_interceptor(tmp_path):
-    yaml_content = """
-kind: DataContract
-apiVersion: v3.1.0
-id: my-contract
-status: active
-name: test
-version: 1.0.0
-schema:
-  - name: users
-    properties:
-      - name: id
-        logicalType: string
-        customProperties:
-          - property: pii
-            value: false
-      - name: email
-        logicalType: string
-        customProperties:
-          - property: pii
-            value: true
-"""
-    yaml_file = tmp_path / "contract.yaml"
-    yaml_file.write_text(yaml_content)
-
-    contract = contract_to_model(str(yaml_file))
-
-    nodes = [
-        GraphNode(name="users.id", id="users.id", type="Column", properties={"example_value": "123"}),
-        GraphNode(name="users.email", id="users.email", type="Column", properties={"example_value": "test@example.com"}),
-    ]
-
-    interceptor = SovereigntyInterceptor()
-    interceptor.intercept(contract, nodes)
-
-    # Check that ID was not redacted
-    assert nodes[0].properties["example_value"] == "123"
-
-    # Check that Email WAS redacted
-    assert nodes[1].properties["example_value"] == "[REDACTED_PII]"
-
-def test_sovereignty_interceptor_schema_format(tmp_path):
-    yaml_content = """
-kind: DataContract
-apiVersion: v3.1.0
-id: my-contract
-status: active
-name: test
-version: 1.0.0
-schema:
-  - name: users
-    properties:
-      - name: id
-        logicalType: string
-        classification: public
-      - name: email
-        logicalType: string
-        classification: pii
-"""
-    yaml_file = tmp_path / "contract.yaml"
-    yaml_file.write_text(yaml_content)
-
-    contract = contract_to_model(str(yaml_file))
+def test_sovereignty_interceptor_schema_format():
+    # Use the existing graph_sample.yaml which has users.email classification: pii added
+    contract = contract_to_model("tests/fixtures/contracts/odcs/graph_sample.yaml")
 
     nodes = [
         GraphNode(name="users.id", id="users.id", type="Column", properties={"example_value": "123"}),

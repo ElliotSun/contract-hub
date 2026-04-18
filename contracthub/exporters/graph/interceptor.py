@@ -45,8 +45,15 @@ class SovereigntyInterceptor:
 
         # Check schema format (v3)
         for schema_obj in (contract.schema_ or []):
-            table_name = schema_obj.name
+            table_name = getattr(schema_obj, 'name', None)
+            if not table_name:
+                continue
+
             for prop in (schema_obj.properties or []):
+                prop_name = getattr(prop, 'name', None)
+                if not prop_name:
+                    continue
+
                 is_pii = False
 
                 # In ODCS v3, PII is denoted via classification or tags typically.
@@ -90,7 +97,7 @@ class SovereigntyInterceptor:
                         is_pii = True
 
                 if is_pii:
-                    pii_columns.add((table_name.lower(), prop.name.lower()))
+                    pii_columns.add((table_name.lower(), prop_name.lower()))
 
         for node in nodes:
             if node.type == "Column":
@@ -98,6 +105,8 @@ class SovereigntyInterceptor:
                 column_name = None
 
                 if node.properties:
+                    # Depending on how InMemoryGraphBuilder maps ODCS properties,
+                    # usually table name is not "schema.name", it's the node id parsing
                     table_name = node.properties.get("table_name")
                     column_name = node.properties.get("name")
 

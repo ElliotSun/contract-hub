@@ -4,6 +4,9 @@ schema:
     properties:
       - name: id
         logicalType: string
+      - name: email
+        logicalType: string
+        classification: pii
   - name: loyalty_members
     properties:
       - name: customer_id
