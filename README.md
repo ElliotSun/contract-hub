@@ -179,6 +179,8 @@ Reference examples live under:
   - maps single-column FKs to property-level `relationships`
   - maps multi-column FKs to schema-level `relationships`
   - never blocks import if metadata is unavailable; writes fallback markers in `customProperties`
+- Graph topology validation ensures strict "Paths Over Joins" compliance via `TopologyValidator`.
+- PII data sovereignty rules are automatically enforced in graph exports via `SovereigntyInterceptor`.
 - Great Expectations export follows a two-step validation boundary:
   - contract-level quality rule validation in `contracthub.core.validator`
   - GE-specific expectation preflight in `contracthub.quality.ge_exporter`
