@@ -10,9 +10,12 @@ schema:
         logicalType: string
         businessName: User Email Address
         quality:
-          - type: custom
-            description: Ensure valid email formats
-            rule: email_format_check
+          - id: email_valid_format
+            metric: invalidValues
+            arguments:
+              pattern: '^.+@.+$'
+            mustBe: 0
+            description: "Ensure valid email formats"
         classification: pii
   - name: loyalty_members
     properties:

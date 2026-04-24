@@ -27,8 +27,10 @@ def test_graph_exporter_nodes(sample_graph_yaml):
     quality_prop = users_email_node.properties.get("quality")
     assert isinstance(quality_prop, list)
     assert len(quality_prop) == 1
-    assert quality_prop[0]["type"] == "custom"
-    assert quality_prop[0]["rule"] == "email_format_check"
+    assert quality_prop[0]["id"] == "email_valid_format"
+    assert quality_prop[0]["metric"] == "invalidValues"
+    assert quality_prop[0]["arguments"]["pattern"] == "^.+@.+$"
+    assert quality_prop[0]["mustBe"] == 0
 
     node_names = {n.name for n in nodes}
     assert "users" in node_names
