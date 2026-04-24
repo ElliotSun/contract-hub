@@ -1,17 +1,25 @@
 version: 1.0.0
 schema:
   - name: users
+    businessName: Users Table
+    dataGranularityDescription: One row per user
     properties:
       - name: id
         logicalType: string
       - name: email
         logicalType: string
+        businessName: User Email Address
+        quality:
+          - type: custom
+            description: Ensure valid email formats
+            rule: email_format_check
         classification: pii
   - name: loyalty_members
     properties:
       - name: customer_id
         logicalType: string
   - name: orders
+    businessName: Orders Table
     properties:
       - name: id
         logicalType: string

@@ -16,6 +16,20 @@ def test_graph_exporter_nodes(sample_graph_yaml):
     # 10 tables + 20 columns = 30 nodes
     assert len(nodes) == 30
 
+    users_table_node = next(n for n in nodes if n.name == "users" and n.type == "Table")
+    assert users_table_node.properties.get("businessName") == "Users Table"
+    assert users_table_node.properties.get("dataGranularityDescription") == "One row per user"
+
+    users_email_node = next(n for n in nodes if n.name == "users.email" and n.type == "Column")
+    assert users_email_node.properties.get("businessName") == "User Email Address"
+
+    # Assert quality matches the serialized ODCS library type expectation
+    quality_prop = users_email_node.properties.get("quality")
+    assert isinstance(quality_prop, list)
+    assert len(quality_prop) == 1
+    assert quality_prop[0]["type"] == "custom"
+    assert quality_prop[0]["rule"] == "email_format_check"
+
     node_names = {n.name for n in nodes}
     assert "users" in node_names
     assert "orders" in node_names
@@ -41,6 +55,9 @@ def test_graph_exporter_edges(sample_graph_yaml):
     assert edge2.source == "orders"
     assert edge2.label == "LOYALTY_MEMBERS" # fallback
     assert edge2.is_junction_edge is True
+    assert edge2.properties.get("name") == "orders"
+    assert edge2.properties.get("businessName") == "Orders Table"
+    assert edge2.properties.get("to") == "loyalty_members.customer_id"
 
     # Check another fallback
     edge3 = next(e for e in edges if e.label == "PRODUCTS" and e.source == "orders")

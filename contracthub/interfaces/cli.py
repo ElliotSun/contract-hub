@@ -88,6 +88,15 @@ def _build_parser() -> argparse.ArgumentParser:
     merge_parser.add_argument("--runtime-context", default="auto")
     merge_parser.add_argument("--fail-on-conflict", action="store_true")
 
+    export_parser = subparsers.add_parser("export", help="Convert data contract to a specific format")
+    export_parser.add_argument("location", nargs="?", default="datacontract.yaml", help="The location (url or path) of the data contract yaml")
+    export_parser.add_argument("--format", required=True, help="The export format (e.g. html, graph, jsonschema, dbt, etc.)")
+    export_parser.add_argument("--output", help="Specify the file path where the exported data will be saved. If no path is provided, the output will be printed to stdout.")
+    export_parser.add_argument("--server", help="The server name to export.")
+    export_parser.add_argument("--schema-name", default="all", help="The name of the schema to export, e.g., orders, or all for all schemas (default).")
+    export_parser.add_argument("--sql-server-type", default="auto", help="The server type to determine the sql dialect.")
+    export_parser.add_argument("--export-args", help="Additional arguments for custom exporters in JSON string format, e.g. '{\"format\": \"cypher\"}'")
+
     ge_parser = subparsers.add_parser("export-ge", help="Export Great Expectations suite")
     ge_parser.add_argument("--contract", required=True)
     ge_parser.add_argument("--output", required=True)
@@ -455,6 +464,55 @@ def _run_merge(args: argparse.Namespace) -> Path:
     return dump_yaml(contract_to_dict(result.contract), args.output)
 
 
+def _run_export(args: argparse.Namespace) -> str:
+    export_args_dict = {}
+    if args.export_args:
+        try:
+            export_args_dict = json.loads(args.export_args)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Failed to parse --export-args as JSON: {exc}")
+
+    # Pre-parse using contracthub's more robust loader if it's our graph exporter
+    # because DataContract SDK doesn't consistently attach the payload schema_
+    # to the `m` object for unregistered legacy or custom ODCS schemas out-of-the-box in the same way.
+    if args.format == "graph":
+        from contracthub.utils.schema_utils import contract_to_model
+        from contracthub.exporters.graph_exporter import GraphExporter
+
+        contract_model = contract_to_model(args.location)
+        exporter = GraphExporter(export_format="graph")
+        result = exporter.export(
+            data_contract=contract_model,
+            schema_name=args.schema_name,
+            server=args.server,
+            sql_server_type=args.sql_server_type,
+            export_args=export_args_dict
+        )
+    else:
+        contract = DataContract(data_contract_file=args.location)
+        # We call the datacontract sdk export method which handles stdout printing
+        # and file writing according to the output arg, while dynamically using registered exporters
+        result = contract.export(
+            export_format=args.format,
+            server=args.server,
+            schema_name=args.schema_name,
+            sql_server_type=args.sql_server_type,
+            export_args=export_args_dict
+        )
+
+    if args.output:
+        # data contract sdk `export` method already writes to file if `export()` handles output,
+        # but in datacontract-cli 0.11.x sometimes we need to write manually if custom exporter doesn't handle writing
+        # SDK usually returns the exported string.
+        if result is not None:
+            Path(args.output).write_text(result, encoding="utf-8")
+            return f"Exported to {args.output}"
+        return f"Exported to {args.output}"
+
+    # If no output file, we just return the result to print to stdout
+    return result if result is not None else ""
+
+
 def _run_export_ge(args: argparse.Namespace) -> Path:
     import sys
     try:
@@ -623,6 +681,11 @@ def main() -> int:
 
     if args.command == "import":
         output = _run_import(args)
+        print(output)
+        return 0
+
+    if args.command == "export":
+        output = _run_export(args)
         print(output)
         return 0
 

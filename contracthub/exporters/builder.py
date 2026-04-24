@@ -1,4 +1,4 @@
-from typing import Optional, List, Any
+from typing import List, Any
 from open_data_contract_standard.model import OpenDataContractStandard, Relationship
 
 class InMemoryGraphBuilder:

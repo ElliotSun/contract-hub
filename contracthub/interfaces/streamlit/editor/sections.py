@@ -16,7 +16,6 @@ from .contract_model import (
     apply_quick_field_rows,
     contract_api_version,
     contract_data_product,
-    contract_description_part,
     contract_id,
     contract_kind,
     contract_name,
@@ -49,7 +48,6 @@ from .helpers import (
     rows_from_dataframe,
     selectbox_index,
     tags_to_text,
-    text_to_tags,
 )
 from .state import selected_schema
 from .styles import section_title
