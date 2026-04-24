@@ -6,7 +6,7 @@ from open_data_contract_standard.model import OpenDataContractStandard
 def test_contract_enricher(mocker, tmp_path):
     # Mock OpenAI client
     mock_response = MagicMock()
-    mock_response.choices[0].message.content = '{"edge_label": "MOCKED_LABEL"}'
+    mock_response.choices[0].message.content = '{"potential_joins": [{"source_column": "rcvr_cntry_code", "target_column": "receiver_name", "edge_label": "MOCKED_LABEL", "confidence": 0.8}]}'
 
     # We patch openai.Client to mock the client instantiation and completions
     mock_openai_client_class = mocker.patch("openai.Client")
@@ -20,7 +20,7 @@ def test_contract_enricher(mocker, tmp_path):
         test_path.write_text(f.read())
 
     enricher = ContractEnricher()
-    enricher.process(str(test_path), max_workers=2)
+    enricher.process(str(test_path), max_workers=2, mode="infer_joins")
 
     # Validate OpenAI was called correctly
     assert mock_client_instance.chat.completions.create.call_count > 0
