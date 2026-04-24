@@ -1,17 +1,35 @@
 version: 1.0.0
 schema:
   - name: users
+    businessName: Users Table
+    dataGranularityDescription: One row per user
     properties:
       - name: id
         logicalType: string
       - name: email
         logicalType: string
+        businessName: User Email Address
+        quality:
+          - id: email_valid_format
+            metric: invalidValues
+            arguments:
+              pattern: '^.+@.+$'
+            mustBe: 0
+            description: "Ensure valid email formats"
         classification: pii
   - name: loyalty_members
     properties:
       - name: customer_id
         logicalType: string
+      - name: created_at
+        logicalType: timestamp
+        logicalTypeOptions:
+          format: "yyyy-MM-ddTHH:mm:ssZ"
+        examples:
+          - "2024-03-10T14:22:35Z"
+          - "2024-03-11T10:00:00Z"
   - name: orders
+    businessName: Orders Table
     properties:
       - name: id
         logicalType: string
@@ -119,6 +137,10 @@ schema:
                 value: true
               - property: "graph_semantic.edge_label"
                 value: "PURCHASED"
+              - property: "graph_semantic.provenance"
+                value: "LLM_INFERRED"
+              - property: "graph_semantic.confidence"
+                value: 0.85
       - name: target_product_id
         logicalType: string
         relationships:

@@ -173,6 +173,7 @@ Reference examples live under:
 - Great Expectations suite generation uses datacontract-cli exporter APIs.
 - Databricks/Spark SQL deployment DDL generation lives in `contracthub.exporters.sql_exporter`.
 - Databricks-only quality constraint mapping is appended only when `sql_server_type="databricks"`.
+- Graph exporters interpret relationship metadata based on the ODCS v3 format constraints. For Property-level relationships, edge targets implicitly map without a `from` object, while Schema-level references explicitly retain and serialize `from` strings or composite key arrays. Edges collapse into junction edges gracefully using explicit `customProperties`.
 - `enrich` command uses an LLM to infer relationship semantic edges and writes them back to `customProperties` of the contract in batch.
 - Unity import (`--type uc|unity`) runs a best-effort relationship enrichment step:
   - reads Unity table metadata for foreign key constraints
