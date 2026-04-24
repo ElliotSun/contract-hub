@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 
 class BaseLLMProvider(ABC):
     @abstractmethod
-    def generate_json(self, system_prompt: str, user_prompt: str) -> dict:
+    def generate_json(self, system_prompt: str, user_prompt: str, temperature: float = 0.0) -> dict:
         """
         Generates a JSON response from the LLM.
         """
@@ -24,7 +24,7 @@ class OpenAILLMProvider(BaseLLMProvider):
             base_url=self.base_url
         )
 
-    def generate_json(self, system_prompt: str, user_prompt: str) -> dict:
+    def generate_json(self, system_prompt: str, user_prompt: str, temperature: float = 0.0) -> dict:
         response = self.client.chat.completions.create(
             model=self.model_name,
             response_format={"type": "json_object"},
@@ -32,7 +32,7 @@ class OpenAILLMProvider(BaseLLMProvider):
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            temperature=0.0
+            temperature=temperature
         )
         content = response.choices[0].message.content
         if not content:
