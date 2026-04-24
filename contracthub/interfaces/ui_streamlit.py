@@ -1,6 +1,7 @@
+from __future__ import annotations
+
 """Streamlit interface placeholder for business-facing contract review workflows."""
 
-from __future__ import annotations
 from typing import Any
 
 

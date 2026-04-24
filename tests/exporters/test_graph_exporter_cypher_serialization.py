@@ -1,4 +1,5 @@
-from contracthub.exporters.graph_exporter import CypherSerializer, GraphNode
+import pytest
+from contracthub.exporters.graph_exporter import CypherSerializer, GraphNode, GraphEdge
 
 def test_cypher_serializer_escaping():
     serializer = CypherSerializer()

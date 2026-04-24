@@ -150,7 +150,7 @@ class GraphExporter(Exporter):
         server: str = "",
         sql_server_type: str = "",
         export_args: Dict[str, Any] = None,
-    ) -> Union[tuple[List[GraphNode], List[GraphEdge]], str]:
+    ) -> tuple[List[GraphNode], List[GraphEdge]]:
         nodes: List[GraphNode] = []
         edges: List[GraphEdge] = []
 
@@ -231,8 +231,6 @@ class GraphExporter(Exporter):
                 if prop.businessName:
                     col_props["businessName"] = prop.businessName
                 if prop.quality is not None:
-                    # In ODCS, quality is an array of objects.
-                    # We store it as a JSON serialized string for standard cypher serialization
                     col_props["quality"] = [q.model_dump(exclude_none=True) for q in prop.quality] if isinstance(prop.quality, list) else prop.quality
                 if prop.classification is not None:
                     col_props["classification"] = str(prop.classification)
