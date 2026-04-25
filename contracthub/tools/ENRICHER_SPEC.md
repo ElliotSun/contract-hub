@@ -4,6 +4,38 @@ This document details the functionality, prompts, and behaviors of the `Contract
 
 The main purpose of the `ContractEnricher` is to leverage a Large Language Model (LLM) to infer semantic relationships between database tables.
 
+## Architecture
+
+The Enricher module is comprised of several key components that work together to apply LLM inferences to ODCS models:
+
+- `contracthub/tools/enricher.py`: Contains the `ContractEnricher` class, which is responsible for iterating through the ODCS contract (tables and columns), parsing schema definitions, and preparing parallel tasks for LLM inferences. It writes the semantic relationships directly back to the contract file.
+- `contracthub/tools/llm_client.py`: Provides the abstraction layers (`BaseLLMProvider`, `OpenAILLMProvider`) used by the enricher to communicate with various Large Language Models.
+- `contracthub/constants.py`: Stores the system and user prompt templates (e.g., `LABEL_SYSTEM_PROMPT_TEMPLATE`, `JOIN_SYSTEM_PROMPT_TEMPLATE`) used by the enricher. Moving these templates into a central constants file prevents the enricher logic from being cluttered by hard-coded prompts and promotes reusability.
+
+## How to Invoke the Enricher using the SDK
+
+You can initialize and run the `ContractEnricher` programmatically using the Python SDK. The enricher uses an LLM provider and calls the `.process()` method with the path to the ODCS contract.
+
+### Code Example
+
+```python
+from contracthub.tools.enricher import ContractEnricher
+from contracthub.tools.llm_client import OpenAILLMProvider
+
+# Initialize the default OpenAI provider (ensure your OPENAI_API_KEY is set)
+provider = OpenAILLMProvider()
+
+# Instantiate the enricher
+enricher = ContractEnricher(llm_provider=provider)
+
+# Run the enricher in 'infer_joins' mode to predict new potential relationships
+# Note: max_workers controls the concurrency of LLM API requests.
+enricher.process(contract_path="path/to/datacontract.yaml", max_workers=2, mode="infer_joins")
+
+# Alternatively, run in 'label' mode to infer semantic edge labels for existing relationships
+enricher.process(contract_path="path/to/datacontract.yaml", max_workers=2, mode="label")
+```
+
 ## Context and Philosophy
 
 In enterprise environments, explicit foreign keys are often missing from the physical database schema. The `ContractEnricher` bridges this gap by statically analyzing Open Data Contract Standard (ODCS) YAML configurations, iterating through entities (tables) and properties (columns), and prompting an LLM to predict missing relationships based on semantic context (table descriptions, column names).
