@@ -44,6 +44,7 @@ def _build_parser() -> argparse.ArgumentParser:
     enrich_parser = subparsers.add_parser("enrich", help="Enrich data contract with semantic relationship labels via LLM")
     enrich_parser.add_argument("--contract", required=True, help="Path to the YAML contract")
     enrich_parser.add_argument("--concurrency", type=int, default=1, help="Max parallel LLM API calls")
+    enrich_parser.add_argument("--mode", choices=["label", "infer_joins"], default="label", help="Enrichment mode: 'label' tags existing relationships, 'infer_joins' discovers new ones")
 
     plan_parser = subparsers.add_parser("plan", help="Dry run and summarize changes between source and base contract")
     plan_parser.add_argument("--source", required=True)
@@ -651,8 +652,8 @@ def _run_release_create_pr(args: argparse.Namespace) -> dict[str, Any]:
 def _run_enrich(args: argparse.Namespace) -> str:
     from contracthub.tools.enricher import ContractEnricher
     enricher = ContractEnricher()
-    enricher.process(args.contract, max_workers=args.concurrency)
-    return f"Successfully enriched {args.contract}"
+    enricher.process(args.contract, max_workers=args.concurrency, mode=getattr(args, "mode", "label"))
+    return f"Successfully enriched {args.contract} (mode: {getattr(args, 'mode', 'label')})"
 
 
 def _run_release_create_prs(args: argparse.Namespace) -> dict[str, Any]:
