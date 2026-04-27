@@ -23,7 +23,7 @@ def test_cli_import_supports_delta_table_alias(sample_odcs_model, tmp_path, monk
         [
             "contracthub",
             "import",
-            "--type",
+            "--format",
             "delta-table",
             "--source",
             "abfss://container@acct.dfs.core.windows.net/table_path",
@@ -52,7 +52,7 @@ def test_cli_import_supports_delta_ddl_alias(sample_odcs_model, tmp_path, monkey
         [
             "contracthub",
             "import",
-            "--type",
+            "--format",
             "delta-ddl",
             "--source",
             str(tmp_path),
@@ -86,7 +86,7 @@ def test_cli_import_uc_runs_unity_enrichment(sample_unity_contract_model, tmp_pa
         [
             "contracthub",
             "import",
-            "--type",
+            "--format",
             "uc",
             "--source",
             "main.silver.orders",

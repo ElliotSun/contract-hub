@@ -56,7 +56,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
     import_parser = subparsers.add_parser("import", help="Import contract from source")
     import_parser.add_argument(
-        "--type",
+        "--format",
         choices=["delta", "delta-table", "delta-ddl", "sql", "sql-folder", "uc", "unity"],
         required=True,
     )
@@ -79,7 +79,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     import_parser.add_argument(
         "--tables",
-        help="Comma-separated list of additional Delta table URIs (used with --type delta or --type delta-table)",
+        help="Comma-separated list of additional Delta table URIs (used with --format delta or --format delta-table)",
     )
 
     merge_parser = subparsers.add_parser("merge", help="Merge base and business-edited contracts")
@@ -357,7 +357,7 @@ def _run_import(args: argparse.Namespace) -> Path:
     if args.existing:
         existing_contract = loader.load(args.existing)
 
-    if args.type in {"delta", "delta-table"}:
+    if args.format in {"delta", "delta-table"}:
         oauth_token = _resolve_adls_oauth_token(args)
         table_uris = _parse_table_uris(args.tables)
         contract = DataContract.import_from_source(
@@ -366,14 +366,17 @@ def _run_import(args: argparse.Namespace) -> Path:
             oauth_bearer_token=oauth_token,
             table_uris=table_uris,
         )
-    elif args.type == "delta-ddl":
+    elif args.format == "delta-ddl":
         contract = DataContract.import_from_source(
             format="delta-ddl",
             source=args.source,
         )
-    elif args.type in {"sql", "sql-folder"}:
+    elif args.format in {"sql", "sql-folder"}:
+        # Note: 'sql' uses the upstream datacontract-cli native importer for single files.
+        # 'sql-folder' uses our custom extension (contracthub.importers.sql_importer.SQLFolderImporter)
+        # to batch import multiple DDL files from a directory.
         contract = DataContract.import_from_source(
-            format=args.type,
+            format=args.format,
             source=args.source,
         )
     else:

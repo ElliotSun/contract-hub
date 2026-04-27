@@ -50,12 +50,12 @@ uv sync --extra dev --extra azure
 ## CLI
 
 ```bash
-contracthub import --type delta-ddl --source ./sql/orders --output ./contracts/orders.yaml
-contracthub import --type sql --source ./ddl/orders.sql --output ./contracts/orders.yaml
-contracthub import --type delta-table --source abfss://container@acct.dfs.core.windows.net/orders \
+contracthub import --format delta-ddl --source ./sql/orders --output ./contracts/orders.yaml
+contracthub import --format sql --source ./ddl/orders.sql --output ./contracts/orders.yaml
+contracthub import --format delta-table --source abfss://container@acct.dfs.core.windows.net/orders \
   --tables abfss://container@acct.dfs.core.windows.net/payments \
   --output ./contracts/finance.yaml
-contracthub import --type unity --source main.silver.orders --workspace-url https://adb.example --token $DATABRICKS_TOKEN \
+contracthub import --format unity --source main.silver.orders --workspace-url https://adb.example --token $DATABRICKS_TOKEN \
   --output ./contracts/orders.yaml
 contracthub merge --base ./generated.yaml --business ./contracts/orders.yaml --output ./contracts/orders.merged.yaml
 contracthub export-ge --contract ./contracts/orders.yaml --output ./artifacts/orders_suite.json
