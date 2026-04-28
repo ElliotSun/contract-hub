@@ -162,10 +162,10 @@ def test_uc_volume_auto_runtime_does_not_fallback_to_sparkutils(monkeypatch):
 
 def test_unknown_path_uses_sparkutils_only_in_notebook_runtime(monkeypatch):
     monkeypatch.setattr(loader, "_read_with_mssparkutils", lambda _: CONTRACT_YAML)
-    text = loader._read_contract_text("s3://bucket/contract.yaml", "synapse")  # noqa: SLF001
+    text = loader.read_contract_text("s3://bucket/contract.yaml", "synapse")
     assert "apiVersion" in text
     with pytest.raises(ValueError, match="Unsupported contract path"):
-        loader._read_contract_text("s3://bucket/contract.yaml", "auto")  # noqa: SLF001
+        loader.read_contract_text("s3://bucket/contract.yaml", "auto")
 
 
 def test_read_with_mssparkutils_handles_missing_module_or_fs(monkeypatch):
@@ -229,14 +229,14 @@ def test_adls2_uri_conversion_and_headers(monkeypatch):
 
 
 def test_read_contract_text_classifiers():
-    assert loader._is_uc_volume_path("/Volumes/main/silver/c.yaml") is True  # noqa: SLF001
-    assert loader._is_uc_volume_path("dbfs:/Volumes/main/silver/c.yaml") is True  # noqa: SLF001
-    assert loader._is_uc_volume_path("abfss://x@y/c.yaml") is False  # noqa: SLF001
-    assert loader._normalize_uc_volume_local_path("dbfs:/Volumes/main/c.yaml") == "/dbfs/Volumes/main/c.yaml"  # noqa: E501, SLF001
-    assert loader._normalize_uc_volume_local_path("/Volumes/main/c.yaml") == "/Volumes/main/c.yaml"  # noqa: SLF001
-    assert loader._is_local_path("file:///tmp/c.yaml") is True  # noqa: SLF001
+    assert loader.is_uc_volume_path("/Volumes/main/silver/c.yaml") is True
+    assert loader.is_uc_volume_path("dbfs:/Volumes/main/silver/c.yaml") is True
+    assert loader.is_uc_volume_path("abfss://x@y/c.yaml") is False
+    assert loader.normalize_uc_volume_local_path("dbfs:/Volumes/main/c.yaml") == "/dbfs/Volumes/main/c.yaml"
+    assert loader.normalize_uc_volume_local_path("/Volumes/main/c.yaml") == "/Volumes/main/c.yaml"
+    assert loader.is_local_path("file:///tmp/c.yaml") is True
     assert loader._is_http_path("https://example.com/c.yaml") is True  # noqa: SLF001
-    assert loader._is_adls2_path("https://acct.dfs.core.windows.net/c/path.yaml") is True  # noqa: SLF001
+    assert loader.is_adls2_path("https://acct.dfs.core.windows.net/c/path.yaml") is True
 
 
 def test_read_local_text_with_file_scheme(tmp_path):

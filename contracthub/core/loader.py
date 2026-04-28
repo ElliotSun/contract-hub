@@ -54,22 +54,22 @@ def load_contract(
     notebook-only access methods (`mssparkutils`).
     """
     resolved_context = _resolve_runtime_context(runtime_context)
-    contract_text = _read_contract_text(contract_path, resolved_context)
+    contract_text = read_contract_text(contract_path, resolved_context)
     payload = yaml.safe_load(contract_text)
     if not isinstance(payload, dict):
         raise ValueError("Contract YAML must deserialize into a mapping object")
     return OpenDataContractStandard.model_validate(payload)
 
 
-def _read_contract_text(contract_path: str, runtime_context: RuntimeContext) -> str:
+def read_contract_text(contract_path: str, runtime_context: RuntimeContext) -> str:
     """Return raw YAML text from the supported storage backends."""
-    if _is_uc_volume_path(contract_path):
+    if is_uc_volume_path(contract_path):
         return _read_uc_volume_text(contract_path, runtime_context)
 
-    if _is_local_path(contract_path):
+    if is_local_path(contract_path):
         return _read_local_text(contract_path)
 
-    if _is_adls2_path(contract_path):
+    if is_adls2_path(contract_path):
         if _notebook_runtime_enabled(runtime_context):
             via_sparkutils = _read_with_mssparkutils(contract_path)
             if via_sparkutils is not None:
@@ -89,7 +89,7 @@ def _read_contract_text(contract_path: str, runtime_context: RuntimeContext) -> 
 
 def _read_uc_volume_text(contract_path: str, runtime_context: RuntimeContext) -> str:
     """Read from UC volume paths, preferring mounted local `/dbfs` access."""
-    local_candidate = _normalize_uc_volume_local_path(contract_path)
+    local_candidate = normalize_uc_volume_local_path(contract_path)
     try:
         return _read_local_text(local_candidate)
     except OSError:
@@ -135,7 +135,7 @@ def _read_http_text(url: str, headers: Optional[dict[str, str]] = None) -> str:
     return response.text
 
 
-def _list_adls2_paths(root_path: str) -> list[str]:
+def list_adls2_paths(root_path: str) -> list[str]:
     """List YAML documents under an ADLS2 root using the Azure SDK."""
     parsed_root = _parse_adls2_path(root_path)
     if _looks_like_yaml_path(parsed_root["relative_path"]):
@@ -272,22 +272,22 @@ def _notebook_runtime_enabled(runtime_context: RuntimeContext) -> bool:
     return runtime_context in {"synapse", "fabric"}
 
 
-def _is_uc_volume_path(contract_path: str) -> bool:
+def is_uc_volume_path(path: str) -> bool:
     return (
-        contract_path.startswith("/Volumes/")
-        or contract_path.startswith("/dbfs/Volumes/")
-        or contract_path.startswith("dbfs:/Volumes/")
+        path.startswith("/Volumes/")
+        or path.startswith("/dbfs/Volumes/")
+        or path.startswith("dbfs:/Volumes/")
     )
 
 
-def _normalize_uc_volume_local_path(contract_path: str) -> str:
-    if contract_path.startswith("dbfs:/Volumes/"):
-        return f"/dbfs/{contract_path[len('dbfs:/') :]}"
-    return contract_path
+def normalize_uc_volume_local_path(path: str) -> str:
+    if path.startswith("dbfs:/Volumes/"):
+        return f"/dbfs/{path[len('dbfs:/') :]}"
+    return path
 
 
-def _is_local_path(contract_path: str) -> bool:
-    parsed = urlparse(contract_path)
+def is_local_path(path: str) -> bool:
+    parsed = urlparse(path)
     return parsed.scheme in {"", "file"}
 
 
@@ -296,8 +296,8 @@ def _is_http_path(contract_path: str) -> bool:
     return parsed.scheme in {"http", "https"}
 
 
-def _is_adls2_path(contract_path: str) -> bool:
-    parsed = urlparse(contract_path)
+def is_adls2_path(path: str) -> bool:
+    parsed = urlparse(path)
     if parsed.scheme in {"abfs", "abfss"}:
         return True
     if parsed.scheme in {"https", "http"} and parsed.netloc.endswith(".dfs.core.windows.net"):
@@ -371,9 +371,14 @@ def _looks_like_yaml_path(path: str) -> bool:
 class _StaticBearerTokenCredential:
     """Minimal TokenCredential wrapper around a pre-fetched bearer token."""
 
+    _DEFAULT_TTL_SECONDS = 3600  # 1-hour expiry window
+
     def __init__(self, token: str, AccessToken: Any) -> None:  # noqa: N803
         self._token = token
         self._access_token_cls = AccessToken
 
     def get_token(self, *scopes: str, **kwargs: Any) -> Any:  # noqa: ARG002
-        return self._access_token_cls(self._token, 2_000_000_000)
+        import time
+        expires_on = int(time.time()) + self._DEFAULT_TTL_SECONDS
+        return self._access_token_cls(self._token, expires_on)
+

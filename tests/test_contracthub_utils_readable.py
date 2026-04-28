@@ -51,7 +51,7 @@ def test_yaml_utils_list_yaml_documents_supports_recursive_local_root(tmp_path):
 def test_yaml_utils_list_yaml_documents_supports_adls2_directory(monkeypatch):
     monkeypatch.setattr(
         contract_loader,
-        "_list_adls2_paths",
+        "list_adls2_paths",
         lambda root: [
             "abfss://contracts@acct.dfs.core.windows.net/contracts/a.yaml",
             "abfss://contracts@acct.dfs.core.windows.net/contracts/sub/b.yml",

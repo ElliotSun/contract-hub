@@ -247,7 +247,7 @@ def test_merge_engine_rejects_retired_contract_modification():
         schema=[SchemaObject(name="orders", properties=[SchemaProperty(name="id", physicalType="INT")])],
     )
 
-    with pytest.raises(merge_engine.MergeConflict, match="Retired contract cannot be modified"):
+    with pytest.raises(merge_engine.MergeConflictError, match="Retired contract cannot be modified"):
         ContractMergeEngine().merge(base_contract=source, business_contract=existing)
 
 

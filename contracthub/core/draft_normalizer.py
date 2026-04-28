@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
 from copy import deepcopy
 from typing import Any
 
 from open_data_contract_standard.model import OpenDataContractStandard, SchemaObject, SchemaProperty
+
+LOGGER = logging.getLogger(__name__)
 
 from contracthub.constants import EDITABLE_PROPERTY_FIELDS, EDITABLE_SCHEMA_FIELDS, READ_ONLY_CONTRACT_FIELDS
 from contracthub.utils.schema_utils import contract_to_dict, contract_to_model, ensure_schema_key
@@ -27,6 +30,8 @@ def normalize_draft_contract(
 
     normalized = contract_to_dict(draft_model)
     main_payload = contract_to_dict(main_model)
+
+    LOGGER.debug("Normalizing draft payload against main contract %s", main_model.id)
 
     for field in READ_ONLY_CONTRACT_FIELDS:
         if field in main_payload:

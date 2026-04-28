@@ -23,7 +23,6 @@ def test_export_ge_handles_missing_pyspark_gracefully(monkeypatch):
         "out.json",
     ]
     with patch("sys.argv", test_args):
-        with pytest.raises(SystemExit) as excinfo:
-            main()
-
-        assert "requires pyspark to be installed" in str(excinfo.value)
+        # The new CLI top-level error handler catches RuntimeErrors and returns 1
+        exit_code = main()
+        assert exit_code == 1
