@@ -1,10 +1,11 @@
-from __future__ import annotations
-
 import re
+import logging
 from copy import deepcopy
-from datetime import datetime
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from typing import Any, Iterable
+
+LOGGER = logging.getLogger(__name__)
 
 from open_data_contract_standard.model import (
     CustomProperty,
@@ -45,8 +46,13 @@ PROPERTY_OVERWRITE_FIELDS: tuple[str, ...] = (
 OdcModel = OpenDataContractStandard
 
 
+class MergeConflictError(Exception):
+    """Raised when a fatal conflict prevents any merge attempt (e.g., retired contract)."""
+    pass
+
+
 @dataclass(slots=True)
-class MergeConflict(Exception):
+class MergeConflict:
     """Represents a merge conflict between source and target contracts."""
 
     path: str | None = None
@@ -56,9 +62,6 @@ class MergeConflict(Exception):
     schema_id: str | None = None
     property_name: str | None = None
     message: str | None = None
-
-    def __post_init__(self) -> None:
-        Exception.__init__(self, self.message or self.rule or self.path or "merge_conflict")
 
 
 @dataclass(slots=True)
@@ -91,12 +94,11 @@ class ContractMergeEngine:
         source_model = _to_odcs_model(base_contract)
         target_model = _to_odcs_model(business_contract)
 
+        LOGGER.info("Starting merge for contract: %s (version: %s)", target_model.id, target_model.version)
+
         if _is_retired_contract(target_model):
-            raise MergeConflict(
-                schema_id="__contract__",
-                property_name="__contract__",
-                message="Retired contract cannot be modified",
-            )
+            LOGGER.error("Merge failed: contract %s is retired", target_model.id)
+            raise MergeConflictError("Retired contract cannot be modified")
 
         return self._analyze_merge(target_model=target_model, source_model=source_model)
 
@@ -120,6 +122,7 @@ class ContractMergeEngine:
             source_model=source_model,
             analysis=analysis,
         )
+        LOGGER.info("Successfully merged contract %s. Deprecated %d schemas, %d properties.", target_model.id, len(analysis.deprecated_schemas), len(analysis.deprecated_properties))
         return MergeResult(contract=merged_model, conflicts=analysis.conflicts)
 
     def detect_conflicts(
@@ -446,7 +449,7 @@ def _deprecate_property_model(entity: SchemaProperty) -> SchemaProperty:
         {"property": LIFECYCLE_STATUS_PROPERTY, "value": DEPRECATED_LIFECYCLE_VALUE},
     ]
     if deprecation_date is None:
-        deprecation_items.append({"property": "deprecationDate", "value": datetime.utcnow().date().isoformat()})
+        deprecation_items.append({"property": "deprecationDate", "value": datetime.now(timezone.utc).date().isoformat()})
     removed.customProperties = _merge_custom_properties_models(
         removed.customProperties,
         deprecation_items,

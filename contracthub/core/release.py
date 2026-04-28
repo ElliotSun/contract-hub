@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import re
+import logging
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+LOGGER = logging.getLogger(__name__)
+
 from open_data_contract_standard.model import CustomProperty, OpenDataContractStandard
 
-from contracthub.lifecycle.helpers import normalize_status, schema_items
+from contracthub.lifecycle.helpers import lifecycle_from_custom_properties, normalize_status, schema_items
 from contracthub.lifecycle.policy import BreakingChange, evaluate_merge_policy
 from contracthub.utils.schema_utils import contract_to_dict, contract_to_model
 
@@ -89,8 +92,11 @@ def classify_contract_change(
     if not has_changes:
         return ContractChangeAssessment(has_changes=False, required_bump="none", reasons=["No contract changes detected"])
 
+    LOGGER.debug("Classifying changes for contract %s (base version: %s)", base_model.id, base_model.version)
+
     policy = evaluate_merge_policy(base_model, candidate_model)
     if policy.breaking_changes:
+        LOGGER.info("Breaking changes detected in contract %s requiring major bump: %s", base_model.id, policy.breaking_changes)
         return ContractChangeAssessment(
             has_changes=True,
             required_bump="major",
@@ -135,8 +141,11 @@ def prepare_release_candidate(
     candidate_model.id = base_model.id
     candidate_model.version = base_model.version
 
+    LOGGER.info("Preparing release candidate for contract %s with tag %s", base_model.id, release_tag)
+
     assessment = classify_contract_change(base_model, candidate_model)
     if not assessment.has_changes:
+        LOGGER.error("Preparation failed: contract %s has no changes", base_model.id)
         raise ValueError("Cannot promote a contract with no changes")
     if assessment.required_bump == "none":
         raise ValueError("Contract changes do not require a release version bump")
@@ -212,7 +221,7 @@ def _parse_semver(version: str) -> tuple[int, int, int]:
     match = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)", str(version or "").strip())
     if not match:
         raise ValueError(f"Version '{version}' must be a semantic version like 1.2.3")
-    return tuple(int(item) for item in match.groups())
+    return (int(match.group(1)), int(match.group(2)), int(match.group(3)))
 
 
 def _has_schema_or_property_additions(base: OpenDataContractStandard, candidate: OpenDataContractStandard) -> bool:
@@ -301,23 +310,10 @@ def _canonicalize(value: Any) -> Any:
 def _is_deprecated(entity: Any) -> bool:
     value = getattr(entity, "lifecycleStatus", None)
     if value is None:
-        value = _lifecycle_from_custom_properties(getattr(entity, "customProperties", None))
+        value = lifecycle_from_custom_properties(getattr(entity, "customProperties", None))
     return normalize_status(value, default="active") == "deprecated"
 
 
-def _lifecycle_from_custom_properties(custom_properties: Any) -> Any:
-    if not isinstance(custom_properties, list):
-        return None
-    for item in custom_properties:
-        if isinstance(item, CustomProperty):
-            key = (item.property or "").strip().lower()
-            if key == "lifecyclestatus":
-                return item.value
-        elif isinstance(item, dict):
-            key = str(item.get("property") or "").strip().lower()
-            if key == "lifecyclestatus":
-                return item.get("value")
-    return None
 
 
 def _dedupe(values: list[str]) -> list[str]:

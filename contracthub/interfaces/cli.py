@@ -24,7 +24,7 @@ from contracthub.devops.release_workflow import (
     release_plan_to_dict,
     repository_change_to_dict,
 )
-from contracthub.importers.unity_relationships import enrich_unity_contract_relationships
+from contracthub.importers.unity_importer import import_unity_contract
 from contracthub.lifecycle.merge_engine import ContractMergeEngine
 from contracthub.quality.ge_exporter import GreatExpectationsExporter
 from contracthub.utils.schema_utils import contract_to_dict
@@ -205,7 +205,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 
-def _build_git_config(args: any) -> GitProviderConfig:
+def _build_git_config(args: argparse.Namespace) -> GitProviderConfig:
     provider = getattr(args, "git_provider", "azure")
     if provider == "github":
         return GitHubConfig(
@@ -250,10 +250,13 @@ jobs:
       - name: Contract Check
         run: contracthub release classify-repo --base-root contracts-main --candidate-root contracts-feature
 """
-
-    with open(".github/workflows/contract-check.yaml", "w") as f:
-        f.write(github_action)
-    print("📝 Created .github/workflows/contract-check.yaml")
+    gh_action_path = ".github/workflows/contract-check.yaml"
+    if not os.path.exists(gh_action_path):
+        with open(gh_action_path, "w") as f:
+            f.write(github_action)
+        print(f"📄 Created GitHub Actions workflow: {gh_action_path}")
+    else:
+        print(f"⏭️ Skipped existing GitHub Actions workflow: {gh_action_path}")
 
     gitlab_ci = """stages:
   - validate
@@ -290,10 +293,15 @@ schema:
         name: col1
         physicalType: string
 """
-        with open("contracts/sample.yaml", "w") as f:
-            f.write(sample_yaml.lstrip())
+        sample_path = "contracts/sample.yaml"
+        if not os.path.exists(sample_path):
+            with open(sample_path, "w") as f:
+                f.write(sample_yaml.lstrip())
+            print(f"📄 Created sample contract: {sample_path}")
+        else:
+            print(f"⏭️ Skipped existing sample contract: {sample_path}")
     except Exception:
-        pass
+        logging.getLogger("contracthub").debug("Failed to generate sample contract via datacontract-cli", exc_info=True)
 
     print("✅ Setup complete! You can now use GitOps for your data contracts.")
 
@@ -346,9 +354,8 @@ def _run_plan(args: argparse.Namespace) -> None:
                 print(f"\n⚠️ Action Required: This is a BREAKING change. The required bump is {bump}.")
 
     except Exception as e:
+        logging.getLogger("contracthub").error("Plan failed: %s", e, exc_info=True)
         print(f"❌ Error during plan: {e}")
-        import traceback
-        traceback.print_exc()
         raise SystemExit(1)
 
 def _run_import(args: argparse.Namespace) -> Path:
@@ -380,7 +387,7 @@ def _run_import(args: argparse.Namespace) -> Path:
             source=args.source,
         )
     else:
-        contract = _import_unity_contract(
+        contract = import_unity_contract(
             table_fqn=args.source,
             workspace_url=args.workspace_url,
             token=args.token,
@@ -395,39 +402,6 @@ def _run_import(args: argparse.Namespace) -> Path:
     return dump_yaml(contract_to_dict(contract), args.output)
 
 
-def _import_unity_contract(
-    *,
-    table_fqn: str,
-    workspace_url: str | None,
-    token: str | None,
-) -> OpenDataContractStandard:
-    if not workspace_url or not token:
-        raise ValueError("--workspace-url and --token are required for uc imports")
-
-    env_backup = {
-        "DATACONTRACT_DATABRICKS_SERVER_HOSTNAME": os.environ.get("DATACONTRACT_DATABRICKS_SERVER_HOSTNAME"),
-        "DATACONTRACT_DATABRICKS_TOKEN": os.environ.get("DATACONTRACT_DATABRICKS_TOKEN"),
-    }
-    os.environ["DATACONTRACT_DATABRICKS_SERVER_HOSTNAME"] = workspace_url
-    os.environ["DATACONTRACT_DATABRICKS_TOKEN"] = token
-    try:
-        imported = DataContract.import_from_source(
-            format="unity",
-            source=None,
-            unity_table_full_name=[table_fqn],
-        )
-        return enrich_unity_contract_relationships(
-            imported,
-            table_fqn=table_fqn,
-            workspace_url=workspace_url,
-            token=token,
-        )
-    finally:
-        for key, value in env_backup.items():
-            if value is None:
-                os.environ.pop(key, None)
-            else:
-                os.environ[key] = value
 
 
 def _resolve_adls_oauth_token(args: argparse.Namespace) -> str | None:
@@ -675,67 +649,90 @@ def _run_release_create_prs(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def main() -> int:
+    import logging as _logging
+
     parser = _build_parser()
-    args = parser.parse_args()
+    try:
+        args = parser.parse_args()
+    except SystemExit as exc:
+        return exc.code if isinstance(exc.code, int) else 2
 
-    if args.command == "enrich":
-        output = _run_enrich(args)
-        print(output)
-        return 0
-
-    if args.command == "import":
-        output = _run_import(args)
-        print(output)
-        return 0
-
-    if args.command == "export":
-        output = _run_export(args)
-        print(output)
-        return 0
-
-    if args.command == "merge":
-        output = _run_merge(args)
-        print(output)
-        return 0
-
-    if args.command == "export-ge":
-        output = _run_export_ge(args)
-        print(output)
-        return 0
-
-    if args.command == "create-pr":
-        payload = _run_create_pr(args)
-        print(json.dumps(payload, indent=2, sort_keys=True))
-        return 0
-
-    if args.command == "release":
-        if args.release_command == "classify":
-            payload = _run_release_classify(args)
-            print(json.dumps(payload, indent=2, sort_keys=True))
+    try:
+        if args.command == "setup":
+            _run_setup(args)
             return 0
-        if args.release_command == "classify-repo":
-            payload = _run_release_classify_repo(args)
-            print(json.dumps(payload, indent=2, sort_keys=True))
+
+        if args.command == "enrich":
+            output = _run_enrich(args)
+            print(output)
             return 0
-        if args.release_command == "build-manifest":
-            payload = _run_release_build_manifest(args)
-            print(json.dumps(payload, indent=2, sort_keys=True))
+
+        if args.command == "plan":
+            _run_plan(args)
             return 0
-        if args.release_command == "prepare":
-            payload = _run_release_prepare(args)
-            print(json.dumps(payload, indent=2, sort_keys=True))
+
+        if args.command == "import":
+            output = _run_import(args)
+            print(output)
             return 0
-        if args.release_command == "create-pr":
-            payload = _run_release_create_pr(args)
-            print(json.dumps(payload, indent=2, sort_keys=True))
+
+        if args.command == "export":
+            output = _run_export(args)
+            print(output)
             return 0
-        if args.release_command == "create-prs":
-            payload = _run_release_create_prs(args)
+
+        if args.command == "merge":
+            output = _run_merge(args)
+            print(output)
+            return 0
+
+        if args.command == "export-ge":
+            output = _run_export_ge(args)
+            print(output)
+            return 0
+
+        if args.command == "create-pr":
+            payload = _run_create_pr(args)
             print(json.dumps(payload, indent=2, sort_keys=True))
             return 0
 
-    parser.error(f"Unknown command: {args.command}")
-    return 2
+        if args.command == "release":
+            if args.release_command == "classify":
+                payload = _run_release_classify(args)
+                print(json.dumps(payload, indent=2, sort_keys=True))
+                return 0
+            if args.release_command == "classify-repo":
+                payload = _run_release_classify_repo(args)
+                print(json.dumps(payload, indent=2, sort_keys=True))
+                return 0
+            if args.release_command == "build-manifest":
+                payload = _run_release_build_manifest(args)
+                print(json.dumps(payload, indent=2, sort_keys=True))
+                return 0
+            if args.release_command == "prepare":
+                payload = _run_release_prepare(args)
+                print(json.dumps(payload, indent=2, sort_keys=True))
+                return 0
+            if args.release_command == "create-pr":
+                payload = _run_release_create_pr(args)
+                print(json.dumps(payload, indent=2, sort_keys=True))
+                return 0
+            if args.release_command == "create-prs":
+                payload = _run_release_create_prs(args)
+                print(json.dumps(payload, indent=2, sort_keys=True))
+                return 0
+
+        parser.error(f"Unknown command: {args.command}")
+        return 2
+
+    except KeyboardInterrupt:
+        return 130
+    except SystemExit as exc:
+        return exc.code if isinstance(exc.code, int) else 1
+    except Exception as exc:
+        _logging.getLogger("contracthub").error("Fatal error: %s", exc, exc_info=True)
+        print(f"❌ {exc}", file=__import__('sys').stderr)
+        return 1
 
 
 if __name__ == "__main__":

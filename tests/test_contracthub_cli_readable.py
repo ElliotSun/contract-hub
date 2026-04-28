@@ -78,8 +78,8 @@ def test_cli_import_uc_runs_unity_enrichment(sample_unity_contract_model, tmp_pa
         captured["enrich_kwargs"] = kwargs
         return contract
 
-    monkeypatch.setattr("contracthub.interfaces.cli.DataContract.import_from_source", _fake_import_from_source)
-    monkeypatch.setattr("contracthub.interfaces.cli.enrich_unity_contract_relationships", _fake_enrich)
+    monkeypatch.setattr("contracthub.importers.unity_importer.DataContract.import_from_source", _fake_import_from_source)
+    monkeypatch.setattr("contracthub.importers.unity_importer.enrich_unity_contract_relationships", _fake_enrich)
     output_path = tmp_path / "out.yaml"
     monkeypatch.setattr(
         "sys.argv",

@@ -12,7 +12,7 @@ dependencies = [
   "pydantic>=2.8.0",
   "PyYAML>=6.0.0",
   "SQLAlchemy>=2.0.0",
-  "datacontract-cli @ git+https://github.com/datacontract/datacontract-cli.git@main",
+  "datacontract-cli @ git+https://github.com/datacontract/datacontract-cli.git@2dc840ffdc861b0ff091e8f5f124a3caa12e4039",
   "deltalake>=0.18.0",
   "sqlglot>=26.0.0",
   "requests>=2.32.0",
@@ -40,6 +40,7 @@ dev = [
   "pytest>=8.2.0",
   "pytest-mock>=3.14.0",
   "networkx>=3.0",
+  "types-PyYAML>=6.0.0",
 ]
 
 [tool.pytest.ini_options]

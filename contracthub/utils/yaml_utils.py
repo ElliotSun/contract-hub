@@ -32,7 +32,7 @@ def read_yaml_text(path: str | Path) -> str:
     if _is_local_path(path_str):
         resolved = _resolve_local_path(path)
         return resolved.read_text(encoding="utf-8")
-    return contract_loader._read_contract_text(path_str, contract_loader._resolve_runtime_context(None))  # noqa: SLF001
+    return contract_loader.read_contract_text(path_str, contract_loader._resolve_runtime_context(None))
 
 
 def load_yaml(path: str | Path) -> dict[str, Any]:
@@ -84,12 +84,12 @@ def load_yaml_metadata(path: str | Path, keys: list[str] | tuple[str, ...]) -> d
 def list_yaml_documents(root: str | Path) -> list[str]:
     """List YAML contract documents under a local or ADLS2 root path."""
     root_str = str(root)
-    if contract_loader._is_uc_volume_path(root_str):  # noqa: SLF001
-        return _list_local_yaml_documents(contract_loader._normalize_uc_volume_local_path(root_str))  # noqa: SLF001
+    if contract_loader.is_uc_volume_path(root_str):
+        return _list_local_yaml_documents(contract_loader.normalize_uc_volume_local_path(root_str))
     if _is_local_path(root_str):
         return _list_local_yaml_documents(root)
-    if contract_loader._is_adls2_path(root_str):  # noqa: SLF001
-        return contract_loader._list_adls2_paths(root_str)  # noqa: SLF001
+    if contract_loader.is_adls2_path(root_str):
+        return contract_loader.list_adls2_paths(root_str)
     raise ValueError(f"Unsupported contract storage root: {root}")
 
 
@@ -110,7 +110,7 @@ def _resolve_local_path(path: str | Path) -> Path:
 
 
 def _is_local_path(path: str) -> bool:
-    return contract_loader._is_local_path(path)  # noqa: SLF001
+    return contract_loader.is_local_path(path)
 
 
 def _is_yaml_name(name: str) -> bool:

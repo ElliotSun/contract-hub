@@ -27,7 +27,7 @@ from open_data_contract_standard.model import OpenDataContractStandard
 from datacontract.data_contract import DataContract
 
 import contracthub.importers  # ensure custom importers are registered
-from contracthub.importers.unity_relationships import enrich_unity_contract_relationships
+from contracthub.importers.unity_importer import import_unity_contract
 from contracthub.core.loader import ContractLoader
 from contracthub.core.validator import ContractValidator, ValidationReport
 from contracthub.devops.audit import AuditMetadata
@@ -102,7 +102,7 @@ class ContractPipeline:
         normalized = source_type.strip().lower()
 
         if normalized in {"uc", "unity"}:
-            return _import_unity_contract(
+            return import_unity_contract(
                 table_fqn=source,
                 workspace_url=uc_workspace_url,
                 token=uc_token,
@@ -313,37 +313,3 @@ class ContractPipeline:
         return "draft"
 
 
-def _import_unity_contract(
-    *,
-    table_fqn: str,
-    workspace_url: str | None,
-    token: str | None,
-) -> OpenDataContractStandard:
-    """Import a Unity Catalog contract using datacontract-cli's unity importer."""
-    if not workspace_url or not token:
-        raise ValueError("uc_workspace_url and uc_token are required for uc source_type")
-
-    env_backup = {
-        "DATACONTRACT_DATABRICKS_SERVER_HOSTNAME": os.environ.get("DATACONTRACT_DATABRICKS_SERVER_HOSTNAME"),
-        "DATACONTRACT_DATABRICKS_TOKEN": os.environ.get("DATACONTRACT_DATABRICKS_TOKEN"),
-    }
-    os.environ["DATACONTRACT_DATABRICKS_SERVER_HOSTNAME"] = workspace_url
-    os.environ["DATACONTRACT_DATABRICKS_TOKEN"] = token
-    try:
-        imported = DataContract.import_from_source(
-            format="unity",
-            source=None,
-            unity_table_full_name=[table_fqn],
-        )
-        return enrich_unity_contract_relationships(
-            imported,
-            table_fqn=table_fqn,
-            workspace_url=workspace_url,
-            token=token,
-        )
-    finally:
-        for key, value in env_backup.items():
-            if value is None:
-                os.environ.pop(key, None)
-            else:
-                os.environ[key] = value

@@ -44,7 +44,7 @@ def test_pipeline_import_schema_supports_delta_and_sql(monkeypatch):
 def test_pipeline_import_schema_requires_uc_credentials():
     pipeline = ContractPipeline()
 
-    with pytest.raises(ValueError, match="uc_workspace_url and uc_token"):
+    with pytest.raises(ValueError, match="workspace_url and token"):
         pipeline.import_schema("uc", "main.silver.orders")
 
 
@@ -68,8 +68,8 @@ def test_pipeline_import_schema_supports_uc_when_credentials_are_given(monkeypat
         captured.update(kwargs)
         return contract
 
-    monkeypatch.setattr(DataContract, "import_from_source", staticmethod(fake_import))
-    monkeypatch.setattr("contracthub.orchestrator.pipeline.enrich_unity_contract_relationships", fake_enrich)
+    monkeypatch.setattr("contracthub.importers.unity_importer.DataContract.import_from_source", staticmethod(fake_import))
+    monkeypatch.setattr("contracthub.importers.unity_importer.enrich_unity_contract_relationships", fake_enrich)
     pipeline = ContractPipeline()
 
     contract = pipeline.import_schema(
@@ -512,9 +512,9 @@ def test_pipeline_run_executes_real_unity_workflow(
         captured.update(kwargs)
         return contract
 
-    monkeypatch.setattr(DataContract, "import_from_source", staticmethod(fake_import_from_source))
+    monkeypatch.setattr("contracthub.importers.unity_importer.DataContract.import_from_source", staticmethod(fake_import_from_source))
     monkeypatch.setattr("contracthub.orchestrator.pipeline.GreatExpectationsExporter.export_to_path", fake_export_to_path)
-    monkeypatch.setattr("contracthub.orchestrator.pipeline.enrich_unity_contract_relationships", fake_enrich)
+    monkeypatch.setattr("contracthub.importers.unity_importer.enrich_unity_contract_relationships", fake_enrich)
 
     artifacts = ContractPipeline().run(
         source_type="uc",
