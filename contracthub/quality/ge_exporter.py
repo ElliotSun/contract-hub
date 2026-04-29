@@ -67,7 +67,9 @@ class GreatExpectationsExporter:
         suite_name: str | None = None,
     ) -> Any:
         model = contract_to_model(contract)
-        return generate_expectation_suite(model, schema_name=schema_name, suite_name=suite_name)
+        return generate_expectation_suite(
+            model, schema_name=schema_name, suite_name=suite_name
+        )
 
     def export_to_path(
         self,
@@ -77,7 +79,9 @@ class GreatExpectationsExporter:
         schema_name: str = "all",
         suite_name: str | None = None,
     ) -> Path:
-        suite = self.generate_suite(contract, schema_name=schema_name, suite_name=suite_name)
+        suite = self.generate_suite(
+            contract, schema_name=schema_name, suite_name=suite_name
+        )
         path = Path(output_path).expanduser().resolve()
         path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -165,7 +169,9 @@ def _validate_ge_suite_dict(suite_dict: ExpectationSuiteDict) -> None:
     be resolved by the installed Great Expectations registry.
     """
     if not isinstance(suite_dict, dict):
-        raise ValueError("Great Expectations exporter output must deserialize into a mapping object")
+        raise ValueError(
+            "Great Expectations exporter output must deserialize into a mapping object"
+        )
 
     expectations = suite_dict.get("expectations", [])
     if not isinstance(expectations, list):
@@ -179,12 +185,16 @@ def _validate_ge_suite_dict(suite_dict: ExpectationSuiteDict) -> None:
 
         expectation_type = _expectation_type(expectation)
         if not expectation_type:
-            raise ValueError(f"Expectation at index {index} must define expectation_type or type")
+            raise ValueError(
+                f"Expectation at index {index} must define expectation_type or type"
+            )
 
         try:
             expectation_impl = get_expectation_impl(expectation_type)
         except Exception as exc:
-            raise ValueError(f"Failed to resolve Great Expectations rule '{expectation_type}'") from exc
+            raise ValueError(
+                f"Failed to resolve Great Expectations rule '{expectation_type}'"
+            ) from exc
 
         if not expectation_impl:
             raise ValueError(f"Unknown Great Expectations rule '{expectation_type}'")
@@ -192,7 +202,9 @@ def _validate_ge_suite_dict(suite_dict: ExpectationSuiteDict) -> None:
 
 def _expectation_type(expectation: ExpectationConfigDict) -> str:
     """Resolve the GE expectation type from exporter JSON."""
-    return str(expectation.get("expectation_type") or expectation.get("type") or "").strip()
+    return str(
+        expectation.get("expectation_type") or expectation.get("type") or ""
+    ).strip()
 
 
 def _create_suite_object(ExpectationSuite: Any, suite_name: str) -> Any:
@@ -248,7 +260,14 @@ def _create_expectation_object(
     if meta:
         init_kwargs["meta"] = meta
 
-    for key in ("notes", "description", "severity", "success_on_last_run", "id", "rendered_content"):
+    for key in (
+        "notes",
+        "description",
+        "severity",
+        "success_on_last_run",
+        "id",
+        "rendered_content",
+    ):
         if key in raw_expectation:
             init_kwargs[key] = raw_expectation[key]
 
@@ -284,13 +303,17 @@ def _load_ge_suite_classes() -> tuple[Any, Any]:
         return ExpectationSuite, ExpectationConfiguration
     except Exception as first_exc:
         try:
-            from great_expectations.core.expectation_configuration import ExpectationConfiguration
+            from great_expectations.core.expectation_configuration import (
+                ExpectationConfiguration,
+            )
             from great_expectations.core.expectation_suite import ExpectationSuite
 
             return ExpectationSuite, ExpectationConfiguration
         except Exception as second_exc:
             try:
-                from great_expectations.expectations.expectation_configuration import ExpectationConfiguration
+                from great_expectations.expectations.expectation_configuration import (
+                    ExpectationConfiguration,
+                )
                 from great_expectations.core.expectation_suite import ExpectationSuite
 
                 return ExpectationSuite, ExpectationConfiguration

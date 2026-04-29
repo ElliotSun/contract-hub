@@ -58,12 +58,16 @@ def run_contract_tests_on_df(
     if contract_runtime_context is None:
         contract = load_contract(contract_path)
     else:
-        contract = load_contract(contract_path, runtime_context=contract_runtime_context)
+        contract = load_contract(
+            contract_path, runtime_context=contract_runtime_context
+        )
     expectation_suite = generate_expectation_suite(contract, schema_name=schema_name)
     validator = create_spark_validator(spark_df, expectation_suite)
     validation_result = validator.validate()
     formatted = format_validation_result(validation_result)
-    LOGGER.info("Contract validation on dataframe completed: success=%s", formatted["success"])
+    LOGGER.info(
+        "Contract validation on dataframe completed: success=%s", formatted["success"]
+    )
     return formatted
 
 
@@ -112,7 +116,9 @@ def run_contract_tests(
             contract_runtime_context=contract_runtime_context,
         )
 
-    raise ValueError("Provide either spark_df or (table_fqn and spark_session) to run contract tests")
+    raise ValueError(
+        "Provide either spark_df or (table_fqn and spark_session) to run contract tests"
+    )
 
 
 def format_validation_result(validation_result: Any) -> Dict[str, Any]:
@@ -160,7 +166,9 @@ def _load_great_expectations_module() -> Any:
 
         return gx
     except Exception as exc:
-        raise RuntimeError("great_expectations is required for Spark validator runtime") from exc
+        raise RuntimeError(
+            "great_expectations is required for Spark validator runtime"
+        ) from exc
 
 
 def _load_runtime_batch_request() -> Any:
@@ -169,7 +177,9 @@ def _load_runtime_batch_request() -> Any:
 
         return RuntimeBatchRequest
     except Exception as exc:
-        raise RuntimeError("RuntimeBatchRequest is unavailable in installed great_expectations version") from exc
+        raise RuntimeError(
+            "RuntimeBatchRequest is unavailable in installed great_expectations version"
+        ) from exc
 
 
 def _assert_ge_spark_runtime_classes() -> None:

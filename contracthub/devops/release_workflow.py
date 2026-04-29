@@ -5,9 +5,16 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from contracthub.core.release import PromotionResult, classify_contract_change, prepare_release_candidate
+from contracthub.core.release import (
+    PromotionResult,
+    classify_contract_change,
+    prepare_release_candidate,
+)
 from contracthub.core.release import suggest_release_version
-from contracthub.devops.pr_creator import AzureDevOpsConfig, PullRequestCreator, GitProviderConfig
+from contracthub.devops.pr_creator import (
+    PullRequestCreator,
+    GitProviderConfig,
+)
 from contracthub.utils.schema_utils import contract_to_model
 from contracthub.utils.yaml_utils import dump_yaml, list_yaml_documents, load_yaml
 
@@ -122,7 +129,9 @@ def create_release_pull_request(
     push: bool = False,
 ) -> dict[str, Any]:
     """Prepare one promoted contract and open a release PR for it."""
-    promotion = prepare_release_candidate(base_contract, candidate_contract, release_tag)
+    promotion = prepare_release_candidate(
+        base_contract, candidate_contract, release_tag
+    )
     repo_root = Path(repo_path).expanduser().resolve()
     contract_path = repo_root / contract_repo_path
     dump_yaml(promotion.contract, contract_path)
@@ -201,7 +210,9 @@ def classify_contracts_in_repo(
                     candidate_version=str(candidate_model.version or ""),
                     required_bump=None,
                     suggested_release_version=None,
-                    reasons=["New governed contract; initial release handled separately"],
+                    reasons=[
+                        "New governed contract; initial release handled separately"
+                    ],
                 )
             )
             continue
@@ -217,7 +228,9 @@ def classify_contracts_in_repo(
                     candidate_version=None,
                     required_bump=None,
                     suggested_release_version=None,
-                    reasons=["Governed contract missing from candidate root; manual review required"],
+                    reasons=[
+                        "Governed contract missing from candidate root; manual review required"
+                    ],
                 )
             )
             continue
@@ -323,7 +336,9 @@ def build_batch_release_manifest(
             str(change.required_bump or "none"),
         )
         release_tag = f"{contract_key}/v{next_version}"
-        source_branch = f"{source_branch_prefix}{_branch_safe_name(contract_key)}-v{next_version}"
+        source_branch = (
+            f"{source_branch_prefix}{_branch_safe_name(contract_key)}-v{next_version}"
+        )
 
         tasks.append(
             BatchReleaseTask(
@@ -381,5 +396,7 @@ def _contract_release_key(change: RepositoryContractChange) -> str:
 
 
 def _branch_safe_name(value: str) -> str:
-    cleaned = "".join(char if char.isalnum() or char in {"-", "_"} else "-" for char in value.strip())
+    cleaned = "".join(
+        char if char.isalnum() or char in {"-", "_"} else "-" for char in value.strip()
+    )
     return cleaned.strip("-") or "contract"

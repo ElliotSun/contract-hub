@@ -16,7 +16,10 @@ from contracthub.devops.release_workflow import (
     load_batch_release_tasks,
     repository_change_to_dict,
 )
-from contracthub.exporters.sql_exporter import SparkSqlContractExporter, export_contract_to_spark_sql
+from contracthub.exporters.sql_exporter import (
+    SparkSqlContractExporter,
+    export_contract_to_spark_sql,
+)
 from contracthub.importers.delta_importer import DeltaTableImporter
 from contracthub.importers.sql_importer import SQLFolderImporter
 from contracthub.lifecycle.merge_engine import ContractMergeEngine

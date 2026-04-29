@@ -8,10 +8,14 @@ from open_data_contract_standard.model import OpenDataContractStandard
 from contracthub.core.loader import load_contract
 
 
-def contract_to_model(contract_input: OpenDataContractStandard | dict[str, Any] | str | Path) -> OpenDataContractStandard:
+def contract_to_model(
+    contract_input: OpenDataContractStandard | dict[str, Any] | str | Path,
+) -> OpenDataContractStandard:
     """Normalize contract input to OpenDataContractStandard model."""
     if isinstance(contract_input, OpenDataContractStandard):
-        return OpenDataContractStandard.model_validate(contract_input.model_dump(by_alias=True, exclude_none=True))
+        return OpenDataContractStandard.model_validate(
+            contract_input.model_dump(by_alias=True, exclude_none=True)
+        )
 
     if isinstance(contract_input, dict):
         return OpenDataContractStandard.model_validate(contract_input)
@@ -25,7 +29,9 @@ def contract_to_model(contract_input: OpenDataContractStandard | dict[str, Any] 
     raise TypeError(f"Unsupported contract input type: {type(contract_input)!r}")
 
 
-def contract_to_dict(contract_input: OpenDataContractStandard | dict[str, Any] | str | Path) -> dict[str, Any]:
+def contract_to_dict(
+    contract_input: OpenDataContractStandard | dict[str, Any] | str | Path,
+) -> dict[str, Any]:
     """Normalize contract input to ODCS dictionary."""
     model = contract_to_model(contract_input)
     return model.model_dump(by_alias=True, exclude_none=True)

@@ -6,7 +6,12 @@ from typing import Any
 
 import streamlit as st
 
-from contracthub.constants import LIFECYCLE_OPTIONS, QUALITY_SEVERITY_OPTIONS, QUALITY_TYPE_OPTIONS, TABLE_RULE_COLUMN
+from contracthub.constants import (
+    LIFECYCLE_OPTIONS,
+    QUALITY_SEVERITY_OPTIONS,
+    QUALITY_TYPE_OPTIONS,
+    TABLE_RULE_COLUMN,
+)
 
 from .analysis import field_governance_info_for
 from .contract_model import (
@@ -16,7 +21,6 @@ from .contract_model import (
     apply_quick_field_rows,
     contract_api_version,
     contract_data_product,
-    contract_description_part,
     contract_id,
     contract_kind,
     contract_name,
@@ -49,7 +53,6 @@ from .helpers import (
     rows_from_dataframe,
     selectbox_index,
     tags_to_text,
-    text_to_tags,
 )
 from .state import selected_schema
 from .styles import section_title
@@ -57,7 +60,9 @@ from .styles import section_title
 
 def render_contract_section(contract: dict[str, Any]) -> None:
     """Render always-visible contract metadata."""
-    section_title("Contract", "Business-facing contract context and descriptive metadata.")
+    section_title(
+        "Contract", "Business-facing contract context and descriptive metadata."
+    )
     st.markdown("#### Core Info")
     core_row_1 = st.columns([1.1, 0.9, 0.8], gap="large")
     with core_row_1[0]:
@@ -106,12 +111,16 @@ def render_contract_section(contract: dict[str, Any]) -> None:
             help="Optional ODCS name. Many contracts use Data Product as the primary business identifier.",
         )
 
-    edited_contract_tags = render_tags_editor(contract_tags(contract), state_prefix="editor_contract", label="Tags")
+    edited_contract_tags = render_tags_editor(
+        contract_tags(contract), state_prefix="editor_contract", label="Tags"
+    )
 
     st.markdown("#### Description")
     purpose_col, limitations_col, usage_col = st.columns(3, gap="large")
     with purpose_col:
-        contract_purpose = st.text_area("Purpose", key="editor_contract_description_purpose_input", height=140)
+        contract_purpose = st.text_area(
+            "Purpose", key="editor_contract_description_purpose_input", height=140
+        )
     with limitations_col:
         contract_limitations = st.text_area(
             "Limitations",
@@ -119,16 +128,33 @@ def render_contract_section(contract: dict[str, Any]) -> None:
             height=140,
         )
     with usage_col:
-        contract_usage = st.text_area("Usage", key="editor_contract_description_usage_input", height=140)
+        contract_usage = st.text_area(
+            "Usage", key="editor_contract_description_usage_input", height=140
+        )
 
     with st.expander("System Fields", expanded=False):
         system_col_1, system_col_2, system_col_3 = st.columns(3, gap="large")
         with system_col_1:
-            st.text_input("apiVersion", value=contract_api_version(contract), key="editor_contract_api_version_input", disabled=True)
+            st.text_input(
+                "apiVersion",
+                value=contract_api_version(contract),
+                key="editor_contract_api_version_input",
+                disabled=True,
+            )
         with system_col_2:
-            st.text_input("kind", value=contract_kind(contract), key="editor_contract_kind_input", disabled=True)
+            st.text_input(
+                "kind",
+                value=contract_kind(contract),
+                key="editor_contract_kind_input",
+                disabled=True,
+            )
         with system_col_3:
-            st.text_input("id", value=display_value(contract_id(contract)), key="editor_contract_id_display", disabled=True)
+            st.text_input(
+                "id",
+                value=display_value(contract_id(contract)),
+                key="editor_contract_id_display",
+                disabled=True,
+            )
 
     set_contract_tags_list(contract, edited_contract_tags)
     set_contract_description_part(contract, "purpose", contract_purpose)
@@ -138,9 +164,15 @@ def render_contract_section(contract: dict[str, Any]) -> None:
 
 def render_schema_selector(contract: dict[str, Any], on_change: Any) -> None:
     """Render shared schema selection controls."""
-    section_title("Schema", "Review table-level metadata and switch between schemas without leaving the editor.")
+    section_title(
+        "Schema",
+        "Review table-level metadata and switch between schemas without leaving the editor.",
+    )
     schemas = schema_items(contract)
-    schema_names = [str(schema.get("name", "") or f"schema_{index + 1}") for index, schema in enumerate(schemas)]
+    schema_names = [
+        str(schema.get("name", "") or f"schema_{index + 1}")
+        for index, schema in enumerate(schemas)
+    ]
     if not schema_names:
         st.warning("No schemas defined in this contract.")
         return
@@ -164,11 +196,22 @@ def render_schema_selector(contract: dict[str, Any], on_change: Any) -> None:
         with metric_1:
             st.metric("Fields", len(field_rows))
         with metric_2:
-            st.metric("Active", sum(1 for row in field_rows if str(row.get("lifecycleStatus", "")).lower() == "active"))
+            st.metric(
+                "Active",
+                sum(
+                    1
+                    for row in field_rows
+                    if str(row.get("lifecycleStatus", "")).lower() == "active"
+                ),
+            )
         with metric_3:
             st.metric(
                 "Deprecated",
-                sum(1 for row in field_rows if str(row.get("lifecycleStatus", "")).lower() == "deprecated"),
+                sum(
+                    1
+                    for row in field_rows
+                    if str(row.get("lifecycleStatus", "")).lower() == "deprecated"
+                ),
             )
 
 
@@ -183,15 +226,21 @@ def render_schema_tab(contract: dict[str, Any]) -> None:
     with schema_meta_col_1:
         st.text_input("Schema Name", key="editor_schema_name_input", disabled=True)
     with schema_meta_col_2:
-        business_name = st.text_input("Business Name", key="editor_schema_business_name_input")
+        business_name = st.text_input(
+            "Business Name", key="editor_schema_business_name_input"
+        )
     with schema_meta_col_3:
-        schema_state_id = str(st.session_state.get("editor_selected_schema_name", "") or "schema")
+        schema_state_id = str(
+            st.session_state.get("editor_selected_schema_name", "") or "schema"
+        )
         tags = render_tags_editor(
             current_schema.get("tags"),
             state_prefix=f"editor_schema_{schema_state_id}",
             label="Tags",
         )
-    description = st.text_area("Table Description", key="editor_schema_description_input", height=100)
+    description = st.text_area(
+        "Table Description", key="editor_schema_description_input", height=100
+    )
 
     if business_name != str(current_schema.get("businessName", "")):
         current_schema["businessName"] = business_name
@@ -223,17 +272,30 @@ def render_schema_tab(contract: dict[str, Any]) -> None:
             num_rows="fixed",
             width="stretch",
             hide_index=True,
-            column_order=["name", "businessName", "type", "required", "lifecycleStatus", "description"],
+            column_order=[
+                "name",
+                "businessName",
+                "type",
+                "required",
+                "lifecycleStatus",
+                "description",
+            ],
             column_config={
                 "name": st.column_config.TextColumn("name"),
                 "businessName": st.column_config.TextColumn("business name"),
                 "type": st.column_config.TextColumn("type"),
                 "required": st.column_config.CheckboxColumn("required"),
-                "lifecycleStatus": st.column_config.SelectboxColumn("lifecycleStatus", options=LIFECYCLE_OPTIONS),
+                "lifecycleStatus": st.column_config.SelectboxColumn(
+                    "lifecycleStatus", options=LIFECYCLE_OPTIONS
+                ),
                 "description": st.column_config.TextColumn("description"),
                 "__original_index": None,
             },
-            disabled=[column for column in ["name", "type", "required"] if is_technical_editor_column(column)],
+            disabled=[
+                column
+                for column in ["name", "type", "required"]
+                if is_technical_editor_column(column)
+            ],
             key="editor_schema_table",
         )
         edited_rows = rows_from_dataframe(edited_df)
@@ -247,7 +309,9 @@ def render_schema_tab(contract: dict[str, Any]) -> None:
         return
 
     st.markdown("#### Field Detail")
-    st.caption("Expand a field to review or edit business metadata while keeping technical schema details read-only.")
+    st.caption(
+        "Expand a field to review or edit business metadata while keeping technical schema details read-only."
+    )
     for index, field_obj in enumerate(fields):
         with st.expander(_field_list_label(field_obj, index), expanded=False):
             _render_field_detail_form(current_schema, field_obj, index)
@@ -262,13 +326,25 @@ def _field_list_label(field_obj: dict[str, Any], index: int) -> str:
     return label
 
 
-def _render_field_detail_form(schema_obj: dict[str, Any], field_obj: dict[str, Any], index: int) -> None:
+def _render_field_detail_form(
+    schema_obj: dict[str, Any], field_obj: dict[str, Any], index: int
+) -> None:
     """Render a clean per-field detail form inside an expander."""
     summary_col_1, summary_col_2, summary_col_3 = st.columns(3, gap="medium")
     with summary_col_1:
-        st.text_input("Field Name", value=str(field_obj.get("name", "") or ""), disabled=True, key=f"editor_field_name_display_{index}")
+        st.text_input(
+            "Field Name",
+            value=str(field_obj.get("name", "") or ""),
+            disabled=True,
+            key=f"editor_field_name_display_{index}",
+        )
     with summary_col_2:
-        st.text_input("Type", value=field_type(field_obj), disabled=True, key=f"editor_field_type_display_{index}")
+        st.text_input(
+            "Type",
+            value=field_type(field_obj),
+            disabled=True,
+            key=f"editor_field_type_display_{index}",
+        )
     with summary_col_3:
         st.text_input(
             "Lifecycle",
@@ -289,15 +365,21 @@ def _render_field_detail_form(schema_obj: dict[str, Any], field_obj: dict[str, A
             field_lifecycle = st.selectbox(
                 "Lifecycle Status",
                 LIFECYCLE_OPTIONS,
-                index=selectbox_index(LIFECYCLE_OPTIONS, field_lifecycle_status(field_obj) or "draft"),
+                index=selectbox_index(
+                    LIFECYCLE_OPTIONS, field_lifecycle_status(field_obj) or "draft"
+                ),
             )
-            field_business_name = st.text_input("Business Name", value=str(field_obj.get("businessName", "") or ""))
+            field_business_name = st.text_input(
+                "Business Name", value=str(field_obj.get("businessName", "") or "")
+            )
             field_description = st.text_area(
                 "Description",
                 value=str(field_obj.get("description", "") or ""),
                 height=150,
             )
-            field_examples = st.text_area("Examples", value=field_examples_text(field_obj), height=110)
+            field_examples = st.text_area(
+                "Examples", value=field_examples_text(field_obj), height=110
+            )
             field_tags = st.text_input(
                 "Tags",
                 value=tags_to_text(field_obj.get("tags")),
@@ -316,14 +398,26 @@ def _render_field_detail_form(schema_obj: dict[str, Any], field_obj: dict[str, A
 
         with detail_right:
             st.caption("Technical Fields")
-            st.text_input("Name", value=str(field_obj.get("name", "") or ""), disabled=is_technical_property_key("name"))
-            st.text_input("Type", value=field_type(field_obj), disabled=is_technical_editor_column("type"))
+            st.text_input(
+                "Name",
+                value=str(field_obj.get("name", "") or ""),
+                disabled=is_technical_property_key("name"),
+            )
+            st.text_input(
+                "Type",
+                value=field_type(field_obj),
+                disabled=is_technical_editor_column("type"),
+            )
             st.checkbox(
                 "Required",
                 value=bool(field_obj.get("required", False)),
                 disabled=is_technical_property_key("required"),
             )
-            st.text_input("Physical Name", value=str(field_obj.get("physicalName", "") or ""), disabled=True)
+            st.text_input(
+                "Physical Name",
+                value=str(field_obj.get("physicalName", "") or ""),
+                disabled=True,
+            )
             logical_type = str(field_obj.get("logicalType", "") or "")
             physical_type = str(field_obj.get("physicalType", "") or "")
             if logical_type:
@@ -331,16 +425,26 @@ def _render_field_detail_form(schema_obj: dict[str, Any], field_obj: dict[str, A
             if physical_type:
                 st.text_input("Physical Type", value=physical_type, disabled=True)
             if field_obj.get("format") is not None:
-                st.text_input("Format", value=str(field_obj.get("format", "") or ""), disabled=True)
+                st.text_input(
+                    "Format",
+                    value=str(field_obj.get("format", "") or ""),
+                    disabled=True,
+                )
             if field_obj.get("pattern") is not None:
-                st.text_input("Pattern", value=str(field_obj.get("pattern", "") or ""), disabled=True)
+                st.text_input(
+                    "Pattern",
+                    value=str(field_obj.get("pattern", "") or ""),
+                    disabled=True,
+                )
 
             governance_info = field_governance_info_for(schema_obj, field_obj)
             st.caption("Governance Hints")
             st.write(f"Breaking: {'Yes' if governance_info['breaking'] else 'No'}")
             st.write(f"Deprecated: {'Yes' if governance_info['deprecation'] else 'No'}")
 
-        if st.form_submit_button(f"Save {field_option_label(field_obj, index)}", width="stretch"):
+        if st.form_submit_button(
+            f"Save {field_option_label(field_obj, index)}", width="stretch"
+        ):
             apply_field_detail(
                 field_obj,
                 lifecycle_status=field_lifecycle,
@@ -351,7 +455,9 @@ def _render_field_detail_form(schema_obj: dict[str, Any], field_obj: dict[str, A
                 classification=field_classification,
                 transform_description=field_transform_description,
             )
-            st.session_state["editor_notice"] = f"Field '{field_obj.get('name', '')}' changes saved."
+            st.session_state["editor_notice"] = (
+                f"Field '{field_obj.get('name', '')}' changes saved."
+            )
             st.rerun()
 
 
@@ -362,7 +468,10 @@ def render_quality_tab(contract: dict[str, Any]) -> None:
         st.warning("No schema selected.")
         return
 
-    section_title("Quality Rules", "Maintain business-facing validation rules for the selected schema.")
+    section_title(
+        "Quality Rules",
+        "Maintain business-facing validation rules for the selected schema.",
+    )
 
     left_col, right_col = st.columns([1.5, 0.6], gap="large")
     field_names = [name for name in selected_schema_field_names(current_schema) if name]
@@ -398,10 +507,16 @@ def render_quality_tab(contract: dict[str, Any]) -> None:
             column_order=["rule_name", "type", "column", "condition", "severity"],
             column_config={
                 "rule_name": st.column_config.TextColumn("rule_name", required=True),
-                "type": st.column_config.SelectboxColumn("type", options=QUALITY_TYPE_OPTIONS),
-                "column": st.column_config.SelectboxColumn("column", options=column_options, required=True),
+                "type": st.column_config.SelectboxColumn(
+                    "type", options=QUALITY_TYPE_OPTIONS
+                ),
+                "column": st.column_config.SelectboxColumn(
+                    "column", options=column_options, required=True
+                ),
                 "condition": st.column_config.TextColumn("condition"),
-                "severity": st.column_config.SelectboxColumn("severity", options=QUALITY_SEVERITY_OPTIONS),
+                "severity": st.column_config.SelectboxColumn(
+                    "severity", options=QUALITY_SEVERITY_OPTIONS
+                ),
                 "__scope": None,
                 "__rule_index": None,
                 "__property_name": None,
@@ -417,7 +532,10 @@ def render_quality_tab(contract: dict[str, Any]) -> None:
 
 def render_infrastructure_section(contract: dict[str, Any]) -> None:
     """Render read-only infrastructure and data-access information."""
-    section_title("Infrastructure / Data Access", "Read-only deployment and access details for the selected contract.")
+    section_title(
+        "Infrastructure / Data Access",
+        "Read-only deployment and access details for the selected contract.",
+    )
     servers = server_items(contract)
     if not servers:
         st.caption("No server information defined.")
@@ -434,15 +552,26 @@ def render_infrastructure_section(contract: dict[str, Any]) -> None:
 
     business_col_1, business_col_2 = st.columns(2, gap="large")
     with business_col_1:
-        st.text_input("Server", value=str(server.get("server", "") or ""), disabled=True)
-        st.text_input("Environment", value=str(server.get("environment", "") or ""), disabled=True)
+        st.text_input(
+            "Server", value=str(server.get("server", "") or ""), disabled=True
+        )
+        st.text_input(
+            "Environment", value=str(server.get("environment", "") or ""), disabled=True
+        )
     with business_col_2:
-        st.text_area("Description", value=str(server.get("description", "") or ""), height=100, disabled=True)
+        st.text_area(
+            "Description",
+            value=str(server.get("description", "") or ""),
+            height=100,
+            disabled=True,
+        )
 
     with st.expander("Advanced Server Details", expanded=False):
         advanced_col_1, advanced_col_2 = st.columns(2, gap="large")
         with advanced_col_1:
-            st.text_input("Type", value=str(server.get("type", "") or ""), disabled=True)
+            st.text_input(
+                "Type", value=str(server.get("type", "") or ""), disabled=True
+            )
             st.markdown("Roles")
             roles = server.get("roles", []) or []
             if roles:
@@ -455,14 +584,24 @@ def render_infrastructure_section(contract: dict[str, Any]) -> None:
             st.json(server.get("customProperties", []))
 
 
-def render_advanced_tab(contract: dict[str, Any], on_apply_yaml: Any, on_validate_yaml: Any, generated_yaml: str) -> None:
+def render_advanced_tab(
+    contract: dict[str, Any],
+    on_apply_yaml: Any,
+    on_validate_yaml: Any,
+    generated_yaml: str,
+) -> None:
     """Render raw YAML with optional unsafe editing."""
-    section_title("Advanced", "Technical views live here so the main editor stays business-friendly.")
+    section_title(
+        "Advanced",
+        "Technical views live here so the main editor stays business-friendly.",
+    )
 
     with st.expander("Raw YAML", expanded=True):
         st.code(generated_yaml, language="yaml")
 
-    unsafe_enabled = st.toggle("Enable Unsafe Edit", value=False, key="editor_enable_unsafe_edit")
+    unsafe_enabled = st.toggle(
+        "Enable Unsafe Edit", value=False, key="editor_enable_unsafe_edit"
+    )
     if not unsafe_enabled:
         st.session_state["editor_raw_yaml"] = generated_yaml
         return

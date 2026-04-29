@@ -29,7 +29,13 @@ READ_ONLY_CONTRACT_FIELDS = (
     "servers",
 )
 
-EDITABLE_SCHEMA_FIELDS = {"businessName", "description", "tags", "quality", "properties"}
+EDITABLE_SCHEMA_FIELDS = {
+    "businessName",
+    "description",
+    "tags",
+    "quality",
+    "properties",
+}
 EDITABLE_PROPERTY_FIELDS = {
     "businessName",
     "description",

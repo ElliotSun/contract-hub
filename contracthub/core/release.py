@@ -7,9 +7,13 @@ from typing import Any, Literal
 
 LOGGER = logging.getLogger(__name__)
 
-from open_data_contract_standard.model import CustomProperty, OpenDataContractStandard
+from open_data_contract_standard.model import OpenDataContractStandard
 
-from contracthub.lifecycle.helpers import lifecycle_from_custom_properties, normalize_status, schema_items
+from contracthub.lifecycle.helpers import (
+    lifecycle_from_custom_properties,
+    normalize_status,
+    schema_items,
+)
 from contracthub.lifecycle.policy import BreakingChange, evaluate_merge_policy
 from contracthub.utils.schema_utils import contract_to_dict, contract_to_model
 
@@ -88,15 +92,29 @@ def classify_contract_change(
     base_model = contract_to_model(base_contract)
     candidate_model = contract_to_model(candidate_contract)
 
-    has_changes = _canonicalize(contract_to_dict(base_model)) != _canonicalize(contract_to_dict(candidate_model))
+    has_changes = _canonicalize(contract_to_dict(base_model)) != _canonicalize(
+        contract_to_dict(candidate_model)
+    )
     if not has_changes:
-        return ContractChangeAssessment(has_changes=False, required_bump="none", reasons=["No contract changes detected"])
+        return ContractChangeAssessment(
+            has_changes=False,
+            required_bump="none",
+            reasons=["No contract changes detected"],
+        )
 
-    LOGGER.debug("Classifying changes for contract %s (base version: %s)", base_model.id, base_model.version)
+    LOGGER.debug(
+        "Classifying changes for contract %s (base version: %s)",
+        base_model.id,
+        base_model.version,
+    )
 
     policy = evaluate_merge_policy(base_model, candidate_model)
     if policy.breaking_changes:
-        LOGGER.info("Breaking changes detected in contract %s requiring major bump: %s", base_model.id, policy.breaking_changes)
+        LOGGER.info(
+            "Breaking changes detected in contract %s requiring major bump: %s",
+            base_model.id,
+            policy.breaking_changes,
+        )
         return ContractChangeAssessment(
             has_changes=True,
             required_bump="major",
@@ -110,10 +128,14 @@ def classify_contract_change(
     if _has_new_deprecations(base_model, candidate_model):
         reasons.append("New schema/property deprecations require a minor version bump")
     if _has_non_breaking_structural_changes(base_model, candidate_model):
-        reasons.append("Non-breaking structural or quality changes require a minor version bump")
+        reasons.append(
+            "Non-breaking structural or quality changes require a minor version bump"
+        )
 
     if reasons:
-        return ContractChangeAssessment(has_changes=True, required_bump="minor", reasons=_dedupe(reasons))
+        return ContractChangeAssessment(
+            has_changes=True, required_bump="minor", reasons=_dedupe(reasons)
+        )
 
     return ContractChangeAssessment(
         has_changes=True,
@@ -141,7 +163,11 @@ def prepare_release_candidate(
     candidate_model.id = base_model.id
     candidate_model.version = base_model.version
 
-    LOGGER.info("Preparing release candidate for contract %s with tag %s", base_model.id, release_tag)
+    LOGGER.info(
+        "Preparing release candidate for contract %s with tag %s",
+        base_model.id,
+        release_tag,
+    )
 
     assessment = classify_contract_change(base_model, candidate_model)
     if not assessment.has_changes:
@@ -177,16 +203,22 @@ def parse_release_tag_version(release_tag: str) -> str:
     text = str(release_tag or "").strip()
     match = SEMVER_TAG_RE.search(text)
     if not match:
-        raise ValueError(f"Release tag '{release_tag}' must end with a semantic version like v1.2.3")
+        raise ValueError(
+            f"Release tag '{release_tag}' must end with a semantic version like v1.2.3"
+        )
     return match.group("version")
 
 
-def classify_version_bump(current_version: str, target_version: str) -> ActualVersionBump:
+def classify_version_bump(
+    current_version: str, target_version: str
+) -> ActualVersionBump:
     """Classify actual semantic version bump between current and target versions."""
     current = _parse_semver(current_version)
     target = _parse_semver(target_version)
     if target <= current:
-        raise ValueError(f"Target version '{target_version}' must be greater than current version '{current_version}'")
+        raise ValueError(
+            f"Target version '{target_version}' must be greater than current version '{current_version}'"
+        )
     if target[0] > current[0]:
         return "major"
     if target[1] > current[1]:
@@ -224,9 +256,19 @@ def _parse_semver(version: str) -> tuple[int, int, int]:
     return (int(match.group(1)), int(match.group(2)), int(match.group(3)))
 
 
-def _has_schema_or_property_additions(base: OpenDataContractStandard, candidate: OpenDataContractStandard) -> bool:
-    base_schema = {str(schema.name or ""): schema for schema in schema_items(base) if str(schema.name or "")}
-    candidate_schema = {str(schema.name or ""): schema for schema in schema_items(candidate) if str(schema.name or "")}
+def _has_schema_or_property_additions(
+    base: OpenDataContractStandard, candidate: OpenDataContractStandard
+) -> bool:
+    base_schema = {
+        str(schema.name or ""): schema
+        for schema in schema_items(base)
+        if str(schema.name or "")
+    }
+    candidate_schema = {
+        str(schema.name or ""): schema
+        for schema in schema_items(candidate)
+        if str(schema.name or "")
+    }
     if set(candidate_schema) - set(base_schema):
         return True
 
@@ -234,16 +276,34 @@ def _has_schema_or_property_additions(base: OpenDataContractStandard, candidate:
         base_obj = base_schema.get(schema_name)
         if base_obj is None:
             continue
-        base_props = {str(prop.name or "") for prop in (base_obj.properties or []) if str(prop.name or "")}
-        candidate_props = {str(prop.name or "") for prop in (candidate_obj.properties or []) if str(prop.name or "")}
+        base_props = {
+            str(prop.name or "")
+            for prop in (base_obj.properties or [])
+            if str(prop.name or "")
+        }
+        candidate_props = {
+            str(prop.name or "")
+            for prop in (candidate_obj.properties or [])
+            if str(prop.name or "")
+        }
         if candidate_props - base_props:
             return True
     return False
 
 
-def _has_new_deprecations(base: OpenDataContractStandard, candidate: OpenDataContractStandard) -> bool:
-    base_schema = {str(schema.name or ""): schema for schema in schema_items(base) if str(schema.name or "")}
-    candidate_schema = {str(schema.name or ""): schema for schema in schema_items(candidate) if str(schema.name or "")}
+def _has_new_deprecations(
+    base: OpenDataContractStandard, candidate: OpenDataContractStandard
+) -> bool:
+    base_schema = {
+        str(schema.name or ""): schema
+        for schema in schema_items(base)
+        if str(schema.name or "")
+    }
+    candidate_schema = {
+        str(schema.name or ""): schema
+        for schema in schema_items(candidate)
+        if str(schema.name or "")
+    }
 
     for schema_name, base_obj in base_schema.items():
         candidate_obj = candidate_schema.get(schema_name)
@@ -252,9 +312,15 @@ def _has_new_deprecations(base: OpenDataContractStandard, candidate: OpenDataCon
         if not _is_deprecated(base_obj) and _is_deprecated(candidate_obj):
             return True
 
-        base_props = {str(prop.name or ""): prop for prop in (base_obj.properties or []) if str(prop.name or "")}
+        base_props = {
+            str(prop.name or ""): prop
+            for prop in (base_obj.properties or [])
+            if str(prop.name or "")
+        }
         candidate_props = {
-            str(prop.name or ""): prop for prop in (candidate_obj.properties or []) if str(prop.name or "")
+            str(prop.name or ""): prop
+            for prop in (candidate_obj.properties or [])
+            if str(prop.name or "")
         }
         for prop_name, base_prop in base_props.items():
             candidate_prop = candidate_props.get(prop_name)
@@ -265,8 +331,12 @@ def _has_new_deprecations(base: OpenDataContractStandard, candidate: OpenDataCon
     return False
 
 
-def _has_non_breaking_structural_changes(base: OpenDataContractStandard, candidate: OpenDataContractStandard) -> bool:
-    return _canonicalize(_strip_descriptive_contract(base)) != _canonicalize(_strip_descriptive_contract(candidate))
+def _has_non_breaking_structural_changes(
+    base: OpenDataContractStandard, candidate: OpenDataContractStandard
+) -> bool:
+    return _canonicalize(_strip_descriptive_contract(base)) != _canonicalize(
+        _strip_descriptive_contract(candidate)
+    )
 
 
 def _strip_descriptive_contract(contract: OpenDataContractStandard) -> dict[str, Any]:
@@ -284,7 +354,9 @@ def _strip_descriptive_keys(value: Any, *, level: int) -> Any:
             cleaned[key] = _strip_descriptive_keys(item, level=level + 1)
         return cleaned
     if isinstance(value, list):
-        cleaned_items = [_strip_descriptive_keys(item, level=level + 1) for item in value]
+        cleaned_items = [
+            _strip_descriptive_keys(item, level=level + 1) for item in value
+        ]
         return _sort_identity_list(cleaned_items)
     return value
 
@@ -295,7 +367,13 @@ def _sort_identity_list(items: list[Any]) -> list[Any]:
     if all(isinstance(item, dict) and "name" in item for item in items):
         return sorted(items, key=lambda item: str(item.get("name") or ""))
     if all(isinstance(item, dict) and "property" in item for item in items):
-        return sorted(items, key=lambda item: (str(item.get("property") or ""), str(item.get("value") or "")))
+        return sorted(
+            items,
+            key=lambda item: (
+                str(item.get("property") or ""),
+                str(item.get("value") or ""),
+            ),
+        )
     return items
 
 
@@ -310,10 +388,10 @@ def _canonicalize(value: Any) -> Any:
 def _is_deprecated(entity: Any) -> bool:
     value = getattr(entity, "lifecycleStatus", None)
     if value is None:
-        value = lifecycle_from_custom_properties(getattr(entity, "customProperties", None))
+        value = lifecycle_from_custom_properties(
+            getattr(entity, "customProperties", None)
+        )
     return normalize_status(value, default="active") == "deprecated"
-
-
 
 
 def _dedupe(values: list[str]) -> list[str]:

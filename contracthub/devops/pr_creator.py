@@ -5,19 +5,21 @@ import json
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional, Protocol
+from typing import Any, Protocol
 
 import requests
 
 
 class GitProviderConfig(Protocol):
     """Protocol for Git provider configuration."""
+
     pass
 
 
 @dataclass(slots=True)
 class AzureDevOpsConfig:
     """Azure DevOps connection settings."""
+
     organization: str
     project: str
     repository_id: str
@@ -28,6 +30,7 @@ class AzureDevOpsConfig:
 @dataclass(slots=True)
 class GitHubConfig:
     """GitHub connection settings."""
+
     owner: str
     repo: str
     token: str
@@ -35,6 +38,7 @@ class GitHubConfig:
 
 class GitProvider(Protocol):
     """Protocol for Git provider operations."""
+
     def create_pull_request(
         self,
         *,
@@ -43,8 +47,7 @@ class GitProvider(Protocol):
         title: str,
         description: str,
         reviewers: list[str] | None = None,
-    ) -> dict[str, Any]:
-        ...
+    ) -> dict[str, Any]: ...
 
 
 class AzureDevOpsProvider:
@@ -76,7 +79,9 @@ class AzureDevOpsProvider:
         if reviewers:
             payload["reviewers"] = [{"id": reviewer} for reviewer in reviewers]
 
-        response = requests.post(url, headers=self._headers(), data=json.dumps(payload), timeout=30)
+        response = requests.post(
+            url, headers=self._headers(), data=json.dumps(payload), timeout=30
+        )
         if not response.ok:
             raise RuntimeError(
                 f"Failed to create PR in Azure DevOps: status={response.status_code}, body={response.text[:500]}"
@@ -106,7 +111,9 @@ class GitHubProvider:
         reviewers: list[str] | None = None,
     ) -> dict[str, Any]:
         """Create a GitHub pull request via REST API."""
-        url = f"https://api.github.com/repos/{self.config.owner}/{self.config.repo}/pulls"
+        url = (
+            f"https://api.github.com/repos/{self.config.owner}/{self.config.repo}/pulls"
+        )
 
         payload: dict[str, Any] = {
             "title": title,
@@ -115,7 +122,9 @@ class GitHubProvider:
             "body": description,
         }
 
-        response = requests.post(url, headers=self._headers(), data=json.dumps(payload), timeout=30)
+        response = requests.post(
+            url, headers=self._headers(), data=json.dumps(payload), timeout=30
+        )
         if not response.ok:
             raise RuntimeError(
                 f"Failed to create PR in GitHub: status={response.status_code}, body={response.text[:500]}"
@@ -128,7 +137,12 @@ class GitHubProvider:
             if pr_number:
                 reviewers_url = f"{url}/{pr_number}/requested_reviewers"
                 reviewers_payload = {"reviewers": reviewers}
-                requests.post(reviewers_url, headers=self._headers(), data=json.dumps(reviewers_payload), timeout=30)
+                requests.post(
+                    reviewers_url,
+                    headers=self._headers(),
+                    data=json.dumps(reviewers_payload),
+                    timeout=30,
+                )
 
         return pr_data
 
@@ -174,10 +188,14 @@ class PullRequestCreator:
 
         status = self._git(repo, ["status", "--porcelain"], capture_output=True)
         if not status.stdout.strip():
-            return self._git(repo, ["rev-parse", "HEAD"], capture_output=True).stdout.strip()
+            return self._git(
+                repo, ["rev-parse", "HEAD"], capture_output=True
+            ).stdout.strip()
 
         self._git(repo, ["commit", "-m", commit_message])
-        return self._git(repo, ["rev-parse", "HEAD"], capture_output=True).stdout.strip()
+        return self._git(
+            repo, ["rev-parse", "HEAD"], capture_output=True
+        ).stdout.strip()
 
     def create_pull_request(
         self,
@@ -229,25 +247,42 @@ class PullRequestCreator:
         )
 
     @staticmethod
-    def _git(repo: Path, args: list[str], *, capture_output: bool = False) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            ["git", "-C", str(repo), *args],
-            check=True,
-            text=True,
-            capture_output=capture_output,
-        )
+    def _git(
+        repo: Path, args: list[str], *, capture_output: bool = False
+    ) -> subprocess.CompletedProcess[str]:
+        try:
+            return subprocess.run(
+                ["git", "-C", str(repo), *args],
+                check=True,
+                text=True,
+                capture_output=capture_output,
+                timeout=300,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(
+                f"Git command timed out after 300 seconds: {' '.join(exc.cmd)}"
+            ) from exc
 
     def _ensure_branch(self, repo: Path, source_branch: str) -> None:
-        current_branch = self._git(repo, ["rev-parse", "--abbrev-ref", "HEAD"], capture_output=True).stdout.strip()
+        current_branch = self._git(
+            repo, ["rev-parse", "--abbrev-ref", "HEAD"], capture_output=True
+        ).stdout.strip()
         if current_branch == source_branch:
             return
 
-        branch_check = subprocess.run(
-            ["git", "-C", str(repo), "rev-parse", "--verify", source_branch],
-            check=False,
-            text=True,
-            capture_output=True,
-        )
+        try:
+            branch_check = subprocess.run(
+                ["git", "-C", str(repo), "rev-parse", "--verify", source_branch],
+                check=False,
+                text=True,
+                capture_output=True,
+                timeout=300,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(
+                f"Git command timed out after 300 seconds: {' '.join(exc.cmd)}"
+            ) from exc
+
         if branch_check.returncode == 0:
             self._git(repo, ["checkout", source_branch])
             return

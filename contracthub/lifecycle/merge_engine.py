@@ -48,6 +48,7 @@ OdcModel = OpenDataContractStandard
 
 class MergeConflictError(Exception):
     """Raised when a fatal conflict prevents any merge attempt (e.g., retired contract)."""
+
     pass
 
 
@@ -94,7 +95,11 @@ class ContractMergeEngine:
         source_model = _to_odcs_model(base_contract)
         target_model = _to_odcs_model(business_contract)
 
-        LOGGER.info("Starting merge for contract: %s (version: %s)", target_model.id, target_model.version)
+        LOGGER.info(
+            "Starting merge for contract: %s (version: %s)",
+            target_model.id,
+            target_model.version,
+        )
 
         if _is_retired_contract(target_model):
             LOGGER.error("Merge failed: contract %s is retired", target_model.id)
@@ -122,7 +127,12 @@ class ContractMergeEngine:
             source_model=source_model,
             analysis=analysis,
         )
-        LOGGER.info("Successfully merged contract %s. Deprecated %d schemas, %d properties.", target_model.id, len(analysis.deprecated_schemas), len(analysis.deprecated_properties))
+        LOGGER.info(
+            "Successfully merged contract %s. Deprecated %d schemas, %d properties.",
+            target_model.id,
+            len(analysis.deprecated_schemas),
+            len(analysis.deprecated_properties),
+        )
         return MergeResult(contract=merged_model, conflicts=analysis.conflicts)
 
     def detect_conflicts(
@@ -145,10 +155,14 @@ class ContractMergeEngine:
             return analysis
 
         existing_schema = {
-            _schema_object_id(schema): schema for schema in (target_model.schema_ or []) if _schema_object_id(schema)
+            _schema_object_id(schema): schema
+            for schema in (target_model.schema_ or [])
+            if _schema_object_id(schema)
         }
         imported_schema = {
-            _schema_object_id(schema): schema for schema in (source_model.schema_ or []) if _schema_object_id(schema)
+            _schema_object_id(schema): schema
+            for schema in (source_model.schema_ or [])
+            if _schema_object_id(schema)
         }
 
         for schema_id, existing_schema_obj in existing_schema.items():
@@ -179,17 +193,23 @@ class ContractMergeEngine:
 
                 imported_prop = imported_props.get(prop_id)
                 if imported_prop is None:
-                    analysis.deprecated_properties.setdefault(schema_id, set()).add(prop_id)
+                    analysis.deprecated_properties.setdefault(schema_id, set()).add(
+                        prop_id
+                    )
                     continue
                 if _is_draft_or_deprecated(imported_prop):
                     continue
 
                 path = f"schema[{schema_id}].properties[{prop_id}]"
-                analysis.conflicts.extend(self._property_conflicts(path, imported_prop, existing_prop))
+                analysis.conflicts.extend(
+                    self._property_conflicts(path, imported_prop, existing_prop)
+                )
 
         return analysis
 
-    def _property_conflicts(self, path: str, imported_prop: SchemaProperty, existing_prop: SchemaProperty) -> list[MergeConflict]:
+    def _property_conflicts(
+        self, path: str, imported_prop: SchemaProperty, existing_prop: SchemaProperty
+    ) -> list[MergeConflict]:
         conflicts: list[MergeConflict] = []
         imported_logical = imported_prop.logicalType
         existing_logical = existing_prop.logicalType
@@ -206,9 +226,15 @@ class ContractMergeEngine:
                 )
             )
 
-        if _is_decimal_physical_type(imported_physical) and _is_decimal_physical_type(existing_physical):
-            precision_change = _decimal_precision_reduction(imported_physical, existing_physical)
-            scale_change = _decimal_scale_reduction(imported_physical, existing_physical)
+        if _is_decimal_physical_type(imported_physical) and _is_decimal_physical_type(
+            existing_physical
+        ):
+            precision_change = _decimal_precision_reduction(
+                imported_physical, existing_physical
+            )
+            scale_change = _decimal_scale_reduction(
+                imported_physical, existing_physical
+            )
             if precision_change:
                 conflicts.append(
                     MergeConflict(
@@ -266,7 +292,13 @@ class ContractMergeEngine:
         # - schema/quality/customProperties, which are merged separately
         # - root id/version, which stay anchored to the governed contract
         for field_name in OpenDataContractStandard.model_fields:
-            if field_name in {"id", "version", "schema_", "quality", "customProperties"}:
+            if field_name in {
+                "id",
+                "version",
+                "schema_",
+                "quality",
+                "customProperties",
+            }:
                 continue
             source_value = getattr(source_model, field_name, None)
             if source_value is not None:
@@ -300,13 +332,18 @@ class ContractMergeEngine:
         )
         return merged
 
+
 def _merge_schema_objects_models(
     existing_schema: list[SchemaObject],
     imported_schema: list[SchemaObject],
     analysis: MergeAnalysis,
 ) -> list[SchemaObject]:
-    existing_index = {_schema_object_id(obj): obj for obj in existing_schema if _schema_object_id(obj)}
-    imported_index = {_schema_object_id(obj): obj for obj in imported_schema if _schema_object_id(obj)}
+    existing_index = {
+        _schema_object_id(obj): obj for obj in existing_schema if _schema_object_id(obj)
+    }
+    imported_index = {
+        _schema_object_id(obj): obj for obj in imported_schema if _schema_object_id(obj)
+    }
 
     merged_schema: list[SchemaObject] = []
     # All ordering must be identity-based to ensure stable Git diffs.
@@ -323,7 +360,9 @@ def _merge_schema_objects_models(
             _merge_schema_object_models(
                 existing_obj=existing_obj,
                 imported_obj=imported_obj,
-                deprecated_property_ids=analysis.deprecated_properties.get(existing_id, set()),
+                deprecated_property_ids=analysis.deprecated_properties.get(
+                    existing_id, set()
+                ),
             )
         )
 
@@ -350,12 +389,18 @@ def _merge_schema_object_models(
     _copy_if_provided(merged_obj, imported_obj, "logicalType")
     _copy_if_provided(merged_obj, imported_obj, "dataGranularityDescription")
     _copy_if_provided(merged_obj, imported_obj, "description")
-    merged_obj.relationships = deepcopy(imported_obj.relationships) if getattr(imported_obj, "relationships", None) is not None else None
+    merged_obj.relationships = (
+        deepcopy(imported_obj.relationships)
+        if getattr(imported_obj, "relationships", None) is not None
+        else None
+    )
     merged_obj.customProperties = _merge_custom_properties_models(
         existing_obj.customProperties,
         imported_obj.customProperties,
     )
-    merged_obj.quality = _combine_quality_rules_models(existing_obj.quality, imported_obj.quality)
+    merged_obj.quality = _combine_quality_rules_models(
+        existing_obj.quality, imported_obj.quality
+    )
     merged_obj.properties = _merge_properties_models(
         existing_props=existing_obj.properties or [],
         imported_props=imported_obj.properties or [],
@@ -369,8 +414,12 @@ def _merge_properties_models(
     imported_props: list[SchemaProperty],
     deprecated_property_ids: set[str],
 ) -> list[SchemaProperty]:
-    existing_index = {_property_id(prop): prop for prop in existing_props if _property_id(prop)}
-    imported_index = {_property_id(prop): prop for prop in imported_props if _property_id(prop)}
+    existing_index = {
+        _property_id(prop): prop for prop in existing_props if _property_id(prop)
+    }
+    imported_index = {
+        _property_id(prop): prop for prop in imported_props if _property_id(prop)
+    }
 
     merged_props: list[SchemaProperty] = []
     # All ordering must be identity-based to ensure stable Git diffs.
@@ -401,7 +450,9 @@ def _merge_properties_models(
     return merged_props
 
 
-def _merge_matching_property_models(existing_prop: SchemaProperty, imported_prop: SchemaProperty) -> SchemaProperty:
+def _merge_matching_property_models(
+    existing_prop: SchemaProperty, imported_prop: SchemaProperty
+) -> SchemaProperty:
     merged_prop = existing_prop.model_copy(deep=True)
     existing_status = _resolve_lifecycle_status(existing_prop)
 
@@ -415,18 +466,33 @@ def _merge_matching_property_models(existing_prop: SchemaProperty, imported_prop
         )
         merged_prop.customProperties = _merge_custom_properties_models(
             merged_prop.customProperties,
-            [{"property": LIFECYCLE_STATUS_PROPERTY, "value": DEPRECATED_LIFECYCLE_VALUE}],
+            [
+                {
+                    "property": LIFECYCLE_STATUS_PROPERTY,
+                    "value": DEPRECATED_LIFECYCLE_VALUE,
+                }
+            ],
         )
         merged_prop.tags = _add_deprecated_tag(merged_prop.tags)
-        merged_prop.quality = _combine_quality_rules_models(existing_prop.quality, imported_prop.quality)
-        merged_prop.customProperties = _sort_custom_properties(merged_prop.customProperties)
+        merged_prop.quality = _combine_quality_rules_models(
+            existing_prop.quality, imported_prop.quality
+        )
+        merged_prop.customProperties = _sort_custom_properties(
+            merged_prop.customProperties
+        )
         return merged_prop
 
     # Matching-property updates overwrite technical fields from imported source.
     for field_name in PROPERTY_OVERWRITE_FIELDS:
         _copy_if_provided(merged_prop, imported_prop, field_name)
-    merged_prop.relationships = deepcopy(imported_prop.relationships) if getattr(imported_prop, "relationships", None) is not None else None
-    merged_prop.quality = _combine_quality_rules_models(existing_prop.quality, imported_prop.quality)
+    merged_prop.relationships = (
+        deepcopy(imported_prop.relationships)
+        if getattr(imported_prop, "relationships", None) is not None
+        else None
+    )
+    merged_prop.quality = _combine_quality_rules_models(
+        existing_prop.quality, imported_prop.quality
+    )
     merged_prop.customProperties = _sort_custom_properties(merged_prop.customProperties)
     return merged_prop
 
@@ -435,7 +501,13 @@ def _deprecate_schema_model(entity: SchemaObject) -> SchemaObject:
     removed = entity.model_copy(deep=True)
     removed.customProperties = _merge_custom_properties_models(
         removed.customProperties,
-        [REMOVED_FLAG, {"property": LIFECYCLE_STATUS_PROPERTY, "value": DEPRECATED_LIFECYCLE_VALUE}],
+        [
+            REMOVED_FLAG,
+            {
+                "property": LIFECYCLE_STATUS_PROPERTY,
+                "value": DEPRECATED_LIFECYCLE_VALUE,
+            },
+        ],
     )
     removed.tags = _add_deprecated_tag(removed.tags)
     return removed
@@ -443,13 +515,20 @@ def _deprecate_schema_model(entity: SchemaObject) -> SchemaObject:
 
 def _deprecate_property_model(entity: SchemaProperty) -> SchemaProperty:
     removed = entity.model_copy(deep=True)
-    deprecation_date = _custom_property_value(removed.customProperties, "deprecationDate")
+    deprecation_date = _custom_property_value(
+        removed.customProperties, "deprecationDate"
+    )
     deprecation_items: list[dict[str, str]] = [
         REMOVED_FLAG,
         {"property": LIFECYCLE_STATUS_PROPERTY, "value": DEPRECATED_LIFECYCLE_VALUE},
     ]
     if deprecation_date is None:
-        deprecation_items.append({"property": "deprecationDate", "value": datetime.now(timezone.utc).date().isoformat()})
+        deprecation_items.append(
+            {
+                "property": "deprecationDate",
+                "value": datetime.now(timezone.utc).date().isoformat(),
+            }
+        )
     removed.customProperties = _merge_custom_properties_models(
         removed.customProperties,
         deprecation_items,
@@ -465,7 +544,9 @@ def _copy_if_provided(target: Any, source: Any, field_name: str) -> None:
         setattr(target, field_name, deepcopy(source_value))
 
 
-def _sort_custom_properties(custom_properties: list[CustomProperty] | None) -> list[CustomProperty] | None:
+def _sort_custom_properties(
+    custom_properties: list[CustomProperty] | None,
+) -> list[CustomProperty] | None:
     normalized = _normalize_custom_property_models(custom_properties)
     if not normalized:
         return None
@@ -503,7 +584,9 @@ def _is_retired_contract(contract: OdcModel) -> bool:
     status_value = getattr(contract, "status", None)
     if status_value is not None:
         return _normalize_status(status_value, default="draft") == "retired"
-    custom_status = _custom_property_value(getattr(contract, "customProperties", None), LIFECYCLE_STATUS_PROPERTY)
+    custom_status = _custom_property_value(
+        getattr(contract, "customProperties", None), LIFECYCLE_STATUS_PROPERTY
+    )
     if custom_status is None:
         return False
     return _normalize_status(custom_status, default="draft") == "retired"
@@ -518,7 +601,9 @@ def _resolve_lifecycle_status(obj: Any) -> str:
     status_value = getattr(obj, "status", None)
     if status_value is not None:
         return _normalize_status(status_value, default="draft")
-    custom_status = _custom_property_value(getattr(obj, "customProperties", None), LIFECYCLE_STATUS_PROPERTY)
+    custom_status = _custom_property_value(
+        getattr(obj, "customProperties", None), LIFECYCLE_STATUS_PROPERTY
+    )
     if custom_status is not None:
         return _normalize_status(custom_status, default="draft")
     return "draft"
@@ -543,20 +628,29 @@ def _normalize_status(value: Any, *, default: str) -> str:
 
 def _has_removed_flag(custom_properties: Iterable[dict[str, Any]]) -> bool:
     for item in custom_properties:
-        if item.get("property") == REMOVED_FLAG["property"] and str(item.get("value")).lower() == "true":
+        if (
+            item.get("property") == REMOVED_FLAG["property"]
+            and str(item.get("value")).lower() == "true"
+        ):
             return True
     return False
 
 
 def _value_conflict(base_value: Any, business_value: Any) -> bool:
-    return base_value is not None and business_value is not None and base_value != business_value
+    return (
+        base_value is not None
+        and business_value is not None
+        and base_value != business_value
+    )
 
 
 def _is_decimal_physical_type(physical_type: Any) -> bool:
     return _decimal_precision_scale(physical_type) is not None
 
 
-def _decimal_precision_reduction(imported_physical_type: Any, existing_physical_type: Any) -> bool:
+def _decimal_precision_reduction(
+    imported_physical_type: Any, existing_physical_type: Any
+) -> bool:
     imported_ps = _decimal_precision_scale(imported_physical_type)
     existing_ps = _decimal_precision_scale(existing_physical_type)
     if imported_ps is None or existing_ps is None:
@@ -564,7 +658,9 @@ def _decimal_precision_reduction(imported_physical_type: Any, existing_physical_
     return imported_ps[0] < existing_ps[0]
 
 
-def _decimal_scale_reduction(imported_physical_type: Any, existing_physical_type: Any) -> bool:
+def _decimal_scale_reduction(
+    imported_physical_type: Any, existing_physical_type: Any
+) -> bool:
     imported_ps = _decimal_precision_scale(imported_physical_type)
     existing_ps = _decimal_precision_scale(existing_physical_type)
     if imported_ps is None or existing_ps is None:
@@ -576,7 +672,9 @@ def _decimal_precision_scale(physical_type: Any) -> tuple[int, int] | None:
     if not isinstance(physical_type, str):
         return None
 
-    match = re.match(r"\s*decimal\((\d+)\s*,\s*(\d+)\)\s*", physical_type, re.IGNORECASE)
+    match = re.match(
+        r"\s*decimal\((\d+)\s*,\s*(\d+)\)\s*", physical_type, re.IGNORECASE
+    )
     if not match:
         return None
     return int(match.group(1)), int(match.group(2))
@@ -609,7 +707,9 @@ def _combine_quality_rules_models(*rule_sets: Any) -> list[DataQuality] | None:
     return merged or None
 
 
-def _merge_custom_properties_models(existing: Any, imported: Any) -> list[CustomProperty] | None:
+def _merge_custom_properties_models(
+    existing: Any, imported: Any
+) -> list[CustomProperty] | None:
     merged_index: dict[str, CustomProperty] = {}
     unnamed: list[CustomProperty] = []
 
@@ -679,7 +779,9 @@ def _assert_supported_api_version(api_version: Any) -> None:
         raise ValueError("Contract apiVersion must be set and in v3.0.0+ format")
     major, minor = major_minor
     if major < 3:
-        raise ValueError(f"Unsupported apiVersion '{api_version}'. Only v3.0.0 and above are supported")
+        raise ValueError(
+            f"Unsupported apiVersion '{api_version}'. Only v3.0.0 and above are supported"
+        )
 
 
 def _parse_api_major_minor(api_version: Any) -> tuple[int, int] | None:

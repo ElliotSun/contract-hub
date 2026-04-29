@@ -18,7 +18,9 @@ class CIDecision:
     reason: str
 
 
-def evaluate_ci_gate(validation: ValidationReport, policy: PolicyEvaluation) -> CIDecision:
+def evaluate_ci_gate(
+    validation: ValidationReport, policy: PolicyEvaluation
+) -> CIDecision:
     """Evaluate if a contract change can pass CI/CD gates."""
     if not validation.valid:
         return CIDecision(allowed=False, reason="contract_validation_failed")

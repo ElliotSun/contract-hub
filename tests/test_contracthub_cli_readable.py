@@ -16,7 +16,7 @@ def test_cli_import_supports_delta_table_alias(sample_odcs_model, tmp_path, monk
         captured.update(kwargs)
         return sample_odcs_model.model_copy(deep=True)
 
-    monkeypatch.setattr("contracthub.interfaces.cli.DataContract.import_from_source", _fake_import_from_source)
+    monkeypatch.setattr("datacontract.data_contract.DataContract.import_from_source", _fake_import_from_source)
     output_path = tmp_path / "out.yaml"
     monkeypatch.setattr(
         "sys.argv",
@@ -45,7 +45,7 @@ def test_cli_import_supports_delta_ddl_alias(sample_odcs_model, tmp_path, monkey
         captured.update(kwargs)
         return sample_odcs_model.model_copy(deep=True)
 
-    monkeypatch.setattr("contracthub.interfaces.cli.DataContract.import_from_source", _fake_import_from_source)
+    monkeypatch.setattr("datacontract.data_contract.DataContract.import_from_source", _fake_import_from_source)
     output_path = tmp_path / "out.yaml"
     monkeypatch.setattr(
         "sys.argv",
@@ -254,7 +254,7 @@ def test_cli_release_create_prs_outputs_batch_payload(sample_odcs_model, tmp_pat
     )
 
     monkeypatch.setattr(
-        "contracthub.interfaces.cli.create_release_pull_requests_from_manifest",
+        "contracthub.devops.release_workflow.create_release_pull_requests_from_manifest",
         lambda **kwargs: [
             {
                 "promotion": {"contractId": str(base_contract.id), "targetVersion": "1.1.1"},

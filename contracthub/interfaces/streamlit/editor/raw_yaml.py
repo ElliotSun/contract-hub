@@ -5,7 +5,13 @@ from __future__ import annotations
 import streamlit as st
 
 from .contract_model import parse_yaml_payload
-from .state import ensure_selected_field, ensure_selected_schema, sync_contract_inputs, sync_field_inputs, sync_schema_inputs
+from .state import (
+    ensure_selected_field,
+    ensure_selected_schema,
+    sync_contract_inputs,
+    sync_field_inputs,
+    sync_schema_inputs,
+)
 
 
 def apply_raw_yaml(raw_yaml: str) -> None:
@@ -21,7 +27,9 @@ def apply_raw_yaml(raw_yaml: str) -> None:
     st.session_state["contract"] = payload
     st.session_state["editor_baseline_yaml"] = raw_yaml
     st.session_state["editor_raw_yaml"] = raw_yaml
-    st.session_state["editor_notice"] = "Unsafe YAML edits applied to the working contract."
+    st.session_state["editor_notice"] = (
+        "Unsafe YAML edits applied to the working contract."
+    )
     st.session_state["editor_warning"] = None
     st.session_state["editor_error"] = None
     ensure_selected_schema(payload)

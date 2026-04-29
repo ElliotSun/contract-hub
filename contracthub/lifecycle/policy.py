@@ -6,7 +6,11 @@ from dataclasses import dataclass, field
 from typing import Any
 
 LOGGER = logging.getLogger(__name__)
-from open_data_contract_standard.model import CustomProperty, OpenDataContractStandard, SchemaObject, SchemaProperty
+from open_data_contract_standard.model import (
+    OpenDataContractStandard,
+    SchemaObject,
+    SchemaProperty,
+)
 from contracthub.lifecycle.helpers import (
     decimal_precision_reduction,
     decimal_scale_reduction,
@@ -53,7 +57,9 @@ def evaluate_merge_policy(
 
     if _root_id_changed(base_contract, merged_contract):
         id_violation = True
-        LOGGER.warning("Policy violation: Root ID changed in contract %s", base_contract.id)
+        LOGGER.warning(
+            "Policy violation: Root ID changed in contract %s", base_contract.id
+        )
         breaks.append(
             BreakingChange(
                 path="id",
@@ -63,7 +69,9 @@ def evaluate_merge_policy(
 
     if _root_version_changed(base_contract, merged_contract):
         version_violation = True
-        LOGGER.warning("Policy violation: Root version changed in contract %s", base_contract.id)
+        LOGGER.warning(
+            "Policy violation: Root version changed in contract %s", base_contract.id
+        )
         breaks.append(
             BreakingChange(
                 path="version",
@@ -83,7 +91,12 @@ def evaluate_merge_policy(
 
         target_schema = merged_schema_index.get(schema_key)
         if target_schema is None:
-            breaks.append(BreakingChange(path=f"schema[{schema_key}]", message="Schema removed from active contract"))
+            breaks.append(
+                BreakingChange(
+                    path=f"schema[{schema_key}]",
+                    message="Schema removed from active contract",
+                )
+            )
             continue
 
         base_props = _prop_index(schema)
@@ -96,7 +109,7 @@ def evaluate_merge_policy(
                 breaks.append(
                     BreakingChange(
                         path=f"schema[{schema_key}].relationships",
-                        message=f"Relationship '{rel_hash}' removed from active lifecycle scope. Downstream joins may fail."
+                        message=f"Relationship '{rel_hash}' removed from active lifecycle scope. Downstream joins may fail.",
                     )
                 )
         for prop_key, base_prop in base_props.items():
@@ -121,9 +134,16 @@ def evaluate_merge_policy(
             )
 
     if breaks:
-        LOGGER.info("Policy evaluation found %d breaking changes for contract %s", len(breaks), base_contract.id)
+        LOGGER.info(
+            "Policy evaluation found %d breaking changes for contract %s",
+            len(breaks),
+            base_contract.id,
+        )
     else:
-        LOGGER.debug("Policy evaluation passed with no breaking changes for contract %s", base_contract.id)
+        LOGGER.debug(
+            "Policy evaluation passed with no breaking changes for contract %s",
+            base_contract.id,
+        )
 
     return PolicyEvaluation(
         valid=not breaks,
@@ -185,7 +205,9 @@ def _prop_index(schema: SchemaObject) -> dict[str, SchemaProperty]:
 def _is_draft_or_deprecated(entity: SchemaObject | SchemaProperty) -> bool:
     value = getattr(entity, "lifecycleStatus", None)
     if value is None:
-        value = lifecycle_from_custom_properties(getattr(entity, "customProperties", None))
+        value = lifecycle_from_custom_properties(
+            getattr(entity, "customProperties", None)
+        )
     lifecycle_status = normalize_status(value, default="active")
     return lifecycle_status in {"draft", "deprecated"}
 
@@ -199,7 +221,11 @@ def _property_breaking_changes(
 
     base_logical = base_prop.logicalType
     target_logical = target_prop.logicalType
-    if base_logical is not None and target_logical is not None and str(base_logical) != str(target_logical):
+    if (
+        base_logical is not None
+        and target_logical is not None
+        and str(base_logical) != str(target_logical)
+    ):
         breaks.append(
             BreakingChange(
                 path=f"{path}.logicalType",
@@ -218,9 +244,9 @@ def _property_breaking_changes(
             )
         )
 
-    if decimal_precision_reduction(target_physical, base_physical) or decimal_scale_reduction(
+    if decimal_precision_reduction(
         target_physical, base_physical
-    ):
+    ) or decimal_scale_reduction(target_physical, base_physical):
         breaks.append(
             BreakingChange(
                 path=f"{path}.physicalType",
@@ -322,9 +348,9 @@ def _enum_values(prop: SchemaProperty) -> set[str]:
     return set()
 
 
-
-
-def _extract_relationship_hashes(schema: SchemaObject, schema_properties: dict[str, SchemaProperty]) -> set[str]:
+def _extract_relationship_hashes(
+    schema: SchemaObject, schema_properties: dict[str, SchemaProperty]
+) -> set[str]:
     hashes = set()
 
     # 1. Schema-level relationships

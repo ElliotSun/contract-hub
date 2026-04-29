@@ -72,7 +72,9 @@ class SparkSqlContractExporter:
         if bool(unity_catalog) != bool(unity_schema):
             raise ValueError("unity_catalog and unity_schema must be provided together")
         if (unity_catalog or unity_schema) and sql_server_type != "databricks":
-            raise ValueError("unity_catalog and unity_schema are only supported for sql_server_type=databricks")
+            raise ValueError(
+                "unity_catalog and unity_schema are only supported for sql_server_type=databricks"
+            )
 
         contract_model = _load_contract_model(contract)
         prepared_contract = _prepare_for_sql_export(
@@ -104,8 +106,12 @@ class SparkSqlContractExporter:
         if sql_server_type != "databricks":
             return ddl
 
-        table_prefix = f"{unity_catalog}.{unity_schema}." if unity_catalog and unity_schema else ""
-        return _append_databricks_quality_constraints(ddl, prepared_contract, table_prefix=table_prefix)
+        table_prefix = (
+            f"{unity_catalog}.{unity_schema}." if unity_catalog and unity_schema else ""
+        )
+        return _append_databricks_quality_constraints(
+            ddl, prepared_contract, table_prefix=table_prefix
+        )
 
 
 def export_contract_to_spark_sql(
@@ -137,7 +143,9 @@ def _prepare_for_sql_export(
     *,
     use_physical_names: bool,
 ) -> OpenDataContractStandard:
-    prepared = OpenDataContractStandard.model_validate(contract.model_dump(by_alias=True, exclude_none=True))
+    prepared = OpenDataContractStandard.model_validate(
+        contract.model_dump(by_alias=True, exclude_none=True)
+    )
 
     for schema_obj in prepared.schema_ or []:
         if use_physical_names and schema_obj.physicalName:
@@ -210,7 +218,9 @@ def _append_databricks_quality_constraints(
     table_prefix: str,
 ) -> str:
     """Append supported Databricks constraint statements to base DDL."""
-    statements = _collect_databricks_quality_constraints(contract, table_prefix=table_prefix)
+    statements = _collect_databricks_quality_constraints(
+        contract, table_prefix=table_prefix
+    )
     if not statements:
         return ddl
     suffix = "\n\n".join(statements)
@@ -229,7 +239,9 @@ def _collect_databricks_quality_constraints(
     for schema_obj in contract.schema_ or []:
         table_name = f"{table_prefix}{schema_obj.name}"
         for prop in schema_obj.properties or []:
-            for statement in _property_quality_constraints_sql(schema_obj, prop, table_name):
+            for statement in _property_quality_constraints_sql(
+                schema_obj, prop, table_name
+            ):
                 if statement in seen:
                     continue
                 seen.add(statement)
@@ -267,7 +279,9 @@ def _property_quality_constraints_sql(
         pattern = arguments.get("pattern")
 
         if isinstance(valid_values, list) and valid_values:
-            constraint_name = _constraint_name(schema_obj.name, prop.name, "valid_values")
+            constraint_name = _constraint_name(
+                schema_obj.name, prop.name, "valid_values"
+            )
             values_sql = ", ".join(_sql_literal(value) for value in valid_values)
             statements.append(
                 f"ALTER TABLE {table_name}\n"

@@ -29,7 +29,9 @@ def allows_breaking_changes(entity: Any) -> bool:
     """Return True when entity lifecycle status permits non-breaking updates only."""
     value = getattr(entity, "lifecycleStatus", None)
     if value is None:
-        value = lifecycle_from_custom_properties(getattr(entity, "customProperties", None))
+        value = lifecycle_from_custom_properties(
+            getattr(entity, "customProperties", None)
+        )
     lifecycle_status = normalize_status(value, default="active")
     return lifecycle_status not in NON_BREAKING_LIFECYCLE_STATUSES
 
@@ -67,7 +69,10 @@ _lifecycle_from_custom_properties = lifecycle_from_custom_properties
 # Decimal precision / scale comparison helpers
 # ---------------------------------------------------------------------------
 
-def decimal_precision_reduction(imported_physical_type: Any, existing_physical_type: Any) -> bool:
+
+def decimal_precision_reduction(
+    imported_physical_type: Any, existing_physical_type: Any
+) -> bool:
     """Return True when the imported decimal precision is narrower than existing."""
     imported_ps = _decimal_precision_scale(imported_physical_type)
     existing_ps = _decimal_precision_scale(existing_physical_type)
@@ -76,7 +81,9 @@ def decimal_precision_reduction(imported_physical_type: Any, existing_physical_t
     return imported_ps[0] < existing_ps[0]
 
 
-def decimal_scale_reduction(imported_physical_type: Any, existing_physical_type: Any) -> bool:
+def decimal_scale_reduction(
+    imported_physical_type: Any, existing_physical_type: Any
+) -> bool:
     """Return True when the imported decimal scale is narrower than existing."""
     imported_ps = _decimal_precision_scale(imported_physical_type)
     existing_ps = _decimal_precision_scale(existing_physical_type)
@@ -88,7 +95,9 @@ def decimal_scale_reduction(imported_physical_type: Any, existing_physical_type:
 def _decimal_precision_scale(physical_type: Any) -> tuple[int, int] | None:
     if not isinstance(physical_type, str):
         return None
-    match = re.match(r"\s*decimal\((\d+)\s*,\s*(\d+)\)\s*", physical_type, re.IGNORECASE)
+    match = re.match(
+        r"\s*decimal\((\d+)\s*,\s*(\d+)\)\s*", physical_type, re.IGNORECASE
+    )
     if not match:
         return None
     return int(match.group(1)), int(match.group(2))

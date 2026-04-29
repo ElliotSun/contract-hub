@@ -4,7 +4,12 @@ from dataclasses import dataclass, field
 from typing import Any, Iterable
 from pathlib import Path
 
-from open_data_contract_standard.model import DataQuality, OpenDataContractStandard, SchemaObject, SchemaProperty
+from open_data_contract_standard.model import (
+    DataQuality,
+    OpenDataContractStandard,
+    SchemaObject,
+    SchemaProperty,
+)
 
 from contracthub.utils.schema_utils import contract_to_model
 
@@ -30,7 +35,9 @@ class ValidationReport:
 class ContractValidator:
     """Validate ODCS schema structure and quality rule completeness."""
 
-    def validate(self, contract_input: OpenDataContractStandard | dict[str, Any] | str | Path) -> ValidationReport:
+    def validate(
+        self, contract_input: OpenDataContractStandard | dict[str, Any] | str | Path
+    ) -> ValidationReport:
         from datacontract.data_contract import DataContract
         from pydantic import ValidationError
 
@@ -43,9 +50,13 @@ class ContractValidator:
         except ValidationError as e:
             for error in e.errors():
                 loc = ".".join(str(p) for p in error["loc"])
-                issues.append(ValidationIssue(path=loc, message=error["msg"], severity="error"))
+                issues.append(
+                    ValidationIssue(path=loc, message=error["msg"], severity="error")
+                )
         except Exception as e:
-            issues.append(ValidationIssue(path="pydantic", message=str(e), severity="error"))
+            issues.append(
+                ValidationIssue(path="pydantic", message=str(e), severity="error")
+            )
 
         if not contract:
             return ValidationReport(valid=False, issues=issues)
@@ -74,20 +85,28 @@ class ContractValidator:
 
         return ValidationReport(valid=not issues, issues=issues)
 
-    def _validate_schema_object(self, schema_idx: int, schema_obj: SchemaObject) -> list[ValidationIssue]:
+    def _validate_schema_object(
+        self, schema_idx: int, schema_obj: SchemaObject
+    ) -> list[ValidationIssue]:
         issues: list[ValidationIssue] = []
         path = f"schema[{schema_idx}]"
 
         if schema_obj.properties:
             for prop_idx, prop in enumerate(schema_obj.properties):
-                issues.extend(self._validate_property(f"{path}.properties[{prop_idx}]", prop))
+                issues.extend(
+                    self._validate_property(f"{path}.properties[{prop_idx}]", prop)
+                )
 
         if schema_obj.quality:
-            issues.extend(self._validate_quality_rules(f"{path}.quality", schema_obj.quality))
+            issues.extend(
+                self._validate_quality_rules(f"{path}.quality", schema_obj.quality)
+            )
 
         return issues
 
-    def _validate_property(self, path: str, prop: SchemaProperty) -> list[ValidationIssue]:
+    def _validate_property(
+        self, path: str, prop: SchemaProperty
+    ) -> list[ValidationIssue]:
         issues: list[ValidationIssue] = []
 
         if prop.quality:
@@ -95,26 +114,36 @@ class ContractValidator:
 
         if prop.properties:
             for idx, nested_prop in enumerate(prop.properties):
-                issues.extend(self._validate_property(f"{path}.properties[{idx}]", nested_prop))
+                issues.extend(
+                    self._validate_property(f"{path}.properties[{idx}]", nested_prop)
+                )
 
         if prop.items:
             issues.extend(self._validate_property(f"{path}.items", prop.items))
 
         return issues
 
-    def _validate_quality_rules(self, path: str, rules: Iterable[DataQuality | None]) -> list[ValidationIssue]:
+    def _validate_quality_rules(
+        self, path: str, rules: Iterable[DataQuality | None]
+    ) -> list[ValidationIssue]:
         issues: list[ValidationIssue] = []
 
         for idx, rule in enumerate(rules):
             if rule is None:
-                issues.append(ValidationIssue(path=f"{path}[{idx}]", message="Quality rule must not be null"))
+                issues.append(
+                    ValidationIssue(
+                        path=f"{path}[{idx}]", message="Quality rule must not be null"
+                    )
+                )
                 continue
 
             issues.extend(self._validate_quality_rule(f"{path}[{idx}]", rule))
 
         return issues
 
-    def _validate_quality_rule(self, path: str, rule: DataQuality) -> list[ValidationIssue]:
+    def _validate_quality_rule(
+        self, path: str, rule: DataQuality
+    ) -> list[ValidationIssue]:
         issues: list[ValidationIssue] = []
         rule_type = self._quality_rule_type(rule)
 
@@ -130,10 +159,21 @@ class ContractValidator:
         if rule_type == "library":
             metric = str(rule.metric or rule.rule or "").strip()
             if not metric:
-                issues.append(ValidationIssue(path=f"{path}.metric", message="Library quality rule metric is required"))
+                issues.append(
+                    ValidationIssue(
+                        path=f"{path}.metric",
+                        message="Library quality rule metric is required",
+                    )
+                )
                 return issues
 
-            if metric not in {"nullValues", "missingValues", "invalidValues", "duplicateValues", "rowCount"}:
+            if metric not in {
+                "nullValues",
+                "missingValues",
+                "invalidValues",
+                "duplicateValues",
+                "rowCount",
+            }:
                 issues.append(
                     ValidationIssue(
                         path=f"{path}.metric",
@@ -150,7 +190,9 @@ class ContractValidator:
                 )
 
             arguments = rule.arguments
-            if metric == "missingValues" and not self._argument_value(arguments, "missingValues"):
+            if metric == "missingValues" and not self._argument_value(
+                arguments, "missingValues"
+            ):
                 issues.append(
                     ValidationIssue(
                         path=f"{path}.arguments.missingValues",
@@ -158,7 +200,8 @@ class ContractValidator:
                     )
                 )
             if metric == "invalidValues" and not (
-                self._argument_value(arguments, "validValues") or self._argument_value(arguments, "pattern")
+                self._argument_value(arguments, "validValues")
+                or self._argument_value(arguments, "pattern")
             ):
                 issues.append(
                     ValidationIssue(
@@ -166,7 +209,11 @@ class ContractValidator:
                         message="invalidValues metric requires arguments.validValues or arguments.pattern",
                     )
                 )
-            if metric == "duplicateValues" and path.startswith("schema[") and ".properties[" not in path:
+            if (
+                metric == "duplicateValues"
+                and path.startswith("schema[")
+                and ".properties[" not in path
+            ):
                 if not self._argument_value(arguments, "properties"):
                     issues.append(
                         ValidationIssue(
@@ -177,11 +224,21 @@ class ContractValidator:
 
         elif rule_type == "text":
             if not str(rule.description or "").strip():
-                issues.append(ValidationIssue(path=f"{path}.description", message="Text quality rule description is required"))
+                issues.append(
+                    ValidationIssue(
+                        path=f"{path}.description",
+                        message="Text quality rule description is required",
+                    )
+                )
 
         elif rule_type == "sql":
             if not str(rule.query or "").strip():
-                issues.append(ValidationIssue(path=f"{path}.query", message="SQL quality rule query is required"))
+                issues.append(
+                    ValidationIssue(
+                        path=f"{path}.query",
+                        message="SQL quality rule query is required",
+                    )
+                )
             if not self._has_comparison(rule):
                 issues.append(
                     ValidationIssue(
@@ -192,7 +249,12 @@ class ContractValidator:
 
         elif rule_type == "custom":
             if not str(rule.engine or "").strip():
-                issues.append(ValidationIssue(path=f"{path}.engine", message="Custom quality rule engine is required"))
+                issues.append(
+                    ValidationIssue(
+                        path=f"{path}.engine",
+                        message="Custom quality rule engine is required",
+                    )
+                )
             if not str(rule.implementation or "").strip():
                 issues.append(
                     ValidationIssue(
@@ -232,12 +294,16 @@ class ContractValidator:
         return arguments.get(key)
 
 
-def validate(contract_input: OpenDataContractStandard | dict[str, Any] | str | Path) -> ValidationReport:
+def validate(
+    contract_input: OpenDataContractStandard | dict[str, Any] | str | Path,
+) -> ValidationReport:
     """Validate a contract input using the shared ContractValidator."""
     return ContractValidator().validate(contract_input)
 
 
-def _normalize_contract(contract_input: OpenDataContractStandard | dict[str, Any] | str | Path) -> OpenDataContractStandard:
+def _normalize_contract(
+    contract_input: OpenDataContractStandard | dict[str, Any] | str | Path,
+) -> OpenDataContractStandard:
     """Normalize supported validator inputs into the canonical ODCS model."""
     if isinstance(contract_input, dict):
         return OpenDataContractStandard.model_validate(contract_input)

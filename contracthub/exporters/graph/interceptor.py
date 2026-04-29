@@ -3,8 +3,11 @@ from typing import List
 from open_data_contract_standard.model import OpenDataContractStandard
 from contracthub.exporters.graph_exporter import GraphNode
 
+
 class SovereigntyInterceptor:
-    def intercept(self, contract: OpenDataContractStandard, nodes: List[GraphNode]) -> None:
+    def intercept(
+        self, contract: OpenDataContractStandard, nodes: List[GraphNode]
+    ) -> None:
         """
         Mutates GraphNode objects in-place to redact `example_value` if the node represents a PII column.
         In the new GraphExporter design, `is_pii` is evaluated upfront and injected directly into the `Column` node's properties.

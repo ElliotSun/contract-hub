@@ -1,4 +1,7 @@
-from contracthub.quality.ge_exporter import GreatExpectationsExporter, generate_expectation_suite
+from contracthub.quality.ge_exporter import (
+    GreatExpectationsExporter,
+    generate_expectation_suite,
+)
 from contracthub.quality.validation import (
     create_spark_validator,
     format_validation_result,
