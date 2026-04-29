@@ -11,7 +11,7 @@ def test_export_ge_handles_missing_pyspark_gracefully(monkeypatch):
             )
 
     monkeypatch.setattr(
-        "contracthub.interfaces.cli.GreatExpectationsExporter", lambda: FakeExporter()
+        "contracthub.quality.ge_exporter.GreatExpectationsExporter", lambda: FakeExporter()
     )
 
     test_args = [

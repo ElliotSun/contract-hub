@@ -4,12 +4,24 @@ import logging
 from copy import deepcopy
 from typing import Any
 
-from open_data_contract_standard.model import OpenDataContractStandard, SchemaObject, SchemaProperty
+from open_data_contract_standard.model import (
+    OpenDataContractStandard,
+    SchemaObject,
+    SchemaProperty,
+)
 
 LOGGER = logging.getLogger(__name__)
 
-from contracthub.constants import EDITABLE_PROPERTY_FIELDS, EDITABLE_SCHEMA_FIELDS, READ_ONLY_CONTRACT_FIELDS
-from contracthub.utils.schema_utils import contract_to_dict, contract_to_model, ensure_schema_key
+from contracthub.constants import (
+    EDITABLE_PROPERTY_FIELDS,
+    EDITABLE_SCHEMA_FIELDS,
+    READ_ONLY_CONTRACT_FIELDS,
+)
+from contracthub.utils.schema_utils import (
+    contract_to_dict,
+    contract_to_model,
+    ensure_schema_key,
+)
 
 
 def normalize_draft_contract(
@@ -69,7 +81,11 @@ def _preserve_schema_and_property_fields(
             continue
 
         main_schema_model, main_schema_payload = matched
-        normalized_schemas.append(_preserve_schema_fields(draft_schema, main_schema_model, main_schema_payload))
+        normalized_schemas.append(
+            _preserve_schema_fields(
+                draft_schema, main_schema_model, main_schema_payload
+            )
+        )
 
     draft_contract[schema_key] = normalized_schemas
 
@@ -94,7 +110,9 @@ def _preserve_schema_fields(
     draft_properties = normalized.get("properties")
     main_properties = main_schema_payload.get("properties")
     if isinstance(draft_properties, list) and isinstance(main_properties, list):
-        main_property_lookup = _property_lookup(main_schema.properties or [], main_properties)
+        main_property_lookup = _property_lookup(
+            main_schema.properties or [], main_properties
+        )
         normalized_properties: list[Any] = []
         for draft_property in draft_properties:
             if not isinstance(draft_property, dict):
@@ -109,7 +127,9 @@ def _preserve_schema_fields(
 
             main_property_model, main_property_payload = matched
             normalized_properties.append(
-                _preserve_property_fields(draft_property, main_property_model, main_property_payload)
+                _preserve_property_fields(
+                    draft_property, main_property_model, main_property_payload
+                )
             )
         normalized["properties"] = normalized_properties
 
@@ -150,14 +170,24 @@ def _preserve_property_fields(
                 continue
 
             main_child_model, main_child_payload = matched
-            normalized_children.append(_preserve_property_fields(draft_child, main_child_model, main_child_payload))
+            normalized_children.append(
+                _preserve_property_fields(
+                    draft_child, main_child_model, main_child_payload
+                )
+            )
         normalized["properties"] = normalized_children
 
     draft_items = normalized.get("items")
     main_items = main_property.items
     main_items_payload = main_property_payload.get("items")
-    if isinstance(draft_items, dict) and isinstance(main_items, SchemaProperty) and isinstance(main_items_payload, dict):
-        normalized["items"] = _preserve_property_fields(draft_items, main_items, main_items_payload)
+    if (
+        isinstance(draft_items, dict)
+        and isinstance(main_items, SchemaProperty)
+        and isinstance(main_items_payload, dict)
+    ):
+        normalized["items"] = _preserve_property_fields(
+            draft_items, main_items, main_items_payload
+        )
 
     return normalized
 
@@ -179,7 +209,9 @@ def _property_lookup(
     property_payloads: list[dict[str, Any]],
 ) -> dict[str, tuple[SchemaProperty, dict[str, Any]]]:
     lookup: dict[str, tuple[SchemaProperty, dict[str, Any]]] = {}
-    for property_model, property_payload in zip(properties, property_payloads, strict=False):
+    for property_model, property_payload in zip(
+        properties, property_payloads, strict=False
+    ):
         property_name = _property_name(property_model)
         if property_name:
             lookup[property_name] = (property_model, property_payload)

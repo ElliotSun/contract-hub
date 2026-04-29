@@ -5,41 +5,15 @@ from __future__ import annotations
 from typing import Any
 
 from contracthub.constants import BUSINESS_PROPERTY_KEYS, TECHNICAL_PROPERTY_KEYS
-from contracthub.core.editor_rows import (
-    add_field,
-    add_quality_rule,
-    apply_field_detail,
-    apply_quality_rows,
-    apply_quick_field_rows,
-    field_by_name,
-    quality_rows,
-    selected_schema_field_names,
-)
 from contracthub.core.editor_semantics import (
-    contract_api_version,
-    contract_data_product,
-    contract_description_part,
-    contract_domain,
-    contract_id,
-    contract_kind,
-    contract_name,
-    contract_status,
-    contract_tags,
-    contract_tenant,
-    contract_version,
-    field_option_label,
-    field_examples_text,
     field_lifecycle_status,
     field_type,
-    normalize_tags,
-    schema_label,
     schema_items,
-    server_items,
-    server_label,
-    set_contract_description_part,
-    set_contract_tags_list,
 )
-from contracthub.interfaces.streamlit.services.contract_service import parse_contract_yaml, serialize_contract_yaml
+from contracthub.interfaces.streamlit.services.contract_service import (
+    parse_contract_yaml,
+    serialize_contract_yaml,
+)
 
 
 def parse_yaml_payload(source_yaml: str) -> dict[str, Any]:
@@ -68,7 +42,9 @@ def is_business_property_key(key: str) -> bool:
 def is_technical_editor_column(column: str) -> bool:
     """Map editor column names to ODCS technical attributes."""
     if column == "type":
-        return is_technical_property_key("logicalType") or is_technical_property_key("physicalType")
+        return is_technical_property_key("logicalType") or is_technical_property_key(
+            "physicalType"
+        )
     return is_technical_property_key(column)
 
 

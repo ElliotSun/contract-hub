@@ -17,5 +17,7 @@ def create_app() -> Any:
 
     st.set_page_config(page_title="ContractHub", layout="wide")
     st.title("ContractHub")
-    st.info("UI module scaffold is in place. Implement contract editing workflows here.")
+    st.info(
+        "UI module scaffold is in place. Implement contract editing workflows here."
+    )
     return st

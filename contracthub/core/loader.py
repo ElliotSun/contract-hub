@@ -143,7 +143,9 @@ def list_adls2_paths(root_path: str) -> list[str]:
 
     filesystem_client = _create_adls2_filesystem_client(root_path)
     discovered: list[str] = []
-    for entry in filesystem_client.get_paths(path=parsed_root["relative_path"] or None, recursive=True):
+    for entry in filesystem_client.get_paths(
+        path=parsed_root["relative_path"] or None, recursive=True
+    ):
         entry_name = str(getattr(entry, "name", "") or "")
         if not entry_name or bool(getattr(entry, "is_directory", False)):
             continue
@@ -169,7 +171,9 @@ def _read_with_mssparkutils(contract_path: str) -> Optional[str]:
         except TypeError:
             text = fs.head(contract_path, DEFAULT_SPARKUTILS_MAX_BYTES)
         if isinstance(text, str) and text.strip():
-            LOGGER.debug("Loaded contract via mssparkutils.fs.head from %s", contract_path)
+            LOGGER.debug(
+                "Loaded contract via mssparkutils.fs.head from %s", contract_path
+            )
             return text
 
     return None
@@ -257,7 +261,9 @@ def _import_azure_datalake_sdk() -> dict[str, Any]:
     }
 
 
-def _resolve_runtime_context(runtime_context: RuntimeContext | str | None) -> RuntimeContext:
+def _resolve_runtime_context(
+    runtime_context: RuntimeContext | str | None,
+) -> RuntimeContext:
     """Normalize runtime_context for notebook-aware reads."""
     candidate = runtime_context or os.getenv("CONTRACTHUB_RUNTIME_CONTEXT", "auto")
     normalized = str(candidate).strip().lower()
@@ -300,7 +306,9 @@ def is_adls2_path(path: str) -> bool:
     parsed = urlparse(path)
     if parsed.scheme in {"abfs", "abfss"}:
         return True
-    if parsed.scheme in {"https", "http"} and parsed.netloc.endswith(".dfs.core.windows.net"):
+    if parsed.scheme in {"https", "http"} and parsed.netloc.endswith(
+        ".dfs.core.windows.net"
+    ):
         return True
     return False
 
@@ -314,7 +322,9 @@ def _adls2_to_https_url(contract_path: str) -> str:
         raise ValueError(f"Unsupported ADLS2 URI scheme: {parsed.scheme}")
 
     if "@" not in parsed.netloc:
-        raise ValueError("ADLS2 URI must be in format abfss://<container>@<account>.dfs.core.windows.net/<path>")
+        raise ValueError(
+            "ADLS2 URI must be in format abfss://<container>@<account>.dfs.core.windows.net/<path>"
+        )
 
     container, account_host = parsed.netloc.split("@", 1)
     relative_path = parsed.path.lstrip("/")
@@ -327,10 +337,14 @@ def _parse_adls2_path(contract_path: str) -> dict[str, str]:
     parsed = urlparse(contract_path)
     if parsed.scheme in {"abfs", "abfss"}:
         if "@" not in parsed.netloc:
-            raise ValueError("ADLS2 URI must be in format abfss://<container>@<account>.dfs.core.windows.net/<path>")
+            raise ValueError(
+                "ADLS2 URI must be in format abfss://<container>@<account>.dfs.core.windows.net/<path>"
+            )
         filesystem, account_host = parsed.netloc.split("@", 1)
         relative_path = parsed.path.lstrip("/")
-    elif parsed.scheme in {"http", "https"} and parsed.netloc.endswith(".dfs.core.windows.net"):
+    elif parsed.scheme in {"http", "https"} and parsed.netloc.endswith(
+        ".dfs.core.windows.net"
+    ):
         path_parts = parsed.path.lstrip("/").split("/", 1)
         if not path_parts or not path_parts[0]:
             raise ValueError("ADLS2 HTTPS URI must include the filesystem path segment")
@@ -379,6 +393,6 @@ class _StaticBearerTokenCredential:
 
     def get_token(self, *scopes: str, **kwargs: Any) -> Any:  # noqa: ARG002
         import time
+
         expires_on = int(time.time()) + self._DEFAULT_TTL_SECONDS
         return self._access_token_cls(self._token, expires_on)
-

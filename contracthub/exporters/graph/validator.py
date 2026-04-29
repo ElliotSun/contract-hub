@@ -6,9 +6,12 @@ from contracthub.exporters.graph_exporter import GraphNode, GraphEdge
 
 logger = logging.getLogger(__name__)
 
+
 class TopologyValidationError(Exception):
     """Exception raised when topology validation fails."""
+
     pass
+
 
 @dataclass
 class GraphValidationReport:
@@ -17,15 +20,20 @@ class GraphValidationReport:
     multiple_inbound_edges: List[str] = field(default_factory=list)
     island_tables: List[str] = field(default_factory=list)
 
+
 class TopologyValidator:
-    def validate(self, nodes: List[GraphNode], edges: List[GraphEdge]) -> GraphValidationReport:
+    def validate(
+        self, nodes: List[GraphNode], edges: List[GraphEdge]
+    ) -> GraphValidationReport:
         report = GraphValidationReport(is_valid=True)
 
         column_nodes = {node.id: node for node in nodes if node.type == "Column"}
         table_nodes = {node.id: node for node in nodes if node.type == "Table"}
 
         # Track inbound HAS_COLUMN edges count per column
-        has_column_inbound_counts: Dict[str, int] = {col_id: 0 for col_id in column_nodes}
+        has_column_inbound_counts: Dict[str, int] = {
+            col_id: 0 for col_id in column_nodes
+        }
 
         # Track semantic table-to-table edges
         table_connections: Dict[str, int] = {node_id: 0 for node_id in table_nodes}
@@ -52,7 +60,9 @@ class TopologyValidator:
         for table_id, count in table_connections.items():
             if count == 0:
                 report.island_tables.append(table_id)
-                logger.warning(f"Table node '{table_id}' is acting as an absolute island (zero semantic edges to other tables).")
+                logger.warning(
+                    f"Table node '{table_id}' is acting as an absolute island (zero semantic edges to other tables)."
+                )
 
         if not report.is_valid:
             err_msg = "Graph topology validation failed."

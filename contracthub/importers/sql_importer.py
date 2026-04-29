@@ -17,6 +17,7 @@ from open_data_contract_standard.model import (
 )
 from sqlglot import expressions as exp
 
+
 class SQLFolderImporter(Importer):
     """Datacontract-compatible importer for SQL folders (one table per file)."""
 
@@ -35,16 +36,24 @@ class SQLFolderImporter(Importer):
         schema_objects: List[SchemaObject] = []
 
         for sql_file in sql_files:
-            logging.getLogger("SQLFolderImporter").info("Parsing SQL file: %s", sql_file)
-            sql_text = upstream_sql_importer.remove_variable_tokens(sql_file.read_text(encoding="utf-8"))
+            logging.getLogger("SQLFolderImporter").info(
+                "Parsing SQL file: %s", sql_file
+            )
+            sql_text = upstream_sql_importer.remove_variable_tokens(
+                sql_file.read_text(encoding="utf-8")
+            )
             statements = sqlglot.parse(sql_text, read=dialect)
             for statement in statements:
-                schema_object = _create_schema_object_from_statement(statement, dialect=dialect)
+                schema_object = _create_schema_object_from_statement(
+                    statement, dialect=dialect
+                )
                 if schema_object is not None:
                     schema_objects.append(schema_object)
 
         if not schema_objects:
-            raise ValueError(f"No CREATE TABLE statements found under folder: {folder_path}")
+            raise ValueError(
+                f"No CREATE TABLE statements found under folder: {folder_path}"
+            )
 
         contract_model = OpenDataContractStandard(
             apiVersion="v3.1.0",
@@ -54,7 +63,9 @@ class SQLFolderImporter(Importer):
             version="1.0.0",
             status="draft",
             schema=schema_objects,
-            customProperties=[CustomProperty(property="contracthub.source", value=self.import_format)],
+            customProperties=[
+                CustomProperty(property="contracthub.source", value=self.import_format)
+            ],
         )
         return contract_model
 
@@ -69,7 +80,9 @@ def _resolve_sql_dialect(import_args: dict | None) -> Any:
     return parsed_dialect or "spark"
 
 
-def _create_schema_object_from_statement(statement: exp.Expression, *, dialect: Any) -> Optional[SchemaObject]:
+def _create_schema_object_from_statement(
+    statement: exp.Expression, *, dialect: Any
+) -> Optional[SchemaObject]:
     if not isinstance(statement, exp.Create):
         return None
     if str(statement.args.get("kind") or "").upper() != "TABLE":
@@ -79,14 +92,21 @@ def _create_schema_object_from_statement(statement: exp.Expression, *, dialect: 
     if table_expression is None:
         return None
 
-    table_name, table_physical_name = _get_table_name_info(table_expression, dialect=dialect)
+    table_name, table_physical_name = _get_table_name_info(
+        table_expression, dialect=dialect
+    )
     if not table_name:
         return None
 
-    table_description, table_physical_type, table_custom_properties, partition_positions = _extract_table_metadata(
-        statement
+    (
+        table_description,
+        table_physical_type,
+        table_custom_properties,
+        partition_positions,
+    ) = _extract_table_metadata(statement)
+    primary_key_positions, unique_columns = _extract_key_constraints(
+        statement, table_name
     )
-    primary_key_positions, unique_columns = _extract_key_constraints(statement, table_name)
     columns = _extract_columns(
         statement,
         table_name=table_name,
@@ -117,7 +137,9 @@ def _create_schema_object_from_statement(statement: exp.Expression, *, dialect: 
     )
 
 
-def _get_table_name_info(table_expression: exp.Table, *, dialect: Any) -> Tuple[str, str]:
+def _get_table_name_info(
+    table_expression: exp.Table, *, dialect: Any
+) -> Tuple[str, str]:
     logical_name = table_expression.name or ""
     physical_name = table_expression.sql(dialect=dialect)
     return logical_name, physical_name
@@ -138,17 +160,28 @@ def _extract_table_metadata(
     for property_expr in properties.expressions:
         if isinstance(property_expr, exp.ExternalProperty):
             physical_type = "external-table"
-            custom_properties.append(CustomProperty(property="contracthub.table.external", value="true"))
-        elif isinstance(property_expr, exp.SchemaCommentProperty) and property_expr.this is not None:
+            custom_properties.append(
+                CustomProperty(property="contracthub.table.external", value="true")
+            )
+        elif (
+            isinstance(property_expr, exp.SchemaCommentProperty)
+            and property_expr.this is not None
+        ):
             description = str(property_expr.this).strip("'\"")
-        elif isinstance(property_expr, exp.LocationProperty) and property_expr.this is not None:
+        elif (
+            isinstance(property_expr, exp.LocationProperty)
+            and property_expr.this is not None
+        ):
             custom_properties.append(
                 CustomProperty(
                     property="contracthub.table.location",
                     value=str(property_expr.this).strip("'\""),
                 )
             )
-        elif isinstance(property_expr, exp.FileFormatProperty) and property_expr.this is not None:
+        elif (
+            isinstance(property_expr, exp.FileFormatProperty)
+            and property_expr.this is not None
+        ):
             custom_properties.append(
                 CustomProperty(
                     property="contracthub.table.format",
@@ -163,7 +196,9 @@ def _extract_table_metadata(
     return description, physical_type, custom_properties, partition_positions
 
 
-def _extract_partition_columns(partition_property: exp.PartitionedByProperty) -> List[str]:
+def _extract_partition_columns(
+    partition_property: exp.PartitionedByProperty,
+) -> List[str]:
     partition_columns: List[str] = []
     partition_schema = partition_property.args.get("this")
     if not isinstance(partition_schema, exp.Schema):
@@ -175,7 +210,9 @@ def _extract_partition_columns(partition_property: exp.PartitionedByProperty) ->
     return partition_columns
 
 
-def _extract_key_constraints(statement: exp.Create, table_name: str) -> Tuple[Dict[str, int], Set[str]]:
+def _extract_key_constraints(
+    statement: exp.Create, table_name: str
+) -> Tuple[Dict[str, int], Set[str]]:
     primary_key_positions: Dict[str, int] = {}
     unique_columns: Set[str] = set()
 
@@ -203,7 +240,10 @@ def _extract_key_constraints(statement: exp.Create, table_name: str) -> Tuple[Di
         if not column_name:
             continue
         normalized = column_name.lower()
-        if normalized not in primary_key_positions and column.find(exp.PrimaryKeyColumnConstraint) is not None:
+        if (
+            normalized not in primary_key_positions
+            and column.find(exp.PrimaryKeyColumnConstraint) is not None
+        ):
             inline_pk_idx += 1
             primary_key_positions[normalized] = inline_pk_idx
         if column.find(exp.UniqueColumnConstraint) is not None:
@@ -282,7 +322,9 @@ def _column_comment(column: exp.ColumnDef) -> Optional[str]:
     return upstream_sql_importer.get_description(column)
 
 
-def _attach_inline_reference_relationship(property_obj: SchemaProperty, column: exp.ColumnDef, *, dialect: Any) -> None:
+def _attach_inline_reference_relationship(
+    property_obj: SchemaProperty, column: exp.ColumnDef, *, dialect: Any
+) -> None:
     reference: exp.Reference | None = None
     for column_constraint in column.args.get("constraints") or []:
         kind = column_constraint.args.get("kind")
@@ -295,8 +337,12 @@ def _attach_inline_reference_relationship(property_obj: SchemaProperty, column: 
     target_table, target_columns = _extract_reference_target(reference, dialect=dialect)
     if not target_table or len(target_columns) != 1:
         return
-    relationship = Relationship(type="foreignKey", to=f"{target_table}.{target_columns[0]}")
-    property_obj.relationships = _merge_relationships(property_obj.relationships, [relationship])
+    relationship = Relationship(
+        type="foreignKey", to=f"{target_table}.{target_columns[0]}"
+    )
+    property_obj.relationships = _merge_relationships(
+        property_obj.relationships, [relationship]
+    )
 
 
 def _extract_table_foreign_key_relationships(
@@ -314,7 +360,11 @@ def _extract_table_foreign_key_relationships(
             if not isinstance(constraint_expr, exp.ForeignKey):
                 continue
 
-            source_columns = [item.name for item in constraint_expr.expressions or [] if isinstance(item, exp.Identifier)]
+            source_columns = [
+                item.name
+                for item in constraint_expr.expressions or []
+                if isinstance(item, exp.Identifier)
+            ]
             if not source_columns:
                 continue
 
@@ -322,7 +372,9 @@ def _extract_table_foreign_key_relationships(
             if not isinstance(reference, exp.Reference):
                 continue
 
-            target_table, target_columns = _extract_reference_target(reference, dialect=dialect)
+            target_table, target_columns = _extract_reference_target(
+                reference, dialect=dialect
+            )
             if not target_table or not target_columns:
                 continue
 
@@ -332,11 +384,18 @@ def _extract_table_foreign_key_relationships(
                 if source_property is not None:
                     source_property.relationships = _merge_relationships(
                         source_property.relationships,
-                        [Relationship(type="foreignKey", to=f"{target_table}.{target_columns[0]}")],
+                        [
+                            Relationship(
+                                type="foreignKey",
+                                to=f"{target_table}.{target_columns[0]}",
+                            )
+                        ],
                     )
                 continue
 
-            to_values = [f"{target_table}.{target_column}" for target_column in target_columns]
+            to_values = [
+                f"{target_table}.{target_column}" for target_column in target_columns
+            ]
             schema_relationships.append(
                 Relationship(
                     type="foreignKey",
@@ -348,7 +407,9 @@ def _extract_table_foreign_key_relationships(
     return _merge_relationships(None, schema_relationships)
 
 
-def _extract_reference_target(reference: exp.Reference, *, dialect: Any) -> Tuple[Optional[str], List[str]]:
+def _extract_reference_target(
+    reference: exp.Reference, *, dialect: Any
+) -> Tuple[Optional[str], List[str]]:
     schema_or_table = reference.args.get("this")
     if isinstance(schema_or_table, exp.Schema):
         table_expr = schema_or_table.args.get("this")
@@ -413,7 +474,9 @@ def _schema_property_from_data_type(
     items: Optional[SchemaProperty] = None
 
     if data_type is not None:
-        logical_type_options = _extract_logical_type_options(data_type, column=column, physical_type=physical_type)
+        logical_type_options = _extract_logical_type_options(
+            data_type, column=column, physical_type=physical_type
+        )
         nested_properties = _extract_nested_properties(data_type, dialect=dialect)
         items = _extract_items(data_type, dialect=dialect)
     elif format_hint:
@@ -463,21 +526,37 @@ def _extract_logical_type_options(
         options["format"] = format_hint
 
     if type_name == "DECIMAL":
-        params = [p.this for p in data_type.expressions if isinstance(p, exp.DataTypeParam)]
-        if len(params) >= 1 and "precision" not in options and isinstance(params[0], exp.Literal):
+        params = [
+            p.this for p in data_type.expressions if isinstance(p, exp.DataTypeParam)
+        ]
+        if (
+            len(params) >= 1
+            and "precision" not in options
+            and isinstance(params[0], exp.Literal)
+        ):
             options["precision"] = int(str(params[0]))
-        if len(params) >= 2 and "scale" not in options and isinstance(params[1], exp.Literal):
+        if (
+            len(params) >= 2
+            and "scale" not in options
+            and isinstance(params[1], exp.Literal)
+        ):
             options["scale"] = int(str(params[1]))
 
     if type_name == "MAP":
-        key_type = data_type.expressions[0].sql(dialect="spark") if data_type.expressions else None
+        key_type = (
+            data_type.expressions[0].sql(dialect="spark")
+            if data_type.expressions
+            else None
+        )
         if key_type:
             options["keyType"] = key_type
 
     return options or None
 
 
-def _extract_nested_properties(data_type: exp.DataType, *, dialect: Any) -> Optional[List[SchemaProperty]]:
+def _extract_nested_properties(
+    data_type: exp.DataType, *, dialect: Any
+) -> Optional[List[SchemaProperty]]:
     if _data_type_name(data_type) != "STRUCT":
         return None
 
@@ -507,7 +586,9 @@ def _extract_nested_properties(data_type: exp.DataType, *, dialect: Any) -> Opti
     return nested_properties or None
 
 
-def _extract_items(data_type: exp.DataType, *, dialect: Any) -> Optional[SchemaProperty]:
+def _extract_items(
+    data_type: exp.DataType, *, dialect: Any
+) -> Optional[SchemaProperty]:
     type_name = _data_type_name(data_type)
     if type_name == "ARRAY" and data_type.expressions:
         item_type = data_type.expressions[0]

@@ -99,7 +99,7 @@ def test_cli_release_create_pr_outputs_plan_and_pr_payload(sample_odcs_model, tm
     candidate_path = dump_yaml(candidate, tmp_path / "candidate.yaml")
 
     monkeypatch.setattr(
-        "contracthub.interfaces.cli.create_release_pull_request",
+        "contracthub.devops.release_workflow.create_release_pull_request",
         lambda **kwargs: {
             "promotion": {"contractId": str(base.id), "targetVersion": "1.2.0"},
             "pullRequest": {"pullRequestId": 77},

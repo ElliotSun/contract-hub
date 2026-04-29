@@ -18,15 +18,13 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass, field
-import os
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from open_data_contract_standard.model import OpenDataContractStandard
 
 from datacontract.data_contract import DataContract
 
-import contracthub.importers  # ensure custom importers are registered
 from contracthub.importers.unity_importer import import_unity_contract
 from contracthub.core.loader import ContractLoader
 from contracthub.core.validator import ContractValidator, ValidationReport
@@ -188,7 +186,9 @@ class ContractPipeline:
         - Great Expectations suite JSON
         - CI manifest summarizing validation, policy, conflicts, and outputs
         """
-        merged_contract_path = dump_yaml(contract_to_dict(merged_contract), merged_contract_output_path)
+        merged_contract_path = dump_yaml(
+            contract_to_dict(merged_contract), merged_contract_output_path
+        )
         ge_suite_path = self.ge_exporter.export_to_path(
             merged_contract,
             ge_suite_output_path,
@@ -204,7 +204,9 @@ class ContractPipeline:
             "idViolation": policy_evaluation.id_violation,
             "versionViolation": policy_evaluation.version_violation,
             "issues": [asdict(issue) for issue in validation.issues],
-            "breakingChanges": [asdict(change) for change in policy_evaluation.breaking_changes],
+            "breakingChanges": [
+                asdict(change) for change in policy_evaluation.breaking_changes
+            ],
             "conflicts": [asdict(conflict) for conflict in merge_result.conflicts],
             "artifacts": {
                 "mergedContract": str(merged_contract_path),
@@ -212,7 +214,9 @@ class ContractPipeline:
             },
             "audit": asdict(audit_metadata) if audit_metadata is not None else None,
         }
-        ci_manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8")
+        ci_manifest_path.write_text(
+            json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8"
+        )
 
         return PipelineArtifacts(
             merged_contract_path=merged_contract_path,
@@ -275,14 +279,22 @@ class ContractPipeline:
 
         validation = self.validate_contract(merge_result.contract)
         if not validation.valid:
-            message = "; ".join(f"{item.path}: {item.message}" for item in validation.issues)
+            message = "; ".join(
+                f"{item.path}: {item.message}" for item in validation.issues
+            )
             raise ValueError(f"Merged contract validation failed: {message}")
 
-        policy_evaluation = self.evaluate_policy(business_contract, merge_result.contract)
+        policy_evaluation = self.evaluate_policy(
+            business_contract, merge_result.contract
+        )
         id_violation = getattr(policy_evaluation, "id_violation", False)
         version_violation = getattr(policy_evaluation, "version_violation", False)
         if not policy_evaluation.valid and (id_violation or version_violation):
-            violations = [item for item in policy_evaluation.breaking_changes if item.path in ("id", "version")]
+            violations = [
+                item
+                for item in policy_evaluation.breaking_changes
+                if item.path in ("id", "version")
+            ]
             message = "; ".join(f"❌ {item.message}" for item in violations)
             raise ValueError(f"Policy Violation:\n{message}")
 
@@ -308,8 +320,8 @@ class ContractPipeline:
             key = (item.property or "").strip().lower()
             if key != "lifecyclestatus":
                 continue
-            resolved = (str(item.value) if item.value is not None else "").strip().lower()
+            resolved = (
+                (str(item.value) if item.value is not None else "").strip().lower()
+            )
             return resolved or "draft"
         return "draft"
-
-

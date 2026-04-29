@@ -1,10 +1,19 @@
-from contracthub.lifecycle.helpers import allows_breaking_changes, is_active_contract, normalize_status, schema_items
+from contracthub.lifecycle.helpers import (
+    allows_breaking_changes,
+    is_active_contract,
+    normalize_status,
+    schema_items,
+)
 from contracthub.lifecycle.merge_engine import (
     ContractMergeEngine,
     MergeConflict,
     MergeResult,
 )
-from contracthub.lifecycle.policy import BreakingChange, PolicyEvaluation, evaluate_merge_policy
+from contracthub.lifecycle.policy import (
+    BreakingChange,
+    PolicyEvaluation,
+    evaluate_merge_policy,
+)
 
 __all__ = [
     "normalize_status",

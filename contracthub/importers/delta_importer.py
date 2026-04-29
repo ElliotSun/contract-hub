@@ -20,6 +20,7 @@ from open_data_contract_standard.model import (
 import sqlglot
 from sqlglot import expressions as exp
 
+
 class DeltaTableImporter(Importer):
     """Datacontract-compatible importer for Delta tables (delta-rs)."""
 
@@ -28,7 +29,9 @@ class DeltaTableImporter(Importer):
         table_uris = _resolve_table_uris(source, import_args)
         storage_options = import_args.get("storage_options")
         oauth_bearer_token = import_args.get("oauth_bearer_token")
-        dataset_name = import_args.get("dataset_name") or import_args.get("contract_name")
+        dataset_name = import_args.get("dataset_name") or import_args.get(
+            "contract_name"
+        )
         contract_id = import_args.get("contract_id")
         contract_version = import_args.get("contract_version")
 
@@ -101,10 +104,17 @@ def _build_imported_contract(
                 description=description,
                 customProperties=[
                     CustomProperty(property="contracthub.delta.uri", value=table_uri),
-                    CustomProperty(property="contracthub.delta.version", value=delta_version),
+                    CustomProperty(
+                        property="contracthub.delta.version", value=delta_version
+                    ),
                     CustomProperty(
                         property="contracthub.delta.partitionColumns",
-                        value=[col for col, _ in sorted(partition_positions.items(), key=lambda item: item[1])],
+                        value=[
+                            col
+                            for col, _ in sorted(
+                                partition_positions.items(), key=lambda item: item[1]
+                            )
+                        ],
                     ),
                 ],
             )
@@ -121,7 +131,9 @@ def _build_imported_contract(
         version=contract_version,
         status="draft",
         schema=schema_objects,
-        description=Description(usage=contract_description) if contract_description else None,
+        description=Description(usage=contract_description)
+        if contract_description
+        else None,
         customProperties=[
             CustomProperty(property="contracthub.source", value="delta"),
         ],
@@ -195,7 +207,11 @@ def _normalize_storage_options(
     if oauth_bearer_token and not token_keys.intersection(normalized):
         normalized["azure_storage_token"] = oauth_bearer_token
 
-    account_keys = {"azure_storage_account_name", "storage_account_name", "account_name"}
+    account_keys = {
+        "azure_storage_account_name",
+        "storage_account_name",
+        "account_name",
+    }
     if oauth_bearer_token and not account_keys.intersection(normalized):
         account_name = _extract_account_name_from_uri(table_uri)
         if account_name:
@@ -213,7 +229,11 @@ def _extract_account_name_from_uri(table_uri: str) -> Optional[str]:
     if "@" in host:
         host = host.split("@", 1)[1]
 
-    for suffix in (".dfs.core.windows.net", ".blob.core.windows.net", ".dfs.fabric.microsoft.com"):
+    for suffix in (
+        ".dfs.core.windows.net",
+        ".blob.core.windows.net",
+        ".dfs.fabric.microsoft.com",
+    ):
         if host.endswith(suffix):
             return host[: -len(suffix)]
 
@@ -225,7 +245,9 @@ def _to_contract_id(dataset_name: str) -> str:
     return cleaned.lower() or "delta-dataset"
 
 
-def _extract_delta_relationships(metadata: Any) -> Optional[Dict[str, List[Relationship]]]:
+def _extract_delta_relationships(
+    metadata: Any,
+) -> Optional[Dict[str, List[Relationship]]]:
     if metadata is None:
         return None
 
@@ -241,14 +263,12 @@ def _extract_delta_relationships(metadata: Any) -> Optional[Dict[str, List[Relat
     prefix = "contracthub.fk."
     for key, value in configuration.items():
         if isinstance(key, str) and key.startswith(prefix):
-            from_field = key[len(prefix):]
+            from_field = key[len(prefix) :]
             to_fields = [item.strip() for item in str(value).split(",") if item.strip()]
 
             rels = []
             for to_field in to_fields:
-                rels.append(
-                    Relationship(type="foreignKey", to=to_field)
-                )
+                rels.append(Relationship(type="foreignKey", to=to_field))
             if rels:
                 relationships[from_field] = rels
 
@@ -283,7 +303,9 @@ def _extract_partition_positions(metadata: Any) -> Dict[str, int]:
 
     partition_columns: Any = None
     if isinstance(metadata, dict):
-        partition_columns = metadata.get("partition_columns") or metadata.get("partitionColumns")
+        partition_columns = metadata.get("partition_columns") or metadata.get(
+            "partitionColumns"
+        )
     else:
         partition_columns = (
             getattr(metadata, "partition_columns", None)
@@ -301,7 +323,9 @@ def _extract_partition_positions(metadata: Any) -> Dict[str, int]:
     return positions
 
 
-def _extract_delta_fields(table: DeltaTable, partition_positions: Dict[str, int]) -> List[SchemaProperty]:
+def _extract_delta_fields(
+    table: DeltaTable, partition_positions: Dict[str, int]
+) -> List[SchemaProperty]:
     schema_obj = table.schema()
     schema_json = None
     if hasattr(schema_obj, "to_json"):
@@ -321,7 +345,9 @@ def _extract_delta_fields(table: DeltaTable, partition_positions: Dict[str, int]
     for field in fields_payload:
         if not isinstance(field, dict):
             continue
-        property_obj = _schema_property_from_delta_field(field, partition_positions=partition_positions)
+        property_obj = _schema_property_from_delta_field(
+            field, partition_positions=partition_positions
+        )
         if property_obj is not None:
             fields.append(property_obj)
 
@@ -381,7 +407,9 @@ def _schema_property_from_delta_field(
     )
 
 
-def _extract_logical_type_options(type_value: Any, physical_type: str) -> Optional[Dict[str, Any]]:
+def _extract_logical_type_options(
+    type_value: Any, physical_type: str
+) -> Optional[Dict[str, Any]]:
     options: Dict[str, Any] = {}
 
     decimal_match = re.match(r"decimal\((\d+),\s*(\d+)\)", physical_type.lower())
@@ -402,11 +430,15 @@ def _extract_logical_type_options(type_value: Any, physical_type: str) -> Option
     return options or None
 
 
-def _extract_logical_type_options_from_data_type(data_type: exp.DataType) -> Dict[str, Any]:
+def _extract_logical_type_options_from_data_type(
+    data_type: exp.DataType,
+) -> Dict[str, Any]:
     options: Dict[str, Any] = {}
     type_name = _data_type_name(data_type)
     if type_name == "DECIMAL":
-        params = [p.this for p in data_type.expressions if isinstance(p, exp.DataTypeParam)]
+        params = [
+            p.this for p in data_type.expressions if isinstance(p, exp.DataTypeParam)
+        ]
         if len(params) >= 1 and isinstance(params[0], exp.Literal):
             options["precision"] = int(str(params[0]))
         if len(params) >= 2 and isinstance(params[1], exp.Literal):
@@ -426,7 +458,9 @@ def _extract_nested_properties(type_value: Any) -> Optional[List[SchemaProperty]
         for nested_field in nested_fields:
             if not isinstance(nested_field, dict):
                 continue
-            property_obj = _schema_property_from_delta_field(nested_field, partition_positions={})
+            property_obj = _schema_property_from_delta_field(
+                nested_field, partition_positions={}
+            )
             if property_obj is not None:
                 properties.append(property_obj)
         return properties or None
@@ -500,7 +534,9 @@ def _extract_items(type_value: Any) -> Optional[SchemaProperty]:
     return None
 
 
-def _schema_property_from_any_type(type_value: Any, *, required: bool) -> Optional[SchemaProperty]:
+def _schema_property_from_any_type(
+    type_value: Any, *, required: bool
+) -> Optional[SchemaProperty]:
     if type_value is None:
         return None
     if isinstance(type_value, dict) and "name" in type_value:
@@ -530,17 +566,23 @@ def _schema_property_from_sql_data_type(
     required: bool,
     description: Optional[str],
 ) -> SchemaProperty:
-    physical_type = data_type.sql(dialect="spark") if data_type is not None else "string"
+    physical_type = (
+        data_type.sql(dialect="spark") if data_type is not None else "string"
+    )
     return SchemaProperty(
         id=_to_contract_id(name or physical_type),
         name=name,
         physicalName=name,
         logicalType=_map_delta_type_to_odcs(physical_type),
         physicalType=physical_type,
-        logicalTypeOptions=_extract_logical_type_options_from_data_type(data_type) if data_type is not None else None,
+        logicalTypeOptions=_extract_logical_type_options_from_data_type(data_type)
+        if data_type is not None
+        else None,
         required=required,
         description=description,
-        properties=_extract_nested_properties(data_type) if data_type is not None else None,
+        properties=_extract_nested_properties(data_type)
+        if data_type is not None
+        else None,
         items=_extract_items(data_type) if data_type is not None else None,
     )
 

@@ -9,7 +9,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from open_data_contract_standard.model import CustomProperty, Description, OpenDataContractStandard, SchemaProperty, Server
+from open_data_contract_standard.model import (
+    CustomProperty,
+    Description,
+    OpenDataContractStandard,
+    SchemaProperty,
+    Server,
+)
 
 from contracthub.constants import TYPE_OPTIONS
 from contracthub.utils.schema_utils import contract_to_model
@@ -45,13 +51,19 @@ def set_mapping_text(mapping: dict[str, Any], key: str, value: str) -> None:
         mapping.pop(key, None)
 
 
-def description_mapping(contract: dict[str, Any], *, create: bool = False) -> dict[str, Any]:
+def description_mapping(
+    contract: dict[str, Any], *, create: bool = False
+) -> dict[str, Any]:
     """Return the ODCS root description mapping."""
     description = contract.get("description")
     if isinstance(description, dict):
         return description
     if create:
-        contract["description"] = {"purpose": description} if isinstance(description, str) and description.strip() else {}
+        contract["description"] = (
+            {"purpose": description}
+            if isinstance(description, str) and description.strip()
+            else {}
+        )
         return contract["description"]
     return {}
 
@@ -108,7 +120,9 @@ def contract_kind(contract: ContractInput) -> str:
     return str(contract_to_model(contract).kind or "")
 
 
-def set_contract_description_part(contract: dict[str, Any], part: str, value: str) -> None:
+def set_contract_description_part(
+    contract: dict[str, Any], part: str, value: str
+) -> None:
     """Persist a structured contract description field."""
     description = description_mapping(contract, create=True)
     set_mapping_text(description, part, value)
@@ -173,7 +187,11 @@ def set_field_lifecycle_status(field_obj: dict[str, Any], value: Any) -> None:
         for item in _custom_property_models(field_obj.get("customProperties", []) or [])
         if str(item.property or "").strip().lower() != "lifecyclestatus"
     ]
-    custom_properties.append(CustomProperty(property="lifecycleStatus", value=status_value).model_dump(by_alias=True, exclude_none=True))
+    custom_properties.append(
+        CustomProperty(property="lifecycleStatus", value=status_value).model_dump(
+            by_alias=True, exclude_none=True
+        )
+    )
     field_obj["customProperties"] = custom_properties
 
 
@@ -225,7 +243,10 @@ def _custom_property_models(values: list[Any]) -> list[CustomProperty]:
 def server_items(contract: ContractInput) -> list[dict[str, Any]]:
     """Return server objects defined on the contract as UI-friendly mappings."""
     model = contract_to_model(contract)
-    return [server.model_dump(by_alias=True, exclude_none=True) for server in model.servers or []]
+    return [
+        server.model_dump(by_alias=True, exclude_none=True)
+        for server in model.servers or []
+    ]
 
 
 def server_label(server: Server | dict[str, Any]) -> str:

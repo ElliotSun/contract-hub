@@ -12,6 +12,7 @@ from contracthub.lifecycle.merge_engine import MergeAnalysis, MergeConflict
 from .constants import CHANGE_FILTER_OPTIONS
 from .styles import section_title
 
+
 def render_analysis_results() -> None:
     """Render governance analysis below the tabs when dialogs are unavailable."""
     result = st.session_state.get("editor_analysis_result")
@@ -54,7 +55,9 @@ def render_analysis_body(result: dict[str, Any]) -> None:
 
     filter_col, _ = st.columns([0.35, 0.65], gap="large")
     with filter_col:
-        filter_value = st.selectbox("Filter changes", CHANGE_FILTER_OPTIONS, key="editor_analyze_filter")
+        filter_value = st.selectbox(
+            "Filter changes", CHANGE_FILTER_OPTIONS, key="editor_analyze_filter"
+        )
 
     filtered_diff_rows = filter_diff_rows(diff_rows, breaking_rows, filter_value)
     section_title("Changes Overview")
@@ -75,7 +78,6 @@ def render_analysis_body(result: dict[str, Any]) -> None:
                 st.markdown(f"🔵 **CHANGED**: `{field}` - {detail}")
     else:
         st.info("No changes to display for the current filter.")
-
 
     with st.expander("Detailed Diff", expanded=False):
         st.json(result.get("diff", []))
@@ -120,7 +122,12 @@ def run_analysis(contract: dict[str, Any], user: Any) -> None:
 
 def normalize_analysis_result(raw_result: Any) -> dict[str, Any]:
     """Normalize governance output for editor display."""
-    if isinstance(raw_result, dict) and {"diff", "breaking_changes", "auto_deprecations", "allowed"}.issubset(raw_result):
+    if isinstance(raw_result, dict) and {
+        "diff",
+        "breaking_changes",
+        "auto_deprecations",
+        "allowed",
+    }.issubset(raw_result):
         return {
             "diff": list(raw_result.get("diff", []) or []),
             "breaking_changes": list(raw_result.get("breaking_changes", []) or []),
@@ -129,19 +136,34 @@ def normalize_analysis_result(raw_result: Any) -> dict[str, Any]:
         }
 
     if isinstance(raw_result, MergeAnalysis):
-        breaking_changes = [_conflict_to_row(conflict) for conflict in raw_result.conflicts]
+        breaking_changes = [
+            _conflict_to_row(conflict) for conflict in raw_result.conflicts
+        ]
         auto_deprecations: list[dict[str, Any]] = []
         for schema_name in sorted(raw_result.deprecated_schemas):
-            auto_deprecations.append({"field": schema_name, "action": "Mark as deprecated"})
-        for schema_name, property_names in sorted(raw_result.deprecated_properties.items()):
+            auto_deprecations.append(
+                {"field": schema_name, "action": "Mark as deprecated"}
+            )
+        for schema_name, property_names in sorted(
+            raw_result.deprecated_properties.items()
+        ):
             for property_name in sorted(property_names):
-                auto_deprecations.append({"field": f"{schema_name}.{property_name}", "action": "Mark as deprecated"})
+                auto_deprecations.append(
+                    {
+                        "field": f"{schema_name}.{property_name}",
+                        "action": "Mark as deprecated",
+                    }
+                )
 
         diff_rows = [
             {"field": item["field"], "change_type": "MODIFIED", "detail": item["issue"]}
             for item in breaking_changes
         ] + [
-            {"field": item["field"], "change_type": "DEPRECATED", "detail": item["action"]}
+            {
+                "field": item["field"],
+                "change_type": "DEPRECATED",
+                "detail": item["action"],
+            }
             for item in auto_deprecations
         ]
         return {
@@ -154,7 +176,9 @@ def normalize_analysis_result(raw_result: Any) -> dict[str, Any]:
     breaking_changes = [
         {
             "field": compose_field_name(item),
-            "issue": item.get("message") or item.get("rule") or "breaking change detected",
+            "issue": item.get("message")
+            or item.get("rule")
+            or "breaking change detected",
             "from": item.get("business_value"),
             "to": item.get("base_value"),
         }
@@ -164,9 +188,16 @@ def normalize_analysis_result(raw_result: Any) -> dict[str, Any]:
     auto_deprecations: list[dict[str, Any]] = []
     for schema_name in raw_result.get("deprecated_schemas", []) or []:
         auto_deprecations.append({"field": schema_name, "action": "Mark as deprecated"})
-    for schema_name, property_names in (raw_result.get("deprecated_properties", {}) or {}).items():
+    for schema_name, property_names in (
+        raw_result.get("deprecated_properties", {}) or {}
+    ).items():
         for property_name in property_names or []:
-            auto_deprecations.append({"field": f"{schema_name}.{property_name}", "action": "Mark as deprecated"})
+            auto_deprecations.append(
+                {
+                    "field": f"{schema_name}.{property_name}",
+                    "action": "Mark as deprecated",
+                }
+            )
 
     diff_rows = [
         {"field": item["field"], "change_type": "MODIFIED", "detail": item["issue"]}
@@ -192,8 +223,14 @@ def filter_diff_rows(
     if filter_value == "ALL":
         return diff_rows
     if filter_value == "BREAKING":
-        breaking_fields = {str(item.get("field", "")).strip() for item in breaking_changes}
-        return [row for row in diff_rows if str(row.get("field", "")).strip() in breaking_fields]
+        breaking_fields = {
+            str(item.get("field", "")).strip() for item in breaking_changes
+        }
+        return [
+            row
+            for row in diff_rows
+            if str(row.get("field", "")).strip() in breaking_fields
+        ]
     return [
         row
         for row in diff_rows
@@ -212,11 +249,18 @@ def compose_field_name(item: dict[str, Any]) -> str:
     return property_name or "__unknown__"
 
 
-def field_governance_info_for(schema_obj: dict[str, Any], field_obj: dict[str, Any]) -> dict[str, str | None]:
+def field_governance_info_for(
+    schema_obj: dict[str, Any], field_obj: dict[str, Any]
+) -> dict[str, str | None]:
     """Return governance indicators for a specific field."""
     result = st.session_state.get("editor_analysis_result")
     if not isinstance(result, dict):
-        return {"breaking": None, "breaking_emoji": "", "deprecation": None, "deprecation_emoji": ""}
+        return {
+            "breaking": None,
+            "breaking_emoji": "",
+            "deprecation": None,
+            "deprecation_emoji": "",
+        }
 
     field_name = str(field_obj.get("name", "")).strip()
     schema_name = str(schema_obj.get("name", "")).strip()

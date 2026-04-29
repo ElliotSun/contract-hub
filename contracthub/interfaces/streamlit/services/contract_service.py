@@ -106,12 +106,26 @@ class ContractService:
     sample_contract_path: Path | str | None = None
 
     def __post_init__(self) -> None:
-        configured_contracts_dir = self.contracts_dir or os.getenv("CONTRACTHUB_CONTRACTS_DIR")
+        configured_contracts_dir = self.contracts_dir or os.getenv(
+            "CONTRACTHUB_CONTRACTS_DIR"
+        )
         configured_drafts_dir = self.drafts_dir or os.getenv("CONTRACTHUB_DRAFTS_DIR")
-        configured_sample_path = self.sample_contract_path or os.getenv("CONTRACTHUB_SAMPLE_CONTRACT_PATH")
-        self.contracts_dir = str(configured_contracts_dir) if configured_contracts_dir else str(DEFAULT_CONTRACTS_DIR)
-        self.drafts_dir = Path(configured_drafts_dir) if configured_drafts_dir else DEFAULT_DRAFTS_DIR
-        self.sample_contract_path = str(configured_sample_path) if configured_sample_path else str(DEFAULT_SAMPLE_CONTRACT_PATH)
+        configured_sample_path = self.sample_contract_path or os.getenv(
+            "CONTRACTHUB_SAMPLE_CONTRACT_PATH"
+        )
+        self.contracts_dir = (
+            str(configured_contracts_dir)
+            if configured_contracts_dir
+            else str(DEFAULT_CONTRACTS_DIR)
+        )
+        self.drafts_dir = (
+            Path(configured_drafts_dir) if configured_drafts_dir else DEFAULT_DRAFTS_DIR
+        )
+        self.sample_contract_path = (
+            str(configured_sample_path)
+            if configured_sample_path
+            else str(DEFAULT_SAMPLE_CONTRACT_PATH)
+        )
 
     def load_sample_contract_yaml(self) -> str:
         """Return the configured sample ODCS YAML text."""
@@ -138,11 +152,15 @@ class ContractService:
         """
         contracts: list[dict[str, Any]] = []
         for path in self._contract_paths():
-            metadata = load_yaml_metadata(path, keys=["id", "dataProduct", "name", "version", "status", "tenant"])
+            metadata = load_yaml_metadata(
+                path, keys=["id", "dataProduct", "name", "version", "status", "tenant"]
+            )
             contract_id = metadata.get("id") or _path_contract_id(path)
             contract_record = {
                 "id": contract_id,
-                "name": metadata.get("dataProduct") or metadata.get("name") or contract_id,
+                "name": metadata.get("dataProduct")
+                or metadata.get("name")
+                or contract_id,
                 "version": metadata.get("version", ""),
                 "status": metadata.get("status", ""),
                 "tenant": metadata.get("tenant", ""),
@@ -204,34 +222,48 @@ class ContractService:
         _ensure_can_edit(user, main_contract, contract_id)
 
         normalized_draft = normalize_draft_contract(draft_contract, main_contract)
-        return governance_service.analyze_contracts(contract_to_model(normalized_draft), main_contract)
+        return governance_service.analyze_contracts(
+            contract_to_model(normalized_draft), main_contract
+        )
 
-    def classify_draft_change(self, contract_id: str, user: Any) -> ContractChangeAssessment:
+    def classify_draft_change(
+        self, contract_id: str, user: Any
+    ) -> ContractChangeAssessment:
         """Classify required bump for one saved draft contract."""
         main_contract = self._get_contract_model(contract_id)
         _ensure_can_edit(user, main_contract, contract_id)
 
         draft_path = self._get_draft_path(contract_id, user)
         if not draft_path.exists():
-            raise FileNotFoundError(f"Draft for contract '{contract_id}' does not exist")
+            raise FileNotFoundError(
+                f"Draft for contract '{contract_id}' does not exist"
+            )
 
         draft_contract = contract_to_model(load_yaml(draft_path))
-        normalized_draft = contract_to_model(normalize_draft_contract(draft_contract, main_contract))
+        normalized_draft = contract_to_model(
+            normalize_draft_contract(draft_contract, main_contract)
+        )
         normalized_draft.id = main_contract.id
         normalized_draft.version = main_contract.version
         return classify_contract_change(main_contract, normalized_draft)
 
-    def promote_draft(self, contract_id: str, user: Any, release_tag: str) -> PromotionResult:
+    def promote_draft(
+        self, contract_id: str, user: Any, release_tag: str
+    ) -> PromotionResult:
         """Prepare a promoted contract candidate for one saved draft contract."""
         main_contract = self._get_contract_model(contract_id)
         _ensure_can_edit(user, main_contract, contract_id)
 
         draft_path = self._get_draft_path(contract_id, user)
         if not draft_path.exists():
-            raise FileNotFoundError(f"Draft for contract '{contract_id}' does not exist")
+            raise FileNotFoundError(
+                f"Draft for contract '{contract_id}' does not exist"
+            )
 
         draft_contract = contract_to_model(load_yaml(draft_path))
-        normalized_draft = contract_to_model(normalize_draft_contract(draft_contract, main_contract))
+        normalized_draft = contract_to_model(
+            normalize_draft_contract(draft_contract, main_contract)
+        )
         normalized_draft.id = main_contract.id
         normalized_draft.version = main_contract.version
         self._validate_contract(normalized_draft)
@@ -336,7 +368,11 @@ def _contract_id(contract: OpenDataContractStandard | dict[str, Any]) -> str:
 
 def _path_contract_id(path: str) -> str:
     """Resolve the fallback contract id from a storage path."""
-    return Path(path).stem if "://" not in path else path.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+    return (
+        Path(path).stem
+        if "://" not in path
+        else path.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+    )
 
 
 def _join_contract_root(root: str | Path, file_name: str) -> str:
@@ -371,7 +407,9 @@ def _can_edit(user: Any, contract: OpenDataContractStandard | dict[str, Any]) ->
     return contract_tenant == user_tenant
 
 
-def _ensure_can_edit(user: Any, contract: OpenDataContractStandard | dict[str, Any], contract_id: str) -> None:
+def _ensure_can_edit(
+    user: Any, contract: OpenDataContractStandard | dict[str, Any], contract_id: str
+) -> None:
     """Raise when the user is not permitted to edit the target contract."""
     if not _can_edit(user, contract):
         raise PermissionError(f"User is not allowed to edit contract '{contract_id}'")
@@ -382,5 +420,10 @@ def _user_storage_key(user: Any) -> str:
     for field in ("id", "username", "email", "name", "tenant"):
         value = _user_value(user, field).strip()
         if value:
-            return "".join(char if char.isalnum() or char in {"-", "_", "."} else "_" for char in value)
-    raise ValueError("User must provide an id, username, email, name, or tenant for draft storage")
+            return "".join(
+                char if char.isalnum() or char in {"-", "_", "."} else "_"
+                for char in value
+            )
+    raise ValueError(
+        "User must provide an id, username, email, name, or tenant for draft storage"
+    )

@@ -1,34 +1,13 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict
 import json
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
-from open_data_contract_standard.model import OpenDataContractStandard
-from contracthub.core.loader import ContractLoader
-from contracthub.core.release import classify_contract_change, prepare_release_candidate, suggest_release_version
-from datacontract.data_contract import DataContract
-from contracthub.devops.pr_creator import AzureDevOpsConfig, GitHubConfig, PullRequestCreator, GitProviderConfig
-from contracthub.devops.release_workflow import (
-    batch_manifest_build_to_dict,
-    batch_task_to_dict,
-    build_batch_release_manifest,
-    build_release_pr_plan,
-    classify_contracts_in_repo,
-    create_release_pull_request,
-    create_release_pull_requests_from_manifest,
-    load_batch_release_tasks,
-    release_plan_to_dict,
-    repository_change_to_dict,
-)
-from contracthub.importers.unity_importer import import_unity_contract
-from contracthub.lifecycle.merge_engine import ContractMergeEngine
-from contracthub.quality.ge_exporter import GreatExpectationsExporter
-from contracthub.utils.schema_utils import contract_to_dict
-from contracthub.utils.yaml_utils import dump_yaml
+if TYPE_CHECKING:
+    from contracthub.devops.pr_creator import GitProviderConfig
 
 DEFAULT_AZURE_STORAGE_SCOPE = "https://storage.azure.com/.default"
 
@@ -37,19 +16,34 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="contracthub")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    subparsers.add_parser(
+        "setup", help="Bootstrap repository with GitOps templates and CI pipelines"
+    )
 
+    enrich_parser = subparsers.add_parser(
+        "enrich", help="Enrich data contract with semantic relationship labels via LLM"
+    )
+    enrich_parser.add_argument(
+        "--contract", required=True, help="Path to the YAML contract"
+    )
+    enrich_parser.add_argument(
+        "--concurrency", type=int, default=1, help="Max parallel LLM API calls"
+    )
+    enrich_parser.add_argument(
+        "--mode",
+        choices=["label", "infer_joins"],
+        default="label",
+        help="Enrichment mode: 'label' tags existing relationships, 'infer_joins' discovers new ones",
+    )
 
-    subparsers.add_parser("setup", help="Bootstrap repository with GitOps templates and CI pipelines")
-
-    enrich_parser = subparsers.add_parser("enrich", help="Enrich data contract with semantic relationship labels via LLM")
-    enrich_parser.add_argument("--contract", required=True, help="Path to the YAML contract")
-    enrich_parser.add_argument("--concurrency", type=int, default=1, help="Max parallel LLM API calls")
-    enrich_parser.add_argument("--mode", choices=["label", "infer_joins"], default="label", help="Enrichment mode: 'label' tags existing relationships, 'infer_joins' discovers new ones")
-
-    plan_parser = subparsers.add_parser("plan", help="Dry run and summarize changes between source and base contract")
+    plan_parser = subparsers.add_parser(
+        "plan", help="Dry run and summarize changes between source and base contract"
+    )
     plan_parser.add_argument("--source", required=True)
     plan_parser.add_argument("--base", required=True)
-    plan_parser.add_argument("--type", choices=["delta", "sql", "sql-folder", "uc", "unity"], required=True)
+    plan_parser.add_argument(
+        "--type", choices=["delta", "sql", "sql-folder", "uc", "unity"], required=True
+    )
     plan_parser.add_argument("--tables")
     plan_parser.add_argument("--workspace-url")
     plan_parser.add_argument("--token")
@@ -57,7 +51,15 @@ def _build_parser() -> argparse.ArgumentParser:
     import_parser = subparsers.add_parser("import", help="Import contract from source")
     import_parser.add_argument(
         "--format",
-        choices=["delta", "delta-table", "delta-ddl", "sql", "sql-folder", "uc", "unity"],
+        choices=[
+            "delta",
+            "delta-table",
+            "delta-ddl",
+            "sql",
+            "sql-folder",
+            "uc",
+            "unity",
+        ],
         required=True,
     )
     import_parser.add_argument("--source", required=True)
@@ -66,7 +68,9 @@ def _build_parser() -> argparse.ArgumentParser:
     import_parser.add_argument("--runtime-context", default="auto")
     import_parser.add_argument("--workspace-url")
     import_parser.add_argument("--token")
-    import_parser.add_argument("--adls-oauth-token", help="OAuth bearer token for ADLS Gen2 access")
+    import_parser.add_argument(
+        "--adls-oauth-token", help="OAuth bearer token for ADLS Gen2 access"
+    )
     import_parser.add_argument(
         "--use-azure-identity",
         action="store_true",
@@ -82,37 +86,82 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Comma-separated list of additional Delta table URIs (used with --format delta or --format delta-table)",
     )
 
-    merge_parser = subparsers.add_parser("merge", help="Merge base and business-edited contracts")
+    merge_parser = subparsers.add_parser(
+        "merge", help="Merge base and business-edited contracts"
+    )
     merge_parser.add_argument("--base", required=True)
     merge_parser.add_argument("--business", required=True)
     merge_parser.add_argument("--output", required=True)
     merge_parser.add_argument("--runtime-context", default="auto")
     merge_parser.add_argument("--fail-on-conflict", action="store_true")
 
-    export_parser = subparsers.add_parser("export", help="Convert data contract to a specific format")
-    export_parser.add_argument("location", nargs="?", default="datacontract.yaml", help="The location (url or path) of the data contract yaml")
-    export_parser.add_argument("--format", required=True, help="The export format (e.g. html, graph, jsonschema, dbt, etc.)")
-    export_parser.add_argument("--output", help="Specify the file path where the exported data will be saved. If no path is provided, the output will be printed to stdout.")
+    export_parser = subparsers.add_parser(
+        "export", help="Convert data contract to a specific format"
+    )
+    export_parser.add_argument(
+        "location",
+        nargs="?",
+        default="datacontract.yaml",
+        help="The location (url or path) of the data contract yaml",
+    )
+    export_parser.add_argument(
+        "--format",
+        required=True,
+        help="The export format (e.g. html, graph, jsonschema, dbt, etc.)",
+    )
+    export_parser.add_argument(
+        "--output",
+        help="Specify the file path where the exported data will be saved. If no path is provided, the output will be printed to stdout.",
+    )
     export_parser.add_argument("--server", help="The server name to export.")
-    export_parser.add_argument("--schema-name", default="all", help="The name of the schema to export, e.g., orders, or all for all schemas (default).")
-    export_parser.add_argument("--sql-server-type", default="auto", help="The server type to determine the sql dialect.")
-    export_parser.add_argument("--export-args", help="Additional arguments for custom exporters in JSON string format, e.g. '{\"format\": \"cypher\"}'")
+    export_parser.add_argument(
+        "--schema-name",
+        default="all",
+        help="The name of the schema to export, e.g., orders, or all for all schemas (default).",
+    )
+    export_parser.add_argument(
+        "--sql-server-type",
+        default="auto",
+        help="The server type to determine the sql dialect.",
+    )
+    export_parser.add_argument(
+        "--export-args",
+        help='Additional arguments for custom exporters in JSON string format, e.g. \'{"format": "cypher"}\'',
+    )
 
-    ge_parser = subparsers.add_parser("export-ge", help="Export Great Expectations suite")
+    ge_parser = subparsers.add_parser(
+        "export-ge", help="Export Great Expectations suite"
+    )
     ge_parser.add_argument("--contract", required=True)
     ge_parser.add_argument("--output", required=True)
     ge_parser.add_argument("--schema-name", default="all")
     ge_parser.add_argument("--suite-name")
 
     pr_parser = subparsers.add_parser("create-pr", help="Create Azure DevOps PR")
-    pr_parser.add_argument("--git-provider", choices=["azure", "github"], default=os.environ.get("CONTRACTHUB_GIT_PROVIDER", "azure"))
-    pr_parser.add_argument("--organization", default=os.environ.get("CONTRACTHUB_ORGANIZATION"))
-    pr_parser.add_argument("--github-owner", default=os.environ.get("CONTRACTHUB_GITHUB_OWNER"))
-    pr_parser.add_argument("--github-repo", default=os.environ.get("CONTRACTHUB_GITHUB_REPO"))
-    pr_parser.add_argument("--github-token", default=os.environ.get("CONTRACTHUB_GITHUB_TOKEN"))
+    pr_parser.add_argument(
+        "--git-provider",
+        choices=["azure", "github"],
+        default=os.environ.get("CONTRACTHUB_GIT_PROVIDER", "azure"),
+    )
+    pr_parser.add_argument(
+        "--organization", default=os.environ.get("CONTRACTHUB_ORGANIZATION")
+    )
+    pr_parser.add_argument(
+        "--github-owner", default=os.environ.get("CONTRACTHUB_GITHUB_OWNER")
+    )
+    pr_parser.add_argument(
+        "--github-repo", default=os.environ.get("CONTRACTHUB_GITHUB_REPO")
+    )
+    pr_parser.add_argument(
+        "--github-token", default=os.environ.get("CONTRACTHUB_GITHUB_TOKEN")
+    )
     pr_parser.add_argument("--project", default=os.environ.get("CONTRACTHUB_PROJECT"))
-    pr_parser.add_argument("--repository-id", default=os.environ.get("CONTRACTHUB_REPOSITORY_ID"))
-    pr_parser.add_argument("--pat-token", default=os.environ.get("CONTRACTHUB_PAT_TOKEN"))
+    pr_parser.add_argument(
+        "--repository-id", default=os.environ.get("CONTRACTHUB_REPOSITORY_ID")
+    )
+    pr_parser.add_argument(
+        "--pat-token", default=os.environ.get("CONTRACTHUB_PAT_TOKEN")
+    )
     pr_parser.add_argument("--repo-path", required=True)
     pr_parser.add_argument("--source-branch", required=True)
     pr_parser.add_argument("--target-branch", required=True)
@@ -122,8 +171,12 @@ def _build_parser() -> argparse.ArgumentParser:
     pr_parser.add_argument("--paths", nargs="*")
     pr_parser.add_argument("--push", action="store_true")
 
-    release_parser = subparsers.add_parser("release", help="Per-contract release workflow helpers")
-    release_subparsers = release_parser.add_subparsers(dest="release_command", required=True)
+    release_parser = subparsers.add_parser(
+        "release", help="Per-contract release workflow helpers"
+    )
+    release_subparsers = release_parser.add_subparsers(
+        dest="release_command", required=True
+    )
 
     release_classify_parser = release_subparsers.add_parser(
         "classify",
@@ -148,7 +201,9 @@ def _build_parser() -> argparse.ArgumentParser:
     release_build_manifest_parser.add_argument("--candidate-root", required=True)
     release_build_manifest_parser.add_argument("--output", required=True)
     release_build_manifest_parser.add_argument("--target-branch", default="release")
-    release_build_manifest_parser.add_argument("--source-branch-prefix", default="release/")
+    release_build_manifest_parser.add_argument(
+        "--source-branch-prefix", default="release/"
+    )
 
     release_prepare_parser = release_subparsers.add_parser(
         "prepare",
@@ -171,14 +226,32 @@ def _build_parser() -> argparse.ArgumentParser:
     release_pr_parser.add_argument("--contract-path", required=True)
     release_pr_parser.add_argument("--source-branch", required=True)
     release_pr_parser.add_argument("--target-branch", required=True)
-    release_pr_parser.add_argument("--git-provider", choices=["azure", "github"], default=os.environ.get("CONTRACTHUB_GIT_PROVIDER", "azure"))
-    release_pr_parser.add_argument("--organization", default=os.environ.get("CONTRACTHUB_ORGANIZATION"))
-    release_pr_parser.add_argument("--github-owner", default=os.environ.get("CONTRACTHUB_GITHUB_OWNER"))
-    release_pr_parser.add_argument("--github-repo", default=os.environ.get("CONTRACTHUB_GITHUB_REPO"))
-    release_pr_parser.add_argument("--github-token", default=os.environ.get("CONTRACTHUB_GITHUB_TOKEN"))
-    release_pr_parser.add_argument("--project", default=os.environ.get("CONTRACTHUB_PROJECT"))
-    release_pr_parser.add_argument("--repository-id", default=os.environ.get("CONTRACTHUB_REPOSITORY_ID"))
-    release_pr_parser.add_argument("--pat-token", default=os.environ.get("CONTRACTHUB_PAT_TOKEN"))
+    release_pr_parser.add_argument(
+        "--git-provider",
+        choices=["azure", "github"],
+        default=os.environ.get("CONTRACTHUB_GIT_PROVIDER", "azure"),
+    )
+    release_pr_parser.add_argument(
+        "--organization", default=os.environ.get("CONTRACTHUB_ORGANIZATION")
+    )
+    release_pr_parser.add_argument(
+        "--github-owner", default=os.environ.get("CONTRACTHUB_GITHUB_OWNER")
+    )
+    release_pr_parser.add_argument(
+        "--github-repo", default=os.environ.get("CONTRACTHUB_GITHUB_REPO")
+    )
+    release_pr_parser.add_argument(
+        "--github-token", default=os.environ.get("CONTRACTHUB_GITHUB_TOKEN")
+    )
+    release_pr_parser.add_argument(
+        "--project", default=os.environ.get("CONTRACTHUB_PROJECT")
+    )
+    release_pr_parser.add_argument(
+        "--repository-id", default=os.environ.get("CONTRACTHUB_REPOSITORY_ID")
+    )
+    release_pr_parser.add_argument(
+        "--pat-token", default=os.environ.get("CONTRACTHUB_PAT_TOKEN")
+    )
     release_pr_parser.add_argument("--title")
     release_pr_parser.add_argument("--description")
     release_pr_parser.add_argument("--commit-message")
@@ -191,21 +264,40 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     release_prs_parser.add_argument("--manifest", required=True)
     release_prs_parser.add_argument("--repo-path", required=True)
-    release_prs_parser.add_argument("--git-provider", choices=["azure", "github"], default=os.environ.get("CONTRACTHUB_GIT_PROVIDER", "azure"))
-    release_prs_parser.add_argument("--organization", default=os.environ.get("CONTRACTHUB_ORGANIZATION"))
-    release_prs_parser.add_argument("--github-owner", default=os.environ.get("CONTRACTHUB_GITHUB_OWNER"))
-    release_prs_parser.add_argument("--github-repo", default=os.environ.get("CONTRACTHUB_GITHUB_REPO"))
-    release_prs_parser.add_argument("--github-token", default=os.environ.get("CONTRACTHUB_GITHUB_TOKEN"))
-    release_prs_parser.add_argument("--project", default=os.environ.get("CONTRACTHUB_PROJECT"))
-    release_prs_parser.add_argument("--repository-id", default=os.environ.get("CONTRACTHUB_REPOSITORY_ID"))
-    release_prs_parser.add_argument("--pat-token", default=os.environ.get("CONTRACTHUB_PAT_TOKEN"))
+    release_prs_parser.add_argument(
+        "--git-provider",
+        choices=["azure", "github"],
+        default=os.environ.get("CONTRACTHUB_GIT_PROVIDER", "azure"),
+    )
+    release_prs_parser.add_argument(
+        "--organization", default=os.environ.get("CONTRACTHUB_ORGANIZATION")
+    )
+    release_prs_parser.add_argument(
+        "--github-owner", default=os.environ.get("CONTRACTHUB_GITHUB_OWNER")
+    )
+    release_prs_parser.add_argument(
+        "--github-repo", default=os.environ.get("CONTRACTHUB_GITHUB_REPO")
+    )
+    release_prs_parser.add_argument(
+        "--github-token", default=os.environ.get("CONTRACTHUB_GITHUB_TOKEN")
+    )
+    release_prs_parser.add_argument(
+        "--project", default=os.environ.get("CONTRACTHUB_PROJECT")
+    )
+    release_prs_parser.add_argument(
+        "--repository-id", default=os.environ.get("CONTRACTHUB_REPOSITORY_ID")
+    )
+    release_prs_parser.add_argument(
+        "--pat-token", default=os.environ.get("CONTRACTHUB_PAT_TOKEN")
+    )
     release_prs_parser.add_argument("--push", action="store_true")
 
     return parser
 
 
+def _build_git_config(args: argparse.Namespace) -> "GitProviderConfig":
+    from contracthub.devops.pr_creator import AzureDevOpsConfig, GitHubConfig
 
-def _build_git_config(args: argparse.Namespace) -> GitProviderConfig:
     provider = getattr(args, "git_provider", "azure")
     if provider == "github":
         return GitHubConfig(
@@ -221,7 +313,6 @@ def _build_git_config(args: argparse.Namespace) -> GitProviderConfig:
     )
 
 
-
 def _run_setup(args: argparse.Namespace) -> None:
     import os
 
@@ -232,7 +323,7 @@ def _run_setup(args: argparse.Namespace) -> None:
         "contracts-main",
         "contracts-feature",
         ".github/workflows",
-        ".gitlab/ci"
+        ".gitlab/ci",
     ]
     for d in dirs:
         os.makedirs(d, exist_ok=True)
@@ -301,7 +392,10 @@ schema:
         else:
             print(f"⏭️ Skipped existing sample contract: {sample_path}")
     except Exception:
-        logging.getLogger("contracthub").debug("Failed to generate sample contract via datacontract-cli", exc_info=True)
+        import logging
+        logging.getLogger("contracthub").debug(
+            "Failed to generate sample contract via datacontract-cli", exc_info=True
+        )
 
     print("✅ Setup complete! You can now use GitOps for your data contracts.")
 
@@ -321,14 +415,16 @@ def _run_plan(args: argparse.Namespace) -> None:
             source=args.source,
             uc_workspace_url=args.workspace_url,
             uc_token=args.token,
-            import_args={"tables": args.tables} if args.tables else None
+            import_args={"tables": args.tables} if args.tables else None,
         )
 
         # Load base contract
         base_contract = pipeline.loader.load(args.base)
 
         # Merge them (to normalize and evaluate breaks)
-        merge_result = pipeline.merge_contract_updates(imported, base_contract, fail_on_conflict=False)
+        merge_result = pipeline.merge_contract_updates(
+            imported, base_contract, fail_on_conflict=False
+        )
         merged = merge_result.contract
 
         # Classify the change
@@ -349,16 +445,29 @@ def _run_plan(args: argparse.Namespace) -> None:
             if bump == "NONE":
                 print("\n✅ Action Required: No version bump needed.")
             elif bump == "MINOR":
-                print(f"\n⚠️ Action Required: This is an ADDITIVE change. The required bump is {bump}.")
+                print(
+                    f"\n⚠️ Action Required: This is an ADDITIVE change. The required bump is {bump}."
+                )
             elif bump == "MAJOR":
-                print(f"\n⚠️ Action Required: This is a BREAKING change. The required bump is {bump}.")
+                print(
+                    f"\n⚠️ Action Required: This is a BREAKING change. The required bump is {bump}."
+                )
 
     except Exception as e:
+        import logging
         logging.getLogger("contracthub").error("Plan failed: %s", e, exc_info=True)
         print(f"❌ Error during plan: {e}")
         raise SystemExit(1)
 
+
 def _run_import(args: argparse.Namespace) -> Path:
+    from contracthub.core.loader import ContractLoader
+    from datacontract.data_contract import DataContract
+    from contracthub.importers.unity_importer import import_unity_contract
+    from contracthub.lifecycle.merge_engine import ContractMergeEngine
+    from contracthub.utils.schema_utils import contract_to_dict
+    from contracthub.utils.yaml_utils import dump_yaml
+
     loader = ContractLoader(runtime_context=args.runtime_context)
     existing_contract: Any | None = None
     if args.existing:
@@ -394,19 +503,23 @@ def _run_import(args: argparse.Namespace) -> Path:
         )
 
     if existing_contract is not None:
-        contract = ContractMergeEngine().merge(
-            base_contract=contract,
-            business_contract=existing_contract,
-        ).contract
+        contract = (
+            ContractMergeEngine()
+            .merge(
+                base_contract=contract,
+                business_contract=existing_contract,
+            )
+            .contract
+        )
 
     return dump_yaml(contract_to_dict(contract), args.output)
 
 
-
-
 def _resolve_adls_oauth_token(args: argparse.Namespace) -> str | None:
     if args.adls_oauth_token and args.use_azure_identity:
-        raise ValueError("Use either --adls-oauth-token or --use-azure-identity, not both")
+        raise ValueError(
+            "Use either --adls-oauth-token or --use-azure-identity, not both"
+        )
     if args.adls_oauth_token:
         return args.adls_oauth_token
     if not args.use_azure_identity:
@@ -430,6 +543,11 @@ def _parse_table_uris(value: str | None) -> list[str] | None:
 
 
 def _run_merge(args: argparse.Namespace) -> Path:
+    from contracthub.core.loader import ContractLoader
+    from contracthub.lifecycle.merge_engine import ContractMergeEngine
+    from contracthub.utils.schema_utils import contract_to_dict
+    from contracthub.utils.yaml_utils import dump_yaml
+
     loader = ContractLoader(runtime_context=args.runtime_context)
     base_contract = loader.load(args.base)
     business_contract = loader.load(args.business)
@@ -443,6 +561,8 @@ def _run_merge(args: argparse.Namespace) -> Path:
 
 
 def _run_export(args: argparse.Namespace) -> str:
+    from datacontract.data_contract import DataContract
+
     export_args_dict = {}
     if args.export_args:
         try:
@@ -464,7 +584,7 @@ def _run_export(args: argparse.Namespace) -> str:
             schema_name=args.schema_name,
             server=args.server,
             sql_server_type=args.sql_server_type,
-            export_args=export_args_dict
+            export_args=export_args_dict,
         )
     else:
         contract = DataContract(data_contract_file=args.location)
@@ -475,7 +595,7 @@ def _run_export(args: argparse.Namespace) -> str:
             server=args.server,
             schema_name=args.schema_name,
             sql_server_type=args.sql_server_type,
-            export_args=export_args_dict
+            export_args=export_args_dict,
         )
 
     if args.output:
@@ -493,6 +613,8 @@ def _run_export(args: argparse.Namespace) -> str:
 
 def _run_export_ge(args: argparse.Namespace) -> Path:
     import sys
+    from contracthub.quality.ge_exporter import GreatExpectationsExporter
+
     try:
         return GreatExpectationsExporter().export_to_path(
             args.contract,
@@ -507,6 +629,8 @@ def _run_export_ge(args: argparse.Namespace) -> Path:
 
 
 def _run_create_pr(args: argparse.Namespace) -> dict[str, Any]:
+    from contracthub.devops.pr_creator import PullRequestCreator
+
     config = _build_git_config(args)
     manager = PullRequestCreator(config=config)
     return manager.create_update_pr(
@@ -522,6 +646,13 @@ def _run_create_pr(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _run_release_classify(args: argparse.Namespace) -> dict[str, Any]:
+    from contracthub.core.loader import ContractLoader
+    from contracthub.core.release import (
+        classify_contract_change,
+        suggest_release_version,
+    )
+    from dataclasses import asdict
+
     loader = ContractLoader(runtime_context=args.runtime_context)
     base_contract = loader.load(args.base)
     candidate_contract = loader.load(args.candidate)
@@ -545,11 +676,19 @@ def _run_release_classify(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _run_release_prepare(args: argparse.Namespace) -> dict[str, Any]:
+    from contracthub.core.loader import ContractLoader
+    from contracthub.core.release import prepare_release_candidate
+    from contracthub.utils.schema_utils import contract_to_dict
+    from contracthub.utils.yaml_utils import dump_yaml
+    from dataclasses import asdict
+
     loader = ContractLoader(runtime_context=args.runtime_context)
     base_contract = loader.load(args.base)
     candidate_contract = loader.load(args.candidate)
 
-    result = prepare_release_candidate(base_contract, candidate_contract, args.release_tag)
+    result = prepare_release_candidate(
+        base_contract, candidate_contract, args.release_tag
+    )
     output_path = dump_yaml(contract_to_dict(result.contract), args.output)
     return {
         "contractId": str(result.contract.id or ""),
@@ -565,6 +704,11 @@ def _run_release_prepare(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _run_release_classify_repo(args: argparse.Namespace) -> dict[str, Any]:
+    from contracthub.devops.release_workflow import (
+        classify_contracts_in_repo,
+        repository_change_to_dict,
+    )
+
     results = classify_contracts_in_repo(
         base_root=args.base_root,
         candidate_root=args.candidate_root,
@@ -575,6 +719,12 @@ def _run_release_classify_repo(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _run_release_build_manifest(args: argparse.Namespace) -> dict[str, Any]:
+    from contracthub.devops.release_workflow import (
+        build_batch_release_manifest,
+        batch_task_to_dict,
+        batch_manifest_build_to_dict,
+    )
+
     build = build_batch_release_manifest(
         base_root=args.base_root,
         candidate_root=args.candidate_root,
@@ -584,7 +734,9 @@ def _run_release_build_manifest(args: argparse.Namespace) -> dict[str, Any]:
     output_path = Path(args.output).expanduser().resolve()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
-        json.dumps([batch_task_to_dict(item) for item in build.tasks], indent=2, sort_keys=True),
+        json.dumps(
+            [batch_task_to_dict(item) for item in build.tasks], indent=2, sort_keys=True
+        ),
         encoding="utf-8",
     )
     payload = batch_manifest_build_to_dict(build)
@@ -593,11 +745,21 @@ def _run_release_build_manifest(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _run_release_create_pr(args: argparse.Namespace) -> dict[str, Any]:
+    from contracthub.core.loader import ContractLoader
+    from contracthub.core.release import prepare_release_candidate
+    from contracthub.devops.release_workflow import (
+        build_release_pr_plan,
+        create_release_pull_request,
+        release_plan_to_dict,
+    )
+
     loader = ContractLoader(runtime_context=args.runtime_context)
     base_contract = loader.load(args.base)
     candidate_contract = loader.load(args.candidate)
 
-    promotion = prepare_release_candidate(base_contract, candidate_contract, args.release_tag)
+    promotion = prepare_release_candidate(
+        base_contract, candidate_contract, args.release_tag
+    )
     plan = build_release_pr_plan(
         promotion=promotion,
         contract_repo_path=args.contract_path,
@@ -628,12 +790,21 @@ def _run_release_create_pr(args: argparse.Namespace) -> dict[str, Any]:
 
 def _run_enrich(args: argparse.Namespace) -> str:
     from contracthub.tools.enricher import ContractEnricher
+
     enricher = ContractEnricher()
-    enricher.process(args.contract, max_workers=args.concurrency, mode=getattr(args, "mode", "label"))
+    enricher.process(
+        args.contract, max_workers=args.concurrency, mode=getattr(args, "mode", "label")
+    )
     return f"Successfully enriched {args.contract} (mode: {getattr(args, 'mode', 'label')})"
 
 
 def _run_release_create_prs(args: argparse.Namespace) -> dict[str, Any]:
+    from contracthub.devops.release_workflow import (
+        load_batch_release_tasks,
+        create_release_pull_requests_from_manifest,
+        batch_task_to_dict,
+    )
+
     config = _build_git_config(args)
     tasks = load_batch_release_tasks(args.manifest)
     payload = create_release_pull_requests_from_manifest(
@@ -649,7 +820,6 @@ def _run_release_create_prs(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def main() -> int:
-    import logging as _logging
 
     parser = _build_parser()
     try:
@@ -730,8 +900,9 @@ def main() -> int:
     except SystemExit as exc:
         return exc.code if isinstance(exc.code, int) else 1
     except Exception as exc:
-        _logging.getLogger("contracthub").error("Fatal error: %s", exc, exc_info=True)
-        print(f"❌ {exc}", file=__import__('sys').stderr)
+        import logging
+        logging.getLogger("contracthub").error("Fatal error: %s", exc, exc_info=True)
+        print(f"❌ {exc}", file=__import__("sys").stderr)
         return 1
 
 

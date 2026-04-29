@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any, Callable, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Iterable, Sequence, Tuple
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
-from open_data_contract_standard.model import CustomProperty, OpenDataContractStandard, Relationship, SchemaObject
+from open_data_contract_standard.model import (
+    CustomProperty,
+    OpenDataContractStandard,
+    Relationship,
+    SchemaObject,
+)
 
 from contracthub.constants import (
     UNITY_CONSTRAINT_NAME_KEY,
@@ -42,18 +47,32 @@ def enrich_unity_contract_relationships(
     try:
         metadata = table_metadata_fetcher(workspace_url, token, table_fqn)
         foreign_keys = _extract_foreign_keys(metadata)
-        imported_count = _apply_foreign_keys(contract, table_fqn=table_fqn, foreign_keys=foreign_keys)
-        _upsert_contract_custom_property(contract, UNITY_RELATIONSHIPS_IMPORTED_KEY, "true")
-        _upsert_contract_custom_property(contract, UNITY_RELATIONSHIPS_COUNT_KEY, str(imported_count))
+        imported_count = _apply_foreign_keys(
+            contract, table_fqn=table_fqn, foreign_keys=foreign_keys
+        )
+        _upsert_contract_custom_property(
+            contract, UNITY_RELATIONSHIPS_IMPORTED_KEY, "true"
+        )
+        _upsert_contract_custom_property(
+            contract, UNITY_RELATIONSHIPS_COUNT_KEY, str(imported_count)
+        )
     except Exception as exc:  # pragma: no cover - behavior validated via unit tests
-        _upsert_contract_custom_property(contract, UNITY_RELATIONSHIPS_IMPORTED_KEY, "false")
-        _upsert_contract_custom_property(contract, UNITY_RELATIONSHIPS_REASON_KEY, str(exc))
+        _upsert_contract_custom_property(
+            contract, UNITY_RELATIONSHIPS_IMPORTED_KEY, "false"
+        )
+        _upsert_contract_custom_property(
+            contract, UNITY_RELATIONSHIPS_REASON_KEY, str(exc)
+        )
     return contract
 
 
-def _fetch_unity_table_metadata(workspace_url: str, token: str, table_fqn: str) -> dict[str, Any]:
+def _fetch_unity_table_metadata(
+    workspace_url: str, token: str, table_fqn: str
+) -> dict[str, Any]:
     if not workspace_url or not token:
-        raise ValueError("workspace_url and token are required for Unity relationship import")
+        raise ValueError(
+            "workspace_url and token are required for Unity relationship import"
+        )
 
     base_url = workspace_url.rstrip("/")
     endpoint = f"{base_url}/api/2.1/unity-catalog/tables/{quote(table_fqn, safe='')}"
@@ -70,9 +89,13 @@ def _fetch_unity_table_metadata(workspace_url: str, token: str, table_fqn: str) 
         with urlopen(request, timeout=8) as response:
             payload = response.read().decode("utf-8")
     except HTTPError as exc:
-        raise RuntimeError(f"Unity table metadata request failed: HTTP {exc.code}") from exc
+        raise RuntimeError(
+            f"Unity table metadata request failed: HTTP {exc.code}"
+        ) from exc
     except URLError as exc:
-        raise RuntimeError(f"Unity table metadata request failed: {exc.reason}") from exc
+        raise RuntimeError(
+            f"Unity table metadata request failed: {exc.reason}"
+        ) from exc
 
     parsed = json.loads(payload)
     if not isinstance(parsed, dict):
@@ -92,7 +115,13 @@ def _extract_foreign_keys(metadata: dict[str, Any]) -> list[UnityForeignKey]:
 
 def _constraint_items(metadata: dict[str, Any]) -> list[dict[str, Any]]:
     merged: list[dict[str, Any]] = []
-    for key in ("table_constraints", "tableConstraints", "constraints", "foreign_keys", "foreignKeys"):
+    for key in (
+        "table_constraints",
+        "tableConstraints",
+        "constraints",
+        "foreign_keys",
+        "foreignKeys",
+    ):
         value = metadata.get(key)
         if isinstance(value, list):
             merged.extend(item for item in value if isinstance(item, dict))
@@ -178,7 +207,9 @@ def _apply_foreign_keys(
         return 0
 
     imported_count = 0
-    fields = {item.name.lower(): item for item in (schema_obj.properties or []) if item.name}
+    fields = {
+        item.name.lower(): item for item in (schema_obj.properties or []) if item.name
+    }
 
     for record in foreign_keys:
         custom_props = _constraint_custom_props(record.constraint_name)
@@ -191,7 +222,9 @@ def _apply_foreign_keys(
                     to=f"{record.target_table}.{record.target_columns[0]}",
                     customProperties=custom_props,
                 )
-                property_obj.relationships = _merge_relationships(property_obj.relationships, [relationship])
+                property_obj.relationships = _merge_relationships(
+                    property_obj.relationships, [relationship]
+                )
                 imported_count += 1
                 continue
 
@@ -202,13 +235,17 @@ def _apply_foreign_keys(
             to=to_values,
             customProperties=custom_props,
         )
-        schema_obj.relationships = _merge_relationships(schema_obj.relationships, [schema_relationship])
+        schema_obj.relationships = _merge_relationships(
+            schema_obj.relationships, [schema_relationship]
+        )
         imported_count += 1
 
     return imported_count
 
 
-def _resolve_target_schema(contract: OpenDataContractStandard, *, table_fqn: str) -> SchemaObject | None:
+def _resolve_target_schema(
+    contract: OpenDataContractStandard, *, table_fqn: str
+) -> SchemaObject | None:
     schema_items = contract.schema_ or []
     if not schema_items:
         return None
@@ -228,7 +265,9 @@ def _constraint_custom_props(name: str | None) -> list[CustomProperty] | None:
     return [CustomProperty(property=UNITY_CONSTRAINT_NAME_KEY, value=name)]
 
 
-def _merge_relationships(existing: Iterable[Relationship] | None, additions: Iterable[Relationship] | None) -> list[Relationship]:
+def _merge_relationships(
+    existing: Iterable[Relationship] | None, additions: Iterable[Relationship] | None
+) -> list[Relationship]:
     merged: list[Relationship] = list(existing or [])
     seen = {_relationship_key(item) for item in merged}
     for item in additions or []:
@@ -248,7 +287,9 @@ def _relationship_key(item: Relationship) -> Tuple[Any, Any, Any]:
     return item.type, normalized_from, normalized_to
 
 
-def _upsert_contract_custom_property(contract: OpenDataContractStandard, key: str, value: Any) -> None:
+def _upsert_contract_custom_property(
+    contract: OpenDataContractStandard, key: str, value: Any
+) -> None:
     items = list(contract.customProperties or [])
     lowered = key.lower()
     for item in items:

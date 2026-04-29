@@ -17,7 +17,9 @@ from typing import Iterator
 from datacontract.data_contract import DataContract
 from open_data_contract_standard.model import OpenDataContractStandard
 
-from contracthub.importers.unity_relationships import enrich_unity_contract_relationships
+from contracthub.importers.unity_relationships import (
+    enrich_unity_contract_relationships,
+)
 
 LOGGER = logging.getLogger(__name__)
 

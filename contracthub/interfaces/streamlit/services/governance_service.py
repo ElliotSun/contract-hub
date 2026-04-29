@@ -23,7 +23,11 @@ from typing import Any
 
 from open_data_contract_standard.model import OpenDataContractStandard
 
-from contracthub.lifecycle.merge_engine import ContractMergeEngine, MergeAnalysis, MergeResult
+from contracthub.lifecycle.merge_engine import (
+    ContractMergeEngine,
+    MergeAnalysis,
+    MergeResult,
+)
 from contracthub.utils.schema_utils import contract_to_model
 
 
@@ -50,7 +54,9 @@ def apply(source_yaml: str, target_yaml: str) -> MergeResult:
     return apply_contracts(_to_odcs_model(source_yaml), _to_odcs_model(target_yaml))
 
 
-def analyze_contracts(source_contract: ContractInput, target_contract: ContractInput) -> MergeAnalysis:
+def analyze_contracts(
+    source_contract: ContractInput, target_contract: ContractInput
+) -> MergeAnalysis:
     """Analyze two contracts after normalizing them into ODCS models."""
     return _MERGE_ENGINE.analyze(
         base_contract=contract_to_model(source_contract),
@@ -58,7 +64,9 @@ def analyze_contracts(source_contract: ContractInput, target_contract: ContractI
     )
 
 
-def apply_contracts(source_contract: ContractInput, target_contract: ContractInput) -> MergeResult:
+def apply_contracts(
+    source_contract: ContractInput, target_contract: ContractInput
+) -> MergeResult:
     """Apply lifecycle-aware merge after normalizing inputs into ODCS models."""
     return _MERGE_ENGINE.merge(
         base_contract=contract_to_model(source_contract),
@@ -71,4 +79,6 @@ def _to_odcs_model(contract_yaml: str) -> OpenDataContractStandard:
     try:
         return OpenDataContractStandard.from_string(contract_yaml)
     except TypeError as exc:
-        raise ValueError("Contract YAML must deserialize into a mapping object") from exc
+        raise ValueError(
+            "Contract YAML must deserialize into a mapping object"
+        ) from exc

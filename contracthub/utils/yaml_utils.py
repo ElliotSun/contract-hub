@@ -32,7 +32,9 @@ def read_yaml_text(path: str | Path) -> str:
     if _is_local_path(path_str):
         resolved = _resolve_local_path(path)
         return resolved.read_text(encoding="utf-8")
-    return contract_loader.read_contract_text(path_str, contract_loader._resolve_runtime_context(None))
+    return contract_loader.read_contract_text(
+        path_str, contract_loader._resolve_runtime_context(None)
+    )
 
 
 def load_yaml(path: str | Path) -> dict[str, Any]:
@@ -43,15 +45,21 @@ def load_yaml(path: str | Path) -> dict[str, Any]:
     return payload
 
 
-def dump_yaml(payload: dict[str, Any] | OpenDataContractStandard, path: str | Path) -> Path:
+def dump_yaml(
+    payload: dict[str, Any] | OpenDataContractStandard, path: str | Path
+) -> Path:
     """Write ODCS mapping or model payload to YAML."""
     resolved = Path(path).expanduser().resolve()
     resolved.parent.mkdir(parents=True, exist_ok=True)
-    resolved.write_text(yaml.safe_dump(contract_to_dict(payload), sort_keys=False), encoding="utf-8")
+    resolved.write_text(
+        yaml.safe_dump(contract_to_dict(payload), sort_keys=False), encoding="utf-8"
+    )
     return resolved
 
 
-def load_yaml_metadata(path: str | Path, keys: list[str] | tuple[str, ...]) -> dict[str, str]:
+def load_yaml_metadata(
+    path: str | Path, keys: list[str] | tuple[str, ...]
+) -> dict[str, str]:
     """Read only top-level scalar metadata keys from a YAML file.
 
     This avoids deserializing the full contract when the UI only needs catalog
@@ -85,7 +93,9 @@ def list_yaml_documents(root: str | Path) -> list[str]:
     """List YAML contract documents under a local or ADLS2 root path."""
     root_str = str(root)
     if contract_loader.is_uc_volume_path(root_str):
-        return _list_local_yaml_documents(contract_loader.normalize_uc_volume_local_path(root_str))
+        return _list_local_yaml_documents(
+            contract_loader.normalize_uc_volume_local_path(root_str)
+        )
     if _is_local_path(root_str):
         return _list_local_yaml_documents(root)
     if contract_loader.is_adls2_path(root_str):
@@ -101,7 +111,12 @@ def _list_local_yaml_documents(root: str | Path) -> list[str]:
         return []
 
     paths = [*resolved.rglob("*.yaml"), *resolved.rglob("*.yml")]
-    return [str(path.resolve()) for path in sorted(paths, key=lambda item: str(item).lower())]
+    return [
+        str(path.resolve())
+        for path in sorted(paths, key=lambda item: str(item).lower())
+    ]
+
+
 def _resolve_local_path(path: str | Path) -> Path:
     parsed = urlparse(str(path))
     if parsed.scheme == "file":

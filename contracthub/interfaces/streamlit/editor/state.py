@@ -6,7 +6,9 @@ from typing import Any
 
 import streamlit as st
 
-from contracthub.interfaces.streamlit.services.contract_service import load_sample_contract_yaml
+from contracthub.interfaces.streamlit.services.contract_service import (
+    load_sample_contract_yaml,
+)
 
 from .contract_model import (
     contract_api_version,
@@ -106,8 +108,12 @@ def ensure_selected_schema(contract: dict[str, Any]) -> None:
         st.session_state["editor_selected_schema_name"] = ""
         return
 
-    schema_names = [_schema_identity(schema, index) for index, schema in enumerate(schemas)]
-    selected_name = str(st.session_state.get("editor_selected_schema_name", "") or "").strip()
+    schema_names = [
+        _schema_identity(schema, index) for index, schema in enumerate(schemas)
+    ]
+    selected_name = str(
+        st.session_state.get("editor_selected_schema_name", "") or ""
+    ).strip()
     if selected_name not in schema_names:
         st.session_state["editor_selected_schema_name"] = schema_names[0]
 
@@ -120,11 +126,17 @@ def ensure_selected_field(contract: dict[str, Any]) -> None:
         return
 
     fields = current_schema.get("properties", []) or []
-    field_names = [_field_identity(field, index) for index, field in enumerate(fields) if isinstance(field, dict)]
+    field_names = [
+        _field_identity(field, index)
+        for index, field in enumerate(fields)
+        if isinstance(field, dict)
+    ]
     if not field_names:
         st.session_state["editor_selected_field_name"] = ""
         return
-    selected_name = str(st.session_state.get("editor_selected_field_name", "") or "").strip()
+    selected_name = str(
+        st.session_state.get("editor_selected_field_name", "") or ""
+    ).strip()
     if selected_name not in field_names:
         st.session_state["editor_selected_field_name"] = field_names[0]
 
@@ -134,7 +146,9 @@ def selected_schema(contract: dict[str, Any]) -> dict[str, Any] | None:
     all_schemas = schema_items(contract)
     if not all_schemas:
         return None
-    selected_name = str(st.session_state.get("editor_selected_schema_name", "") or "").strip()
+    selected_name = str(
+        st.session_state.get("editor_selected_schema_name", "") or ""
+    ).strip()
     for index, schema in enumerate(all_schemas):
         if _schema_identity(schema, index) == selected_name:
             return schema
@@ -149,7 +163,9 @@ def selected_field(contract: dict[str, Any]) -> dict[str, Any] | None:
     fields = current_schema.get("properties", []) or []
     if not fields:
         return None
-    selected_name = str(st.session_state.get("editor_selected_field_name", "") or "").strip()
+    selected_name = str(
+        st.session_state.get("editor_selected_field_name", "") or ""
+    ).strip()
     for index, field in enumerate(fields):
         if isinstance(field, dict) and _field_identity(field, index) == selected_name:
             return field
@@ -166,25 +182,39 @@ def sync_contract_inputs(contract: dict[str, Any], *, force: bool = False) -> No
     if force or "editor_contract_version_input" not in st.session_state:
         st.session_state["editor_contract_version_input"] = contract_version(contract)
     if force or "editor_contract_status_input" not in st.session_state:
-        st.session_state["editor_contract_status_input"] = contract_status(contract) or "draft"
+        st.session_state["editor_contract_status_input"] = (
+            contract_status(contract) or "draft"
+        )
     if force or "editor_contract_domain_input" not in st.session_state:
         st.session_state["editor_contract_domain_input"] = contract_domain(contract)
     if force or "editor_contract_data_product_input" not in st.session_state:
-        st.session_state["editor_contract_data_product_input"] = contract_data_product(contract)
+        st.session_state["editor_contract_data_product_input"] = contract_data_product(
+            contract
+        )
     if force or "editor_contract_tenant_input" not in st.session_state:
         st.session_state["editor_contract_tenant_input"] = contract_tenant(contract)
     if force or "editor_contract_description_purpose_input" not in st.session_state:
-        st.session_state["editor_contract_description_purpose_input"] = contract_description_part(contract, "purpose")
+        st.session_state["editor_contract_description_purpose_input"] = (
+            contract_description_part(contract, "purpose")
+        )
     if force or "editor_contract_description_limitations_input" not in st.session_state:
-        st.session_state["editor_contract_description_limitations_input"] = contract_description_part(contract, "limitations")
+        st.session_state["editor_contract_description_limitations_input"] = (
+            contract_description_part(contract, "limitations")
+        )
     if force or "editor_contract_description_usage_input" not in st.session_state:
-        st.session_state["editor_contract_description_usage_input"] = contract_description_part(contract, "usage")
+        st.session_state["editor_contract_description_usage_input"] = (
+            contract_description_part(contract, "usage")
+        )
     if force or "editor_contract_tags_input" not in st.session_state:
-        st.session_state["editor_contract_tags_input"] = tags_to_text(contract_tags(contract))
+        st.session_state["editor_contract_tags_input"] = tags_to_text(
+            contract_tags(contract)
+        )
     if force or "editor_contract_id_input" not in st.session_state:
         st.session_state["editor_contract_id_input"] = contract_id(contract)
     if force or "editor_contract_api_version_input" not in st.session_state:
-        st.session_state["editor_contract_api_version_input"] = contract_api_version(contract)
+        st.session_state["editor_contract_api_version_input"] = contract_api_version(
+            contract
+        )
     if force or "editor_contract_kind_input" not in st.session_state:
         st.session_state["editor_contract_kind_input"] = contract_kind(contract)
 
@@ -195,12 +225,21 @@ def sync_schema_inputs(contract: dict[str, Any], *, force: bool = False) -> None
     if current_schema is None:
         return
     selected_key = str(st.session_state.get("editor_selected_schema_name", "") or "")
-    if not force and st.session_state.get("editor_selected_schema_source") == selected_key:
+    if (
+        not force
+        and st.session_state.get("editor_selected_schema_source") == selected_key
+    ):
         return
     st.session_state["editor_schema_name_input"] = str(current_schema.get("name", ""))
-    st.session_state["editor_schema_business_name_input"] = str(current_schema.get("businessName", ""))
-    st.session_state["editor_schema_description_input"] = str(current_schema.get("description", "") or "")
-    st.session_state["editor_schema_tags_input"] = tags_to_text(current_schema.get("tags"))
+    st.session_state["editor_schema_business_name_input"] = str(
+        current_schema.get("businessName", "")
+    )
+    st.session_state["editor_schema_description_input"] = str(
+        current_schema.get("description", "") or ""
+    )
+    st.session_state["editor_schema_tags_input"] = tags_to_text(
+        current_schema.get("tags")
+    )
     st.session_state["editor_selected_schema_source"] = selected_key
 
 
@@ -213,19 +252,38 @@ def sync_field_inputs(contract: dict[str, Any], *, force: bool = False) -> None:
     )
     if current_field is None:
         return
-    if not force and st.session_state.get("editor_selected_field_source") == selected_key:
+    if (
+        not force
+        and st.session_state.get("editor_selected_field_source") == selected_key
+    ):
         return
     st.session_state["editor_field_name_input"] = str(current_field.get("name", ""))
     st.session_state["editor_field_type_input"] = field_type(current_field)
-    st.session_state["editor_field_required_input"] = bool(current_field.get("required", False))
-    st.session_state["editor_field_lifecycle_input"] = field_lifecycle_status(current_field) or "draft"
-    st.session_state["editor_field_business_name_input"] = str(current_field.get("businessName", ""))
-    st.session_state["editor_field_description_input"] = str(current_field.get("description", "") or "")
+    st.session_state["editor_field_required_input"] = bool(
+        current_field.get("required", False)
+    )
+    st.session_state["editor_field_lifecycle_input"] = (
+        field_lifecycle_status(current_field) or "draft"
+    )
+    st.session_state["editor_field_business_name_input"] = str(
+        current_field.get("businessName", "")
+    )
+    st.session_state["editor_field_description_input"] = str(
+        current_field.get("description", "") or ""
+    )
     st.session_state["editor_field_examples_input"] = field_examples_text(current_field)
-    st.session_state["editor_field_tags_input"] = tags_to_text(current_field.get("tags"))
-    st.session_state["editor_field_classification_input"] = str(current_field.get("classification", "") or "")
-    st.session_state["editor_field_transform_description_input"] = str(current_field.get("transformDescription", "") or "")
-    st.session_state["editor_field_physical_name_input"] = str(current_field.get("physicalName", "") or "")
+    st.session_state["editor_field_tags_input"] = tags_to_text(
+        current_field.get("tags")
+    )
+    st.session_state["editor_field_classification_input"] = str(
+        current_field.get("classification", "") or ""
+    )
+    st.session_state["editor_field_transform_description_input"] = str(
+        current_field.get("transformDescription", "") or ""
+    )
+    st.session_state["editor_field_physical_name_input"] = str(
+        current_field.get("physicalName", "") or ""
+    )
     st.session_state["editor_selected_field_source"] = selected_key
 
 

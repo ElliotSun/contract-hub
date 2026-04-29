@@ -8,18 +8,16 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 from contracthub.core.editor_rows import (
-    is_blank_quality_row,
-    is_blank_quick_field_row,
-    optional_int,
-    rule_condition,
     tags_to_text,
     text_to_tags,
 )
-from contracthub.core.editor_semantics import normalize_tags, set_mapping_text
+from contracthub.core.editor_semantics import normalize_tags
 
 try:
     from streamlit_tags import st_tags
-except ImportError:  # pragma: no cover - fallback until optional UI dependency is installed
+except (
+    ImportError
+):  # pragma: no cover - fallback until optional UI dependency is installed
     st_tags = None
 
 
@@ -76,7 +74,9 @@ def rows_from_dataframe(frame: Any) -> list[dict[str, Any]]:
     return []
 
 
-def editor_dataframe(rows: list[dict[str, Any]], columns: list[str] | None = None) -> pd.DataFrame:
+def editor_dataframe(
+    rows: list[dict[str, Any]], columns: list[str] | None = None
+) -> pd.DataFrame:
     """Create a stable dataframe for Streamlit editing."""
     frame = pd.DataFrame(rows)
     if columns:

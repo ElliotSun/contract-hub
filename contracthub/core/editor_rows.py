@@ -61,7 +61,14 @@ def is_blank_quality_row(row: dict[str, Any]) -> bool:
 
 def rule_condition(rule: dict[str, Any]) -> tuple[str, str]:
     """Resolve a readable condition field for a quality rule."""
-    for key in ("condition", "mustBe", "mustBeGreaterThan", "mustBeLessThan", "query", "rule"):
+    for key in (
+        "condition",
+        "mustBe",
+        "mustBeGreaterThan",
+        "mustBeLessThan",
+        "query",
+        "rule",
+    ):
         if key in rule:
             value = rule.get(key)
             return key, "" if value is None else str(value)
@@ -87,7 +94,9 @@ def optional_int(value: Any) -> int | None:
         return None
 
 
-def apply_quick_field_rows(schema_obj: dict[str, Any], edited_rows: list[dict[str, Any]]) -> None:
+def apply_quick_field_rows(
+    schema_obj: dict[str, Any], edited_rows: list[dict[str, Any]]
+) -> None:
     """Write quick-edit business fields back to the selected schema."""
     original_fields = schema_obj.get("properties", []) or []
     updated_fields: list[dict[str, Any]] = []
@@ -155,7 +164,10 @@ def field_by_name(schema_obj: dict[str, Any], field_name: str) -> dict[str, Any]
     """Return a field by name."""
     target_name = field_name.strip()
     for field_obj in schema_obj.get("properties", []) or []:
-        if isinstance(field_obj, dict) and str(field_obj.get("name", "")).strip() == target_name:
+        if (
+            isinstance(field_obj, dict)
+            and str(field_obj.get("name", "")).strip() == target_name
+        ):
             return field_obj
     return None
 
@@ -169,15 +181,19 @@ def selected_schema_field_names(schema_obj: dict[str, Any]) -> list[str]:
     ]
 
 
-def quality_row(rule: dict[str, Any], *, scope: str, rule_index: int, property_name: str) -> dict[str, Any]:
+def quality_row(
+    rule: dict[str, Any], *, scope: str, rule_index: int, property_name: str
+) -> dict[str, Any]:
     """Create a quality rule editor row."""
     condition_key, condition_value = rule_condition(rule)
     return {
         "rule_name": str(rule.get("name") or rule.get("metric") or "").strip(),
-        "type": str(rule.get("type") or DEFAULT_QUALITY_TYPE).strip() or DEFAULT_QUALITY_TYPE,
+        "type": str(rule.get("type") or DEFAULT_QUALITY_TYPE).strip()
+        or DEFAULT_QUALITY_TYPE,
         "column": property_name if scope == "field" else TABLE_RULE_COLUMN,
         "condition": condition_value,
-        "severity": str(rule.get("severity") or DEFAULT_QUALITY_SEVERITY).strip() or DEFAULT_QUALITY_SEVERITY,
+        "severity": str(rule.get("severity") or DEFAULT_QUALITY_SEVERITY).strip()
+        or DEFAULT_QUALITY_SEVERITY,
         "__scope": scope,
         "__rule_index": rule_index,
         "__property_name": property_name,
@@ -191,7 +207,9 @@ def quality_rows(schema_obj: dict[str, Any]) -> list[dict[str, Any]]:
 
     for index, rule in enumerate(schema_obj.get("quality", []) or []):
         if isinstance(rule, dict):
-            rows.append(quality_row(rule, scope="table", rule_index=index, property_name=""))
+            rows.append(
+                quality_row(rule, scope="table", rule_index=index, property_name="")
+            )
 
     for field_obj in schema_obj.get("properties", []) or []:
         if not isinstance(field_obj, dict):
@@ -199,12 +217,18 @@ def quality_rows(schema_obj: dict[str, Any]) -> list[dict[str, Any]]:
         field_name = str(field_obj.get("name", "")).strip()
         for index, rule in enumerate(field_obj.get("quality", []) or []):
             if isinstance(rule, dict):
-                rows.append(quality_row(rule, scope="field", rule_index=index, property_name=field_name))
+                rows.append(
+                    quality_row(
+                        rule, scope="field", rule_index=index, property_name=field_name
+                    )
+                )
 
     return rows
 
 
-def apply_quality_rows(schema_obj: dict[str, Any], edited_rows: list[dict[str, Any]]) -> None:
+def apply_quality_rows(
+    schema_obj: dict[str, Any], edited_rows: list[dict[str, Any]]
+) -> None:
     """Write edited quality rows back to the selected schema."""
     schema_obj["quality"] = []
     for field_obj in schema_obj.get("properties", []) or []:
@@ -216,15 +240,21 @@ def apply_quality_rows(schema_obj: dict[str, Any], edited_rows: list[dict[str, A
             continue
         rule = {
             "name": str(row.get("rule_name", "")).strip(),
-            "type": str(row.get("type", DEFAULT_QUALITY_TYPE)).strip() or DEFAULT_QUALITY_TYPE,
-            "severity": str(row.get("severity", DEFAULT_QUALITY_SEVERITY)).strip() or DEFAULT_QUALITY_SEVERITY,
+            "type": str(row.get("type", DEFAULT_QUALITY_TYPE)).strip()
+            or DEFAULT_QUALITY_TYPE,
+            "severity": str(row.get("severity", DEFAULT_QUALITY_SEVERITY)).strip()
+            or DEFAULT_QUALITY_SEVERITY,
         }
-        condition_key = str(row.get("__condition_key", "condition")).strip() or "condition"
+        condition_key = (
+            str(row.get("__condition_key", "condition")).strip() or "condition"
+        )
         condition_value = str(row.get("condition", "")).strip()
         if condition_value:
             rule[condition_key] = condition_value
 
-        target_column = str(row.get("column", TABLE_RULE_COLUMN)).strip() or TABLE_RULE_COLUMN
+        target_column = (
+            str(row.get("column", TABLE_RULE_COLUMN)).strip() or TABLE_RULE_COLUMN
+        )
         if target_column == TABLE_RULE_COLUMN:
             schema_obj.setdefault("quality", []).append(rule)
             continue

@@ -198,7 +198,9 @@ def section_title(title: str, note: str | None = None) -> None:
     """Render a styled section heading."""
     st.markdown(f"<div class='ch-section-title'>{title}</div>", unsafe_allow_html=True)
     if note:
-        st.markdown(f"<div class='ch-section-note'>{note}</div>", unsafe_allow_html=True)
+        st.markdown(
+            f"<div class='ch-section-note'>{note}</div>", unsafe_allow_html=True
+        )
 
 
 def status_badge_html(status: str, flags: list[str]) -> str:
@@ -212,13 +214,17 @@ def status_badge_html(status: str, flags: list[str]) -> str:
     }
     labels: list[tuple[str, str]] = []
     normalized_status = (status or "draft").lower()
-    labels.append((normalized_status, classes.get(normalized_status, "ch-badge ch-badge-draft")))
+    labels.append(
+        (normalized_status, classes.get(normalized_status, "ch-badge ch-badge-draft"))
+    )
     if "breaking" in flags:
         labels.append(("breaking", classes["breaking"]))
     if "deprecated" in flags and normalized_status != "deprecated":
         labels.append(("deprecated", classes["deprecated"]))
 
-    badges = "".join(f"<span class='{css_class}'>{label}</span>" for label, css_class in labels)
+    badges = "".join(
+        f"<span class='{css_class}'>{label}</span>" for label, css_class in labels
+    )
     return f"<div class='ch-status-row'>{badges}</div>"
 
 
@@ -232,12 +238,18 @@ def catalog_badges_html(status: str, flags: list[str], tags: list[str]) -> str:
         "retired": "ch-badge ch-badge-draft",
     }
     normalized_status = (status or "draft").lower()
-    labels: list[tuple[str, str]] = [(normalized_status, classes.get(normalized_status, "ch-badge ch-badge-draft"))]
+    labels: list[tuple[str, str]] = [
+        (normalized_status, classes.get(normalized_status, "ch-badge ch-badge-draft"))
+    ]
     if "breaking" in flags:
         labels.append(("breaking", classes["breaking"]))
     if "deprecated" in flags and normalized_status != "deprecated":
         labels.append(("deprecated", classes["deprecated"]))
 
-    badge_html = "".join(f"<span class='{css_class}'>{label}</span>" for label, css_class in labels)
-    tag_html = "".join(f"<span class='ch-badge ch-badge-draft'>{tag}</span>" for tag in tags)
+    badge_html = "".join(
+        f"<span class='{css_class}'>{label}</span>" for label, css_class in labels
+    )
+    tag_html = "".join(
+        f"<span class='ch-badge ch-badge-draft'>{tag}</span>" for tag in tags
+    )
     return f"<div class='ch-status-row'>{badge_html}{tag_html}</div>"

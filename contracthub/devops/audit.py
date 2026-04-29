@@ -16,4 +16,6 @@ class AuditMetadata:
 def build_audit_metadata(*, actor: str, source: str) -> AuditMetadata:
     """Create standard audit metadata for a merge operation."""
     ts = datetime.now(timezone.utc).isoformat()
-    return AuditMetadata(last_merge_ts=ts, last_merge_actor=actor, last_merge_source=source)
+    return AuditMetadata(
+        last_merge_ts=ts, last_merge_actor=actor, last_merge_source=source
+    )
