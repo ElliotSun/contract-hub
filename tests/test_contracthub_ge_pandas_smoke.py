@@ -1,4 +1,6 @@
 from __future__ import annotations
+import sys
+
 
 import json
 
@@ -30,6 +32,7 @@ def _create_pandas_validator(df: pd.DataFrame, expectation_suite):
     return context.get_validator(batch_request=batch_request, expectation_suite=expectation_suite)
 
 
+@pytest.mark.skipif(sys.version_info >= (3, 13), reason="great_expectations does not support Python 3.13+")
 def test_generate_expectation_suite_can_validate_pandas_dataframe_with_real_ge_runtime(
     monkeypatch,
     sample_custom_ge_quality_contract_model,
