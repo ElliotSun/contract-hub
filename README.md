@@ -13,6 +13,7 @@ contracthub/
     validator.py
   exporters/
     sql_exporter.py
+    graph_exporter.py
   lifecycle/
     merge_engine.py
     policy.py
@@ -35,63 +36,184 @@ contracthub/
     audit.py
 ```
 
-## Install
+## Installation
 
 ```bash
+# Basic setup with dev tools
 uv sync --extra dev
-```
 
-Azure-backed contract storage support:
-
-```bash
+# With Azure-backed contract storage support
 uv sync --extra dev --extra azure
+
+# With Graph network capabilities
+uv sync --extra dev --extra graph
 ```
 
-## CLI
+## Core Components & Features
 
+### 1. Data Importers
+
+ContractHub provides pure Python, Spark-free importers that register into the `datacontract-cli` importer factory.
+
+* **Delta Importers (`delta-table`)**: Parses Delta tables. You can import multiple Delta tables into a single data contract using the `--tables` parameter containing a comma-separated list of paths.
+* **SQL Importers (`sql-folder` / `delta-ddl`)**: Parses Spark/Databricks-style Delta DDL statically to import structure and foreign key relationships from DDL constraints.
+* **Unity Catalog Importer (`unity`)**: Imports from Databricks Unity Catalog, including a best-effort relationship enrichment step to read Unity table metadata for foreign key constraints (single and multi-column).
+
+### 2. Validation & Quality Exports
+
+* **Great Expectations (`export-ge`)**: Delegates GE suite generation to datacontract-cli while running a lightweight GE-specific preflight check. It separates contract-level quality validation from GE execution.
+* **SQL Exporters (`sql_exporter.py`)**: Generates Databricks/Spark SQL deployment DDL. For Databricks targets, it adds Databricks-specific constraints natively mapped from ODCS quality rules (e.g. `ALTER COLUMN ... SET NOT NULL` for `nullValues mustBe 0`).
+* **Validation**: Core validation delegates base ODCS schema checks to `datacontract-cli` and Pydantic, reserving custom validation strictly for advanced semantic constraints.
+
+### 3. Graph Exports & Relationship Inferencing
+
+* **Graph Exporter**: Exports ODCS models to Directed Property Graphs (`cypher`, `json`). Enforces strict "Paths Over Joins" compliance. Junction tables (with exactly 2 foreign keys) are collapsed into single edges, and PII Sovereignty rules are automatically enforced.
+* **LLM Enrichment (`enrich`)**: Uses an LLM to automatically infer relationship semantic edges or label existing ones. Supports modes like `infer_joins` and `label`, and writes back to `customProperties` of the contract in batch.
+
+### 4. Merging & Lifecycle Governance
+
+* **Merge Engine (`merge`)**: Safely merges technical source updates into an existing, governed contract without overwriting manual business edits.
+* **Lifecycle Governance**: Root contract `id` is immutable after creation. Root contract `version` is release-managed and never automatically updated by standard importer/merge runs.
+* **Streamlit UI**: ContractHub includes a Streamlit app to serve as a presentation layer for interactive contract editing, fully decoupled from the core business logic.
+
+### 5. Storage & Access
+
+Contract catalog storage supports:
+* Local filesystem paths
+* ADLS2 paths (`abfs://`, `abfss://`, or `https://<account>.dfs.core.windows.net/...`)
+* Databricks Unity Catalog volume paths (`/Volumes/...`, `dbfs:/Volumes/...`)
+
+*Note: ADLS2 access is SDK-based and uses `CONTRACTHUB_ADLS_BEARER_TOKEN` or `azure.identity.DefaultAzureCredential`. SAS URL authentication is not supported.*
+
+## CLI Reference
+
+The ContractHub CLI offers commands for the full contract lifecycle:
+
+**Setup & Environment**
 ```bash
+contracthub setup
+```
+
+**Importing Data Contracts**
+```bash
+# Import from Delta SQL DDL
 contracthub import --format delta-ddl --source ./sql/orders --output ./contracts/orders.yaml
-contracthub import --format sql --source ./ddl/orders.sql --output ./contracts/orders.yaml
-contracthub import --format delta-table --source abfss://container@acct.dfs.core.windows.net/orders \
+
+# Import from standard SQL
+contracthub import --format sql-folder --source ./ddl/orders.sql --output ./contracts/orders.yaml
+
+# Import multiple Delta Tables from ADLS
+# Includes `--azure-auth` to automatically fetch ADLS OAuth token via azure-identity DefaultAzureCredential
+contracthub import --format delta-table \
+  --source abfss://container@acct.dfs.core.windows.net/orders \
   --tables abfss://container@acct.dfs.core.windows.net/payments \
+  --azure-auth \
   --output ./contracts/finance.yaml
-contracthub import --format unity --source main.silver.orders --workspace-url https://adb.example --token $DATABRICKS_TOKEN \
+
+# Import from Unity Catalog
+contracthub import --format unity --source main.silver.orders \
+  --workspace-url https://adb.example --token $DATABRICKS_TOKEN \
   --output ./contracts/orders.yaml
+```
+
+**Merging & Enrichment**
+```bash
+# Merge a base contract with business modifications
 contracthub merge --base ./generated.yaml --business ./contracts/orders.yaml --output ./contracts/orders.merged.yaml
+
+# Run dry run plan of changes
+contracthub plan --source ./generated.yaml --base ./contracts/orders.yaml
+
+# Enrich contract via LLM (supports infer_joins and label modes)
+contracthub enrich --contract ./contracts/orders.yaml --concurrency 2
+```
+
+**Exporting Artifacts**
+```bash
+# Export Great Expectations Suite
 contracthub export-ge --contract ./contracts/orders.yaml --output ./artifacts/orders_suite.json
+
+# Export to Graph formats (using datacontract-cli wrapper)
 datacontract export --format graph --export-args '{"format": "cypher"}' ./contracts/orders.yaml
 datacontract export --format graph --export-args '{"format": "json"}' ./contracts/orders.yaml
+```
+
+**CI/CD & DevOps (PRs & Releases)**
+```bash
+# Single Contract PR Creation
+contracthub create-pr --organization org --project proj --repository-id repo --pat-token $ADO_PAT \
+  --repo-path . --source-branch contracthub/update-orders --target-branch main \
+  --commit-message "Update orders contract" --title "Update orders contract" --description "Automated update"
+
+# Classify contract bump required for a feature change
 contracthub release classify --base ./contracts/orders.main.yaml --candidate ./contracts/orders.feature.yaml
+
+# Prepare a release version candidate
 contracthub release prepare --base ./contracts/orders.main.yaml --candidate ./contracts/orders.release.yaml \
   --release-tag orders/v1.2.0 --output ./artifacts/orders.promoted.yaml
+
+# Open a PR for a promoted release candidate
 contracthub release create-pr --base ./contracts/orders.main.yaml --candidate ./contracts/orders.release.yaml \
   --release-tag orders/v1.2.0 --repo-path . --contract-path contracts/orders.yaml \
   --source-branch release/orders-v1.2.0 --target-branch release \
   --organization org --project proj --repository-id repo --pat-token $ADO_PAT --push
+
+# Multi-Contract (Repo-level) Release Management
 contracthub release classify-repo --base-root ./contracts-main --candidate-root ./contracts-feature
 contracthub release build-manifest --base-root ./contracts-main --candidate-root ./contracts-feature \
   --output ./artifacts/release_manifest.json
 contracthub release create-prs --manifest ./artifacts/release_manifest.json --repo-path . \
   --organization org --project proj --repository-id repo --pat-token $ADO_PAT --push
-contracthub create-pr --organization org --project proj --repository-id repo --pat-token $ADO_PAT \
-  --repo-path . --source-branch contracthub/update-orders --target-branch main \
-  --commit-message "Update orders contract" --title "Update orders contract" --description "Automated update"
-contracthub enrich --contract ./contracts/orders.yaml --concurrency 2
 ```
 
 ## SDK Usage
 
+ContractHub functionality can be executed via its pure-Python API.
+
 ```python
 from datacontract.data_contract import DataContract
 from contracthub.lifecycle import ContractMergeEngine
-from contracthub.quality import GreatExpectationsExporter, run_contract_tests
+from contracthub.quality import GreatExpectationsExporter
+from contracthub.importers.unity_importer import import_unity_contract
+from contracthub.tools.enricher import ContractEnricher
+from azure.identity import DefaultAzureCredential
+import os
 
-contract = DataContract.import_from_source(format="delta-ddl", source="./sql/orders")
-merged = ContractMergeEngine().merge(contract, "./contracts/orders.yaml")
-GreatExpectationsExporter().export_to_path(merged.contract, "./artifacts/orders_suite.json")
+# 1. Import from a source
+# Setting Azure token natively for datacontract-cli ingestion via ADLS
+os.environ["CONTRACTHUB_ADLS_BEARER_TOKEN"] = DefaultAzureCredential().get_token("https://storage.azure.com/.default").token
+
+contract = DataContract.import_from_source(
+    format="delta-ddl",
+    source="./sql/orders"
+)
+
+# 2. Merge with an existing governed contract
+merged = ContractMergeEngine().merge(
+    base_contract=contract,
+    business_contract=DataContract(data_contract_file="./contracts/orders.yaml").data_contract
+)
+
+# 3. Export to Great Expectations Suite
+GreatExpectationsExporter().export_to_path(
+    contract=merged.contract,
+    output_path="./artifacts/orders_suite.json",
+    schema_name="all"
+)
+
+# 4. Importing from Unity Catalog Programmatically
+unity_contract = import_unity_contract(
+    table_fqn="main.silver.orders",
+    workspace_url="https://adb.example",
+    token="YOUR_TOKEN"
+)
+
+# 5. Enriching relationships via LLM (supports modes 'label' and 'infer_joins')
+enricher = ContractEnricher()
+enricher.process(contract_path="./contracts/orders.yaml", max_workers=2, mode="label")
 ```
 
-## Suggested CI Flow
+## CI/CD Flow & Releases
 
 ### Feature -> Main
 
@@ -113,15 +235,16 @@ contracthub release classify-repo \
 
 ### Main -> Release
 
-Build an editable per-contract manifest, review or adjust tags, then create
-release PRs:
+Build an editable per-contract manifest, review or adjust tags, then create release PRs:
 
 ```bash
+# Generate manifest
 contracthub release build-manifest \
   --base-root ./contracts-main \
   --candidate-root ./contracts-release \
   --output ./artifacts/release_manifest.json
 
+# Review the manifest, then execute PR creation
 contracthub release create-prs \
   --manifest ./artifacts/release_manifest.json \
   --repo-path . \
@@ -132,67 +255,11 @@ contracthub release create-prs \
   --push
 ```
 
-The generated manifest is still per contract. Review it before creating PRs,
-especially for:
-
-- added contracts
-- removed contracts
-- contracts whose suggested release tag needs adjustment
-
-Reference examples live under:
-
-- `examples/release/release-manifest.example.json`
-- `examples/ci/pr-check.example.sh`
-- `examples/ci/release.example.sh`
-- `examples/azure-devops/contracthub-pr-validation.yml`
-- `examples/azure-devops/contracthub-release.yml`
-
-## Notes
-
-- Importers are pure Python and Spark-free.
-- ContractHub registers custom importers (`delta-table`, `delta-ddl`) into datacontract-cli's importer factory.
-- Backward-compatible aliases remain available:
-  - `delta` -> `delta-table`
-  - `sql-folder` -> `delta-ddl`
-- `delta-ddl` parses Spark/Databricks-style Delta DDL statically (no Spark runtime) and imports foreign key relationships from DDL constraints.
-- Merge and lifecycle policy logic are isolated in `contracthub.lifecycle`.
-- Root contract `id` is immutable after the governed contract exists.
-- Root contract `version` is release-managed and is not updated by normal importer/merge runs.
-- Technical source versions, including Delta table versions, are stored as technical metadata and do not overwrite contract `version`.
-- Lifecycle policy explicitly flags root `id` and `version` changes, and the automation pipeline blocks on those violations.
-- Required version bump is computed per contract, not per repo.
-- `feature -> main` should classify the required bump for each changed contract.
-- `main/release` is the path that applies an explicit release tag and updates contract `version`.
-- Suggested next versions are always computed from the last released contract version plus the highest required bump since that release.
-- Unreleased changes are not bump-chained. For example, `1.2.0 -> major change -> additive change` still suggests `2.0.0`, not `2.1.0`.
-- If `required_bump` is `none`, the suggested next version stays at the current released version and the contract is skipped by default in batch release manifest generation.
-- `release classify-repo` is a repo-level batching helper only; it does not make the repo a versioning unit.
-- `release build-manifest` creates an editable per-contract JSON array for batch release PR automation.
-- `release create-prs` expects an explicit per-contract manifest because each contract may have its own release tag/version.
-- Draft normalization and editor-safe contract mutation helpers live in `contracthub.core`.
-- Great Expectations suite generation uses datacontract-cli exporter APIs.
-- Databricks/Spark SQL deployment DDL generation lives in `contracthub.exporters.sql_exporter`.
-- Databricks-only quality constraint mapping is appended only when `sql_server_type="databricks"`.
-- Graph exporters interpret relationship metadata based on the ODCS v3 format constraints. For Property-level relationships, edge targets implicitly map without a `from` object, while Schema-level references explicitly retain and serialize `from` strings or composite key arrays. Edges collapse into junction edges gracefully using explicit `customProperties`.
-- `enrich` command uses an LLM to infer relationship semantic edges and writes them back to `customProperties` of the contract in batch.
-- Unity import (`--type uc|unity`) runs a best-effort relationship enrichment step:
-  - reads Unity table metadata for foreign key constraints
-  - maps single-column FKs to property-level `relationships`
-  - maps multi-column FKs to schema-level `relationships`
-  - never blocks import if metadata is unavailable; writes fallback markers in `customProperties`
-- Graph topology validation ensures strict "Paths Over Joins" compliance via `TopologyValidator`.
-- PII data sovereignty rules are automatically enforced in graph exports via `SovereigntyInterceptor`.
-- Great Expectations export follows a two-step validation boundary:
-  - contract-level quality rule validation in `contracthub.core.validator`
-  - GE-specific expectation preflight in `contracthub.quality.ge_exporter`
-- Streamlit is a presentation layer and should call service-layer helpers under `contracthub/interfaces/streamlit/services/`.
-- Legacy packages `contracthub_importers` and `contracthub_enforcement` have been removed.
-- Contract catalog storage currently supports:
-  - local filesystem paths
-  - ADLS2 paths (`abfs://`, `abfss://`, or `https://<account>.dfs.core.windows.net/...`)
-  - Databricks Unity Catalog volume paths (`/Volumes/...`, `dbfs:/Volumes/...`)
-- ADLS2 access is SDK-based and supports only:
-  - `CONTRACTHUB_ADLS_BEARER_TOKEN`
-  - `azure.identity.DefaultAzureCredential`
-- SAS URL authentication is not supported.
-- Unity Catalog external volumes are accessed as mounted paths and do not use separate ContractHub-managed cloud auth.
+**Important Notes for CI/CD**:
+* The generated manifest is per contract. Review it before creating PRs, especially for added/removed contracts or required bump adjustments.
+* Reference examples for CI workflows live under:
+  - `examples/release/release-manifest.example.json`
+  - `examples/ci/pr-check.example.sh`
+  - `examples/ci/release.example.sh`
+  - `examples/azure-devops/contracthub-pr-validation.yml`
+  - `examples/azure-devops/contracthub-release.yml`

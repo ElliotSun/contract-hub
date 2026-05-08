@@ -1,6 +1,9 @@
+import pytest
+import sys
 import contracthub.quality.ge_exporter as ge_adapter
 from contracthub.utils.schema_utils import contract_to_model
 
+@pytest.mark.skipif(sys.version_info >= (3, 13), reason="great_expectations does not support Python 3.13+")
 def test_generate_expectation_suite_uses_datacontract_exporter(monkeypatch):
     """
     Test that the Great Expectations exporter successfully constructs the correct GE suite dictionary
