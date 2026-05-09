@@ -68,7 +68,7 @@ ContractHub provides pure Python, Spark-free importers that register into the `d
 ### 3. Graph Exports & Relationship Inferencing
 
 * **Graph Exporter**: Exports ODCS models to Directed Property Graphs (`cypher`, `json`). Enforces strict "Paths Over Joins" compliance. Junction tables (with exactly 2 foreign keys) are collapsed into single edges, and PII Sovereignty rules are automatically enforced.
-* **LLM Enrichment (`enrich`)**: Uses an LLM to automatically infer relationship semantic edges or label existing ones. Supports modes like `infer_joins` and `label`, and writes back to `customProperties` of the contract in batch.
+* **LLM Enrichment (`enrich`)**: Uses an LLM to automatically generate missing table descriptions, column descriptions, base Great Expectations quality rules, and infer semantic relationship edges. Powered by `litellm` under the hood, natively supporting over 100 model providers including OpenAI, Azure AI Foundry, Databricks, vLLM, and Ollama. Supported modes include `infer_joins`, `label`, `describe_tables`, `describe_columns`, and `suggest_quality`.
 
 ### 4. Merging & Lifecycle Governance
 
@@ -124,8 +124,18 @@ contracthub merge --base ./generated.yaml --business ./contracts/orders.yaml --o
 # Run dry run plan of changes
 contracthub plan --source ./generated.yaml --base ./contracts/orders.yaml
 
-# Enrich contract via LLM (supports infer_joins and label modes)
-contracthub enrich --contract ./contracts/orders.yaml --concurrency 2
+# Configure your LLM Provider (Examples)
+export LLM_MODEL_NAME="gpt-4o"
+export LLM_API_KEY="sk-..."
+
+# For Azure AI Foundry
+# export LLM_MODEL_NAME="azure/gpt-4o"
+# export LLM_API_KEY="azure-key"
+# export LLM_BASE_URL="https://your-endpoint.openai.azure.com/"
+
+# Enrich contract metadata via LLM (e.g. generate missing descriptions)
+contracthub enrich --contract ./contracts/orders.yaml --mode describe_columns --concurrency 2
+contracthub enrich --contract ./contracts/orders.yaml --mode suggest_quality --concurrency 2
 ```
 
 **Exporting Artifacts**
@@ -208,9 +218,10 @@ unity_contract = import_unity_contract(
     token="YOUR_TOKEN"
 )
 
-# 5. Enriching relationships via LLM (supports modes 'label' and 'infer_joins')
+# 5. Enriching via LLM (supports modes 'label', 'infer_joins', 'describe_tables', 'describe_columns', 'suggest_quality')
+# Ensure litellm environment variables are set (LLM_MODEL_NAME, LLM_API_KEY)
 enricher = ContractEnricher()
-enricher.process(contract_path="./contracts/orders.yaml", max_workers=2, mode="label")
+enricher.process(contract_path="./contracts/orders.yaml", max_workers=2, mode="suggest_quality")
 ```
 
 ## CI/CD Flow & Releases
