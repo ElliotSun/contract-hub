@@ -29,7 +29,10 @@ def test_format_validation_result_collects_failures():
     assert formatted["success"] is False
     assert formatted["statistics"]["evaluated_expectations"] == 2
     assert len(formatted["failed_expectations"]) == 1
-    assert formatted["failed_expectations"][0]["expectation_type"] == "expect_column_values_to_be_between"
+    assert (
+        formatted["failed_expectations"][0]["expectation_type"]
+        == "expect_column_values_to_be_between"
+    )
 
 
 def test_format_validation_result_supports_to_json_dict_and_non_dict_config():
