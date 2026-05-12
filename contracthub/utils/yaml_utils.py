@@ -16,7 +16,9 @@ def parse_yaml_text(source_yaml: str) -> dict[str, Any]:
     try:
         model = OpenDataContractStandard.from_string(source_yaml)
     except TypeError as exc:
-        raise ValueError("YAML content must be a mapping object") from exc
+        from contracthub.exceptions import ValidationError
+
+        raise ValidationError("YAML content must be a mapping object") from exc
     return model.model_dump(by_alias=True, exclude_none=True)
 
 

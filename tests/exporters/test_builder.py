@@ -3,9 +3,11 @@ from pathlib import Path
 from contracthub.exporters.builder import InMemoryGraphBuilder
 from open_data_contract_standard.model import OpenDataContractStandard
 
+
 @pytest.fixture
 def sample_graph_yaml_path() -> Path:
     return Path("tests/fixtures/contracts/odcs/graph_sample.yaml")
+
 
 def test_in_memory_graph_builder(sample_graph_yaml_path):
     import networkx as nx
@@ -80,14 +82,18 @@ def test_in_memory_graph_builder(sample_graph_yaml_path):
     # Verify ODCS model is unmodified
     assert len(contract.schema_ or []) == original_schema_len
 
+
 @pytest.fixture
 def sample_graph_nary_junction_yaml_path() -> Path:
     return Path("tests/fixtures/contracts/odcs/graph_nary_junction.yaml")
 
+
 def test_nary_junction_fallback(sample_graph_nary_junction_yaml_path):
     from contracthub.utils.schema_utils import contract_to_model
 
-    contract: OpenDataContractStandard = contract_to_model(sample_graph_nary_junction_yaml_path)
+    contract: OpenDataContractStandard = contract_to_model(
+        sample_graph_nary_junction_yaml_path
+    )
     builder = InMemoryGraphBuilder(contract)
     graph = builder.build()
 

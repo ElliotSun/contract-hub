@@ -3,6 +3,7 @@ from pathlib import Path
 from contracthub.tools.enricher import ContractEnricher
 from open_data_contract_standard.model import OpenDataContractStandard
 
+
 def test_contract_enricher(mocker, tmp_path):
     # Mock litellm completion
     mock_response = MagicMock()
@@ -34,7 +35,10 @@ def test_contract_enricher(mocker, tmp_path):
             for rel in schema.relationships:
                 if rel.customProperties:
                     for cp in rel.customProperties:
-                        if cp.property == "graph_semantic.edge_label" and cp.value == "MOCKED_LABEL":
+                        if (
+                            cp.property == "graph_semantic.edge_label"
+                            and cp.value == "MOCKED_LABEL"
+                        ):
                             labels_found += 1
         if schema.properties:
             for prop in schema.properties:
@@ -42,7 +46,10 @@ def test_contract_enricher(mocker, tmp_path):
                     for rel in prop.relationships:
                         if rel.customProperties:
                             for cp in rel.customProperties:
-                                if cp.property == "graph_semantic.edge_label" and cp.value == "MOCKED_LABEL":
+                                if (
+                                    cp.property == "graph_semantic.edge_label"
+                                    and cp.value == "MOCKED_LABEL"
+                                ):
                                     labels_found += 1
 
     assert labels_found > 0

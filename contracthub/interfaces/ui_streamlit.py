@@ -12,8 +12,10 @@ def create_app() -> Any:
     """
     try:
         import streamlit as st
-    except Exception as exc:
-        raise RuntimeError("streamlit is required to run ContractHub UI") from exc
+    except ImportError as exc:
+        from contracthub.exceptions import LifecycleError
+
+        raise LifecycleError("streamlit is required to run ContractHub UI") from exc
 
     st.set_page_config(page_title="ContractHub", layout="wide")
     st.title("ContractHub")
