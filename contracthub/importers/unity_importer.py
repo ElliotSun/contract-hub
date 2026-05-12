@@ -20,6 +20,7 @@ from open_data_contract_standard.model import OpenDataContractStandard
 from contracthub.importers.unity_relationships import (
     enrich_unity_contract_relationships,
 )
+from contracthub.importers.unity_lineage import enrich_unity_lineage
 
 LOGGER = logging.getLogger(__name__)
 
@@ -53,6 +54,8 @@ def import_unity_contract(
     table_fqn: str,
     workspace_url: str | None,
     token: str | None,
+    sql_http_path: str | None = None,
+    extract_lineage: bool = False,
 ) -> OpenDataContractStandard:
     """Import a Unity Catalog contract using datacontract-cli's unity importer.
 
@@ -70,9 +73,18 @@ def import_unity_contract(
             source=None,
             unity_table_full_name=[table_fqn],
         )
-        return enrich_unity_contract_relationships(
+        enriched = enrich_unity_contract_relationships(
             imported,
             table_fqn=table_fqn,
             workspace_url=workspace_url,
             token=token,
         )
+        if extract_lineage:
+            enriched = enrich_unity_lineage(
+                enriched,
+                table_fqn=table_fqn,
+                workspace_url=workspace_url,
+                token=token,
+                sql_http_path=sql_http_path,
+            )
+        return enriched
