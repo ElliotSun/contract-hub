@@ -6,14 +6,22 @@ from contracthub.constants import (
     UNITY_RELATIONSHIPS_IMPORTED_KEY,
     UNITY_RELATIONSHIPS_REASON_KEY,
 )
-from contracthub.importers.unity_relationships import enrich_unity_contract_relationships
+from contracthub.importers.unity_relationships import (
+    enrich_unity_contract_relationships,
+)
 
 
 def _custom_props_map(contract) -> dict[str, object]:  # noqa: ANN001
-    return {item.property: item.value for item in (contract.customProperties or []) if item.property}
+    return {
+        item.property: item.value
+        for item in (contract.customProperties or [])
+        if item.property
+    }
 
 
-def test_unity_relationship_enrichment_imports_property_and_schema_relationships(sample_unity_contract_model):
+def test_unity_relationship_enrichment_imports_property_and_schema_relationships(
+    sample_unity_contract_model,
+):
     contract = sample_unity_contract_model.model_copy(deep=True)
     assert contract.schema_ is not None
     schema = contract.schema_[0]
@@ -44,7 +52,9 @@ def test_unity_relationship_enrichment_imports_property_and_schema_relationships
         )
     )
 
-    def fake_fetcher(workspace_url: str, token: str, table_fqn: str) -> dict[str, object]:
+    def fake_fetcher(
+        workspace_url: str, token: str, table_fqn: str
+    ) -> dict[str, object]:
         assert workspace_url == "https://adb.example"
         assert token == "token"
         assert table_fqn == "main.silver.orders"
@@ -84,16 +94,25 @@ def test_unity_relationship_enrichment_imports_property_and_schema_relationships
     assert fields["id"].relationships[0].type == "foreignKey"
     assert fields["id"].relationships[0].to == "main.ref.customers.customer_id"
     assert fields["id"].relationships[0].customProperties is not None
-    rel_props = {item.property: item.value for item in fields["id"].relationships[0].customProperties if item.property}
+    rel_props = {
+        item.property: item.value
+        for item in fields["id"].relationships[0].customProperties
+        if item.property
+    }
     assert rel_props[UNITY_CONSTRAINT_NAME_KEY] == "fk_orders_customer"
 
     assert enriched_schema.relationships is not None
     assert enriched_schema.relationships[0].type == "foreignKey"
     assert enriched_schema.relationships[0].from_ == ["parent_tenant", "parent_code"]
-    assert enriched_schema.relationships[0].to == ["main.ref.parents.tenant", "main.ref.parents.code"]
+    assert enriched_schema.relationships[0].to == [
+        "main.ref.parents.tenant",
+        "main.ref.parents.code",
+    ]
     assert enriched_schema.relationships[0].customProperties is not None
     schema_rel_props = {
-        item.property: item.value for item in enriched_schema.relationships[0].customProperties if item.property
+        item.property: item.value
+        for item in enriched_schema.relationships[0].customProperties
+        if item.property
     }
     assert schema_rel_props[UNITY_CONSTRAINT_NAME_KEY] == "fk_orders_parent"
 
@@ -102,10 +121,14 @@ def test_unity_relationship_enrichment_imports_property_and_schema_relationships
     assert props[UNITY_RELATIONSHIPS_COUNT_KEY] == "2"
 
 
-def test_unity_relationship_enrichment_records_fallback_on_fetch_error(sample_unity_contract_model):
+def test_unity_relationship_enrichment_records_fallback_on_fetch_error(
+    sample_unity_contract_model,
+):
     contract = sample_unity_contract_model.model_copy(deep=True)
 
-    def broken_fetcher(_workspace_url: str, _token: str, _table_fqn: str) -> dict[str, object]:
+    def broken_fetcher(
+        _workspace_url: str, _token: str, _table_fqn: str
+    ) -> dict[str, object]:
         raise RuntimeError("metadata endpoint unavailable")
 
     enriched = enrich_unity_contract_relationships(

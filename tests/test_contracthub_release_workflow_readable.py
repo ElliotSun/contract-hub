@@ -16,7 +16,9 @@ from contracthub.interfaces.streamlit.services.contract_service import ContractS
 from contracthub.utils.yaml_utils import dump_yaml
 
 
-def test_release_classification_returns_none_for_description_only_change(sample_odcs_model):
+def test_release_classification_returns_none_for_description_only_change(
+    sample_odcs_model,
+):
     base = sample_odcs_model.model_copy(deep=True)
     candidate = sample_odcs_model.model_copy(deep=True)
     assert candidate.description is not None

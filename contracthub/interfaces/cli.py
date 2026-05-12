@@ -31,9 +31,9 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     enrich_parser.add_argument(
         "--mode",
-        choices=["label", "infer_joins"],
+        choices=["label", "infer_joins", "describe_tables", "describe_columns", "suggest_quality"],
         default="label",
-        help="Enrichment mode: 'label' tags existing relationships, 'infer_joins' discovers new ones",
+        help="Enrichment mode: 'label' for tagging existing relationships, 'infer_joins' for discovering new semantic relationships, 'describe_tables' for missing table descriptions, 'describe_columns' for missing column descriptions, 'suggest_quality' for generating DataQuality rules.",
     )
 
     plan_parser = subparsers.add_parser(
@@ -399,6 +399,7 @@ schema:
             print(f"⏭️ Skipped existing sample contract: {sample_path}")
     except Exception:
         import logging
+
         logging.getLogger("contracthub").debug(
             "Failed to generate sample contract via datacontract-cli", exc_info=True
         )
@@ -460,8 +461,13 @@ def _run_plan(args: argparse.Namespace) -> None:
                 )
 
     except Exception as e:
+        from contracthub.exceptions import ContractHubError
         import logging
-        logging.getLogger("contracthub").error("Plan failed: %s", e, exc_info=True)
+
+        if isinstance(e, ContractHubError):
+            logging.getLogger("contracthub").error("Plan failed: %s", e)
+        else:
+            logging.getLogger("contracthub").error("Plan failed: %s", e, exc_info=True)
         print(f"❌ Error during plan: {e}")
         raise SystemExit(1)
 
@@ -535,7 +541,9 @@ def _resolve_adls_oauth_token(args: argparse.Namespace) -> str | None:
     try:
         from azure.identity import DefaultAzureCredential
     except ImportError as exc:
-        raise ValueError(
+        from contracthub.exceptions import LifecycleError
+
+        raise LifecycleError(
             "azure-identity is required for --use-azure-identity. Install with `pip install datacontract-flow[azure]`."
         ) from exc
     credential = DefaultAzureCredential()
@@ -908,8 +916,15 @@ def main() -> int:
     except SystemExit as exc:
         return exc.code if isinstance(exc.code, int) else 1
     except Exception as exc:
+        from contracthub.exceptions import ContractHubError
         import logging
-        logging.getLogger("contracthub").error("Fatal error: %s", exc, exc_info=True)
+
+        if isinstance(exc, ContractHubError):
+            logging.getLogger("contracthub").error("Fatal error: %s", exc)
+        else:
+            logging.getLogger("contracthub").error(
+                "Fatal error: %s", exc, exc_info=True
+            )
         print(f"❌ {exc}", file=__import__("sys").stderr)
         return 1
 

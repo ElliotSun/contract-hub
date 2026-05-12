@@ -111,7 +111,14 @@ def run_analysis(contract: dict[str, Any], user: Any) -> None:
     try:
         raw_result = analyze_draft(contract, user)
     except Exception as exc:
-        st.session_state["editor_error"] = f"Analysis failed: {exc}"
+        from contracthub.exceptions import ContractHubError
+
+        error_message = (
+            exc.message
+            if isinstance(exc, ContractHubError) and hasattr(exc, "message")
+            else str(exc)
+        )
+        st.session_state["editor_error"] = f"Analysis failed: {error_message}"
         st.session_state["editor_warning"] = None
         return
 
