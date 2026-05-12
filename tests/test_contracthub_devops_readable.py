@@ -33,24 +33,12 @@ def test_audit_metadata_builder_returns_actor_source_and_timestamp():
 
 
 def test_ci_gate_allows_only_when_validation_and_policy_are_valid():
-    invalid_contract = evaluate_ci_gate(
-        ValidationReport(valid=False), PolicyEvaluation(valid=True)
-    )
-    invalid_policy = evaluate_ci_gate(
-        ValidationReport(valid=True), PolicyEvaluation(valid=False)
-    )
-    all_valid = evaluate_ci_gate(
-        ValidationReport(valid=True), PolicyEvaluation(valid=True)
-    )
+    invalid_contract = evaluate_ci_gate(ValidationReport(valid=False), PolicyEvaluation(valid=True))
+    invalid_policy = evaluate_ci_gate(ValidationReport(valid=True), PolicyEvaluation(valid=False))
+    all_valid = evaluate_ci_gate(ValidationReport(valid=True), PolicyEvaluation(valid=True))
 
-    assert (
-        invalid_contract.allowed is False
-        and invalid_contract.reason == "contract_validation_failed"
-    )
-    assert (
-        invalid_policy.allowed is False
-        and invalid_policy.reason == "lifecycle_policy_failed"
-    )
+    assert invalid_contract.allowed is False and invalid_contract.reason == "contract_validation_failed"
+    assert invalid_policy.allowed is False and invalid_policy.reason == "lifecycle_policy_failed"
     assert all_valid.allowed is True and all_valid.reason == "ok"
 
 
@@ -74,9 +62,7 @@ def test_commit_updated_contracts_returns_head_when_no_changes(monkeypatch, tmp_
     creator = _creator()
     calls: list[tuple[list[str], bool]] = []
 
-    monkeypatch.setattr(
-        PullRequestCreator, "_ensure_branch", lambda self, repo, source_branch: None
-    )
+    monkeypatch.setattr(PullRequestCreator, "_ensure_branch", lambda self, repo, source_branch: None)
 
     def fake_git(repo, args, capture_output=False):  # noqa: ANN001
         calls.append((args, capture_output))
@@ -102,16 +88,12 @@ def test_commit_updated_contracts_commits_when_changes_exist(monkeypatch, tmp_pa
     creator = _creator()
     calls: list[list[str]] = []
 
-    monkeypatch.setattr(
-        PullRequestCreator, "_ensure_branch", lambda self, repo, source_branch: None
-    )
+    monkeypatch.setattr(PullRequestCreator, "_ensure_branch", lambda self, repo, source_branch: None)
 
     def fake_git(repo, args, capture_output=False):  # noqa: ANN001
         calls.append(args)
         if args == ["status", "--porcelain"]:
-            return subprocess.CompletedProcess(
-                args, 0, stdout="M contract.yaml\n", stderr=""
-            )
+            return subprocess.CompletedProcess(args, 0, stdout="M contract.yaml\n", stderr="")
         if args == ["rev-parse", "HEAD"]:
             return subprocess.CompletedProcess(args, 0, stdout="def456\n", stderr="")
         return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
@@ -172,10 +154,7 @@ def test_create_pull_request_raises_on_failed_response(monkeypatch):
         status_code = 500
         text = "boom"
 
-    monkeypatch.setattr(
-        "contracthub.devops.pr_creator.requests.post",
-        lambda *args, **kwargs: FakeResponse(),
-    )
+    monkeypatch.setattr("contracthub.devops.pr_creator.requests.post", lambda *args, **kwargs: FakeResponse())
 
     with pytest.raises(RuntimeError, match="Failed to create PR"):
         creator.create_pull_request(
@@ -190,11 +169,7 @@ def test_create_update_pr_pushes_branch_before_creating_pr(monkeypatch, tmp_path
     creator = _creator()
     calls: list[list[str]] = []
 
-    monkeypatch.setattr(
-        PullRequestCreator,
-        "commit_updated_contracts",
-        lambda self, *args, **kwargs: "abc123",
-    )
+    monkeypatch.setattr(PullRequestCreator, "commit_updated_contracts", lambda self, *args, **kwargs: "abc123")
 
     def fake_git(repo, args, capture_output=False):  # noqa: ANN001
         calls.append(args)

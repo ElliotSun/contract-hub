@@ -57,9 +57,6 @@ def enrich_unity_contract_relationships(
             contract, UNITY_RELATIONSHIPS_COUNT_KEY, str(imported_count)
         )
     except Exception as exc:  # pragma: no cover - behavior validated via unit tests
-        import logging
-
-        logging.getLogger(__name__).debug(f"Failed to fetch unity relationships: {exc}")
         _upsert_contract_custom_property(
             contract, UNITY_RELATIONSHIPS_IMPORTED_KEY, "false"
         )
@@ -92,15 +89,11 @@ def _fetch_unity_table_metadata(
         with urlopen(request, timeout=8) as response:
             payload = response.read().decode("utf-8")
     except HTTPError as exc:
-        from contracthub.exceptions import StorageError
-
-        raise StorageError(
+        raise RuntimeError(
             f"Unity table metadata request failed: HTTP {exc.code}"
         ) from exc
     except URLError as exc:
-        from contracthub.exceptions import StorageError
-
-        raise StorageError(
+        raise RuntimeError(
             f"Unity table metadata request failed: {exc.reason}"
         ) from exc
 

@@ -165,10 +165,8 @@ def _load_great_expectations_module() -> Any:
         import great_expectations as gx
 
         return gx
-    except ImportError as exc:
-        from contracthub.exceptions import LifecycleError
-
-        raise LifecycleError(
+    except Exception as exc:
+        raise RuntimeError(
             "great_expectations is required for Spark validator runtime"
         ) from exc
 
@@ -178,10 +176,8 @@ def _load_runtime_batch_request() -> Any:
         from great_expectations.core.batch import RuntimeBatchRequest
 
         return RuntimeBatchRequest
-    except ImportError as exc:
-        from contracthub.exceptions import LifecycleError
-
-        raise LifecycleError(
+    except Exception as exc:
+        raise RuntimeError(
             "RuntimeBatchRequest is unavailable in installed great_expectations version"
         ) from exc
 
@@ -192,10 +188,8 @@ def _assert_ge_spark_runtime_classes() -> None:
         from great_expectations.execution_engine import SparkDFExecutionEngine
 
         _ = RuntimeDataConnector, SparkDFExecutionEngine
-    except ImportError as exc:
-        from contracthub.exceptions import LifecycleError
-
-        raise LifecycleError(
+    except Exception as exc:
+        raise RuntimeError(
             "Great Expectations Spark runtime components are unavailable: "
             "RuntimeDataConnector and SparkDFExecutionEngine are required"
         ) from exc

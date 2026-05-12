@@ -12,8 +12,6 @@ import requests
 import yaml
 from open_data_contract_standard.model import OpenDataContractStandard
 
-from contracthub.exceptions import StorageError
-
 LOGGER = logging.getLogger(__name__)
 DEFAULT_SPARKUTILS_MAX_BYTES = int(
     os.getenv("CONTRACTHUB_SPARKUTILS_MAX_BYTES", str(10 * 1024 * 1024))
@@ -128,16 +126,13 @@ def _read_adls2_text(contract_path: str) -> str:
 
 def _read_http_text(url: str, headers: Optional[dict[str, str]] = None) -> str:
     """Fetch contract text over HTTP/S with optional headers."""
-    try:
-        response = requests.get(url, headers=headers or {}, timeout=30)
-        if not response.ok:
-            raise StorageError(
-                f"Failed to fetch contract from {url}: "
-                f"status={response.status_code}, body={response.text[:500]}"
-            )
-        return response.text
-    except requests.RequestException as exc:
-        raise StorageError(f"Network error while fetching contract from {url}") from exc
+    response = requests.get(url, headers=headers or {}, timeout=30)
+    if not response.ok:
+        raise RuntimeError(
+            f"Failed to fetch contract from {url}: "
+            f"status={response.status_code}, body={response.text[:500]}"
+        )
+    return response.text
 
 
 def list_adls2_paths(root_path: str) -> list[str]:
@@ -174,17 +169,7 @@ def _read_with_mssparkutils(contract_path: str) -> Optional[str]:
         try:
             text = fs.head(contract_path, maxBytes=DEFAULT_SPARKUTILS_MAX_BYTES)
         except TypeError:
-            try:
-                text = fs.head(contract_path, DEFAULT_SPARKUTILS_MAX_BYTES)
-            except Exception as inner_exc:
-                raise StorageError(
-                    f"Failed to read contract via mssparkutils: {inner_exc}"
-                ) from inner_exc
-        except Exception as exc:
-            raise StorageError(
-                f"Failed to read contract via mssparkutils: {exc}"
-            ) from exc
-
+            text = fs.head(contract_path, DEFAULT_SPARKUTILS_MAX_BYTES)
         if isinstance(text, str) and text.strip():
             LOGGER.debug(
                 "Loaded contract via mssparkutils.fs.head from %s", contract_path
@@ -200,17 +185,12 @@ def _get_mssparkutils() -> Any:
         mssparkutils = getattr(notebookutils, "mssparkutils", None)
         if mssparkutils is not None:
             return mssparkutils
-    except ImportError:
+    except Exception:
         pass
-    except Exception as exc:
-        LOGGER.debug("Failed to import notebookutils: %s", exc)
 
     try:
         return importlib.import_module("mssparkutils")
-    except ImportError:
-        return None
-    except Exception as exc:
-        LOGGER.debug("Failed to import mssparkutils: %s", exc)
+    except Exception:
         return None
 
 

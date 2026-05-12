@@ -54,9 +54,9 @@ class ContractValidator:
                     ValidationIssue(path=loc, message=error["msg"], severity="error")
                 )
         except Exception as e:
-            from contracthub.exceptions import ValidationError as CHValidationError
-
-            raise CHValidationError(f"Failed to normalize contract: {e}") from e
+            issues.append(
+                ValidationIssue(path="pydantic", message=str(e), severity="error")
+            )
 
         if not contract:
             return ValidationReport(valid=False, issues=issues)

@@ -29,15 +29,10 @@ def _create_pandas_validator(df: pd.DataFrame, expectation_suite):
         asset.add_batch_definition_whole_dataframe("whole_dataframe")
 
     batch_request = asset.build_batch_request(options={"dataframe": df})
-    return context.get_validator(
-        batch_request=batch_request, expectation_suite=expectation_suite
-    )
+    return context.get_validator(batch_request=batch_request, expectation_suite=expectation_suite)
 
 
-@pytest.mark.skipif(
-    sys.version_info >= (3, 13),
-    reason="great_expectations does not support Python 3.13+",
-)
+@pytest.mark.skipif(sys.version_info >= (3, 13), reason="great_expectations does not support Python 3.13+")
 def test_generate_expectation_suite_can_validate_pandas_dataframe_with_real_ge_runtime(
     monkeypatch,
     sample_custom_ge_quality_contract_model,
@@ -63,9 +58,7 @@ def test_generate_expectation_suite_can_validate_pandas_dataframe_with_real_ge_r
 
     monkeypatch.setattr(ge_adapter.exporter_factory, "create", lambda _: FakeExporter())
 
-    suite = ge_adapter.generate_expectation_suite(
-        sample_custom_ge_quality_contract_model, schema_name="orders"
-    )
+    suite = ge_adapter.generate_expectation_suite(sample_custom_ge_quality_contract_model, schema_name="orders")
     validator = _create_pandas_validator(pd.DataFrame({"id": ["a", "b"]}), suite)
     result = validator.validate()
 

@@ -355,15 +355,8 @@ def _open_contract(entry: dict[str, Any], *, edit_mode: bool) -> None:
         try:
             working_contract = get_draft(entry["id"], _current_user())
         except Exception as exc:
-            from contracthub.exceptions import ContractHubError
-
-            error_message = (
-                exc.message
-                if isinstance(exc, ContractHubError) and hasattr(exc, "message")
-                else str(exc)
-            )
             st.session_state["editor_warning"] = (
-                f"Unable to load draft for '{entry['id']}', using main contract view instead: {error_message}"
+                f"Unable to load draft for '{entry['id']}', using main contract view instead: {exc}"
             )
 
     st.session_state["contract"] = working_contract
@@ -411,14 +404,7 @@ def _handle_save() -> None:
     try:
         saved_draft = save_draft(contract, _current_user())
     except Exception as exc:
-        from contracthub.exceptions import ContractHubError
-
-        error_message = (
-            exc.message
-            if isinstance(exc, ContractHubError) and hasattr(exc, "message")
-            else str(exc)
-        )
-        st.session_state["editor_error"] = f"Draft save failed: {error_message}"
+        st.session_state["editor_error"] = f"Draft save failed: {exc}"
         st.session_state["editor_notice"] = None
         return
 
@@ -502,10 +488,7 @@ def _load_service_catalog_entries() -> list[dict[str, Any]]:
     """Load service-backed catalog entries when canonical contracts are available."""
     try:
         metadata_entries = list_main_contracts(_current_user())
-    except Exception as exc:
-        import logging
-
-        logging.getLogger("contracthub").debug(f"Failed to list main contracts: {exc}")
+    except Exception:
         return []
 
     entries: list[dict[str, Any]] = []
@@ -515,12 +498,7 @@ def _load_service_catalog_entries() -> list[dict[str, Any]]:
             continue
         try:
             contract = get_main_contract(contract_id)
-        except Exception as exc:
-            import logging
-
-            logging.getLogger("contracthub").debug(
-                f"Failed to get main contract {contract_id}: {exc}"
-            )
+        except Exception:
             continue
 
         flags: list[str] = []

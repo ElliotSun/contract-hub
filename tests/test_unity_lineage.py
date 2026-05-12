@@ -1,6 +1,6 @@
+import builtins
 import pytest
 from unittest.mock import MagicMock, patch
-import sys
 from open_data_contract_standard.model import OpenDataContractStandard, SchemaObject, SchemaProperty
 
 from contracthub.importers.unity_lineage import enrich_unity_lineage
@@ -93,9 +93,14 @@ def test_enrich_unity_lineage_missing_dependency():
     schema_obj = SchemaObject(name="orders", physicalName="orders", properties=[prop_id])
     contract = OpenDataContractStandard(apiVersion="3.1.0", id="test-contract", schema=[schema_obj])
 
-    # To trigger the ImportError reliably even if the module is actually installed via dev dependencies,
-    # we use mock's sys.modules trick.
-    with patch.dict('sys.modules', {'databricks': None, 'databricks.sql': None}):
+    original_import = builtins.__import__
+
+    def mock_import(name, *args, **kwargs):
+        if name == 'databricks' or name == 'databricks.sql':
+            raise ImportError(f"No module named '{name}'")
+        return original_import(name, *args, **kwargs)
+
+    with patch('builtins.__import__', side_effect=mock_import):
         with pytest.raises(ImportError, match="databricks-sql-connector"):
             enrich_unity_lineage(
                 contract,

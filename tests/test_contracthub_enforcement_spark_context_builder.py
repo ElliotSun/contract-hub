@@ -6,10 +6,7 @@ import builtins
 import contracthub.quality.validation as scb
 
 
-@pytest.mark.skipif(
-    sys.version_info >= (3, 13),
-    reason="great_expectations does not support Python 3.13+",
-)
+@pytest.mark.skipif(sys.version_info >= (3, 13), reason="great_expectations does not support Python 3.13+")
 def test_create_spark_validator_happy_path(monkeypatch):
     calls = {}
 
@@ -39,21 +36,13 @@ def test_create_spark_validator_happy_path(monkeypatch):
     monkeypatch.setattr(scb, "_load_runtime_batch_request", lambda: FakeBatchRequest)
     monkeypatch.setattr(scb, "_assert_ge_spark_runtime_classes", lambda: None)
 
-    validator = scb.create_spark_validator(
-        spark_df=object(), expectation_suite=object()
-    )
+    validator = scb.create_spark_validator(spark_df=object(), expectation_suite=object())
     assert isinstance(validator, FakeValidator)
-    assert (
-        calls["datasource"]["execution_engine"]["class_name"]
-        == "SparkDFExecutionEngine"
-    )
+    assert calls["datasource"]["execution_engine"]["class_name"] == "SparkDFExecutionEngine"
     assert calls["batch"]["data_asset_name"] == "contracthub_runtime_asset"
 
 
-@pytest.mark.skipif(
-    sys.version_info >= (3, 13),
-    reason="great_expectations does not support Python 3.13+",
-)
+@pytest.mark.skipif(sys.version_info >= (3, 13), reason="great_expectations does not support Python 3.13+")
 def test_create_spark_validator_tolerates_add_datasource_failure(monkeypatch):
     class FakeContext:
         @staticmethod
@@ -83,10 +72,7 @@ def test_create_spark_validator_tolerates_add_datasource_failure(monkeypatch):
     assert result["ok"] is True
 
 
-@pytest.mark.skipif(
-    sys.version_info >= (3, 13),
-    reason="great_expectations does not support Python 3.13+",
-)
+@pytest.mark.skipif(sys.version_info >= (3, 13), reason="great_expectations does not support Python 3.13+")
 def test_load_great_expectations_module_error(monkeypatch):
     real_import = builtins.__import__
 
@@ -96,14 +82,11 @@ def test_load_great_expectations_module_error(monkeypatch):
         return real_import(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", fake_import)
-    with pytest.raises(Exception, match="great_expectations is required"):
+    with pytest.raises(RuntimeError, match="great_expectations is required"):
         scb._load_great_expectations_module()  # noqa: SLF001
 
 
-@pytest.mark.skipif(
-    sys.version_info >= (3, 13),
-    reason="great_expectations does not support Python 3.13+",
-)
+@pytest.mark.skipif(sys.version_info >= (3, 13), reason="great_expectations does not support Python 3.13+")
 def test_load_runtime_batch_request_error(monkeypatch):
     real_import = builtins.__import__
 
@@ -113,14 +96,11 @@ def test_load_runtime_batch_request_error(monkeypatch):
         return real_import(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", fake_import)
-    with pytest.raises(Exception, match="RuntimeBatchRequest is unavailable"):
+    with pytest.raises(RuntimeError, match="RuntimeBatchRequest is unavailable"):
         scb._load_runtime_batch_request()  # noqa: SLF001
 
 
-@pytest.mark.skipif(
-    sys.version_info >= (3, 13),
-    reason="great_expectations does not support Python 3.13+",
-)
+@pytest.mark.skipif(sys.version_info >= (3, 13), reason="great_expectations does not support Python 3.13+")
 def test_assert_ge_spark_runtime_classes_error(monkeypatch):
     real_import = builtins.__import__
 
@@ -130,14 +110,11 @@ def test_assert_ge_spark_runtime_classes_error(monkeypatch):
         return real_import(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", fake_import)
-    with pytest.raises(Exception, match="Spark runtime components are unavailable"):
+    with pytest.raises(RuntimeError, match="Spark runtime components are unavailable"):
         scb._assert_ge_spark_runtime_classes()  # noqa: SLF001
 
 
-@pytest.mark.skipif(
-    sys.version_info >= (3, 13),
-    reason="great_expectations does not support Python 3.13+",
-)
+@pytest.mark.skipif(sys.version_info >= (3, 13), reason="great_expectations does not support Python 3.13+")
 def test_runtime_helper_loaders_success_paths():
     gx = scb._load_great_expectations_module()  # noqa: SLF001
     assert hasattr(gx, "get_context")
@@ -146,34 +123,21 @@ def test_runtime_helper_loaders_success_paths():
     assert runtime_batch_request is not None
 
 
-@pytest.mark.skipif(
-    sys.version_info >= (3, 13),
-    reason="great_expectations does not support Python 3.13+",
-)
+@pytest.mark.skipif(sys.version_info >= (3, 13), reason="great_expectations does not support Python 3.13+")
 def test_assert_ge_spark_runtime_classes_success_with_mocked_import(monkeypatch):
     real_import = builtins.__import__
 
     def fake_import(name, *args, **kwargs):  # noqa: ANN001
         if name == "great_expectations.datasource.data_connector":
-
             class RuntimeDataConnector:  # noqa: D401
                 pass
 
-            return type(
-                "DataConnectorModule",
-                (),
-                {"RuntimeDataConnector": RuntimeDataConnector},
-            )()
+            return type("DataConnectorModule", (), {"RuntimeDataConnector": RuntimeDataConnector})()
         if name == "great_expectations.execution_engine":
-
             class SparkDFExecutionEngine:  # noqa: D401
                 pass
 
-            return type(
-                "ExecutionEngineModule",
-                (),
-                {"SparkDFExecutionEngine": SparkDFExecutionEngine},
-            )()
+            return type("ExecutionEngineModule", (), {"SparkDFExecutionEngine": SparkDFExecutionEngine})()
         return real_import(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", fake_import)

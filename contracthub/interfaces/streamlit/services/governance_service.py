@@ -79,8 +79,6 @@ def _to_odcs_model(contract_yaml: str) -> OpenDataContractStandard:
     try:
         return OpenDataContractStandard.from_string(contract_yaml)
     except TypeError as exc:
-        from contracthub.exceptions import ValidationError
-
-        raise ValidationError(
+        raise ValueError(
             "Contract YAML must deserialize into a mapping object"
         ) from exc

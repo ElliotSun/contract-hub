@@ -1,11 +1,6 @@
 import pytest
 
-from open_data_contract_standard.model import (
-    DataQuality,
-    OpenDataContractStandard,
-    SchemaObject,
-    SchemaProperty,
-)
+from open_data_contract_standard.model import DataQuality, OpenDataContractStandard, SchemaObject, SchemaProperty
 
 import contracthub.exporters.sql_exporter as exporter_mod
 
@@ -54,9 +49,7 @@ def test_load_contract_model_invalid_yaml_raises(tmp_path):
 def test_prepare_for_sql_export_handles_nested_items_and_existing_custom_property():
     model = _minimal_contract_model()
     prop = model.schema_[0].properties[0]
-    prop.customProperties = [
-        exporter_mod.CustomProperty(property="physicalType", value="BIGINT")
-    ]
+    prop.customProperties = [exporter_mod.CustomProperty(property="physicalType", value="BIGINT")]
     prop.items = SchemaProperty(logicalType="string", physicalType="STRING")
 
     prepared = exporter_mod._prepare_for_sql_export(model, use_physical_names=True)  # noqa: SLF001
@@ -150,18 +143,14 @@ def test_export_contract_does_not_append_quality_constraints_for_non_databricks_
         DataQuality(metric="invalidValues", mustBe=0, arguments={"validValues": ["A"]}),
     ]
 
-    ddl = exporter_mod.export_contract_to_spark_sql(
-        contract, sql_server_type="postgres"
-    )
+    ddl = exporter_mod.export_contract_to_spark_sql(contract, sql_server_type="postgres")
 
     assert "ALTER TABLE" not in ddl
     assert "ADD CONSTRAINT" not in ddl
 
 
 def test_export_contract_rejects_unity_catalog_for_non_databricks_target():
-    with pytest.raises(
-        ValueError, match="only supported for sql_server_type=databricks"
-    ):
+    with pytest.raises(ValueError, match="only supported for sql_server_type=databricks"):
         exporter_mod.export_contract_to_spark_sql(
             _minimal_contract_model(),
             unity_catalog="main",
@@ -170,12 +159,8 @@ def test_export_contract_rejects_unity_catalog_for_non_databricks_target():
         )
 
 
-def test_export_contract_uses_constraint_friendly_quality_fixture(
-    sample_constraint_quality_contract_path,
-):
-    ddl = exporter_mod.export_contract_to_spark_sql(
-        sample_constraint_quality_contract_path
-    )
+def test_export_contract_uses_constraint_friendly_quality_fixture(sample_constraint_quality_contract_path):
+    ddl = exporter_mod.export_contract_to_spark_sql(sample_constraint_quality_contract_path)
 
     assert "ALTER COLUMN country_code SET NOT NULL" in ddl
     assert "ADD CONSTRAINT chk_quality_rules_country_code_pattern" in ddl

@@ -113,9 +113,7 @@ class ContractPipeline:
                 **import_args,
             )
         except ValueError as exc:
-            from contracthub.exceptions import ValidationError
-
-            raise ValidationError(f"Unsupported source_type: {source_type}") from exc
+            raise ValueError(f"Unsupported source_type: {source_type}") from exc
 
         if existing_contract is not None:
             return self.merge_engine.merge(

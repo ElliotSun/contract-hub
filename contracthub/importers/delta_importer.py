@@ -598,14 +598,7 @@ def _column_def_nullable(column: exp.ColumnDef) -> bool:
 def _parse_sql_data_type(type_str: str) -> Optional[exp.DataType]:
     try:
         parsed = sqlglot.parse_one(type_str, read="spark", into=exp.DataType)
-    except sqlglot.errors.ParseError:
-        return None
-    except Exception as exc:
-        import logging
-
-        logging.getLogger(__name__).debug(
-            f"Failed to parse sql data type {type_str}: {exc}"
-        )
+    except Exception:
         return None
     return parsed if isinstance(parsed, exp.DataType) else None
 

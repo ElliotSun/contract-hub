@@ -2,12 +2,7 @@ from __future__ import annotations
 
 from open_data_contract_standard.model import CustomProperty
 
-from contracthub.lifecycle.helpers import (
-    allows_breaking_changes,
-    is_active_contract,
-    normalize_status,
-    schema_items,
-)
+from contracthub.lifecycle.helpers import allows_breaking_changes, is_active_contract, normalize_status, schema_items
 from contracthub.lifecycle.policy import evaluate_merge_policy
 
 
@@ -43,9 +38,7 @@ def test_policy_flags_removed_property_in_active_contract(sample_odcs_model):
     evaluation = evaluate_merge_policy(base, merged)
 
     assert evaluation.valid is False
-    assert any(
-        "Property removed" in item.message for item in evaluation.breaking_changes
-    )
+    assert any("Property removed" in item.message for item in evaluation.breaking_changes)
 
 
 def test_policy_ignores_removed_property_when_lifecycle_is_draft(sample_odcs_model):
@@ -65,9 +58,7 @@ def test_policy_ignores_removed_property_when_lifecycle_is_draft(sample_odcs_mod
     assert evaluation.breaking_changes == []
 
 
-def test_lifecycle_helpers_cover_status_and_schema_alias_paths(
-    sample_odcs_model, sample_odcs_dict
-):
+def test_lifecycle_helpers_cover_status_and_schema_alias_paths(sample_odcs_model, sample_odcs_dict):
     assert normalize_status(" ACTIVE ") == "active"
     assert normalize_status(None, default="x") == "x"
     active_contract = sample_odcs_model.model_copy(deep=True)
@@ -79,9 +70,7 @@ def test_lifecycle_helpers_cover_status_and_schema_alias_paths(
     from types import SimpleNamespace
 
     assert allows_breaking_changes(SimpleNamespace(lifecycleStatus="active")) is True
-    assert (
-        allows_breaking_changes(SimpleNamespace(lifecycleStatus="deprecated")) is False
-    )
+    assert allows_breaking_changes(SimpleNamespace(lifecycleStatus="deprecated")) is False
     assert schema_items(sample_odcs_model)
 
 
@@ -111,10 +100,7 @@ def test_policy_flags_root_version_change_as_release_managed(sample_odcs_model):
     assert evaluation.valid is False
     assert evaluation.version_violation is True
     assert any(item.path == "version" for item in evaluation.breaking_changes)
-    assert any(
-        "Contract version mismatch" in item.message
-        for item in evaluation.breaking_changes
-    )
+    assert any("Contract version mismatch" in item.message for item in evaluation.breaking_changes)
 
 
 def test_policy_flags_root_id_change_as_immutable_identity(sample_odcs_model):
@@ -129,9 +115,7 @@ def test_policy_flags_root_id_change_as_immutable_identity(sample_odcs_model):
     assert evaluation.valid is False
     assert evaluation.id_violation is True
     assert any(item.path == "id" for item in evaluation.breaking_changes)
-    assert any(
-        "Contract ID mismatch" in item.message for item in evaluation.breaking_changes
-    )
+    assert any("Contract ID mismatch" in item.message for item in evaluation.breaking_changes)
 
 
 def test_policy_does_not_flag_version_when_unchanged(sample_odcs_model):
@@ -146,29 +130,15 @@ def test_policy_does_not_flag_version_when_unchanged(sample_odcs_model):
     assert evaluation.version_violation is False
 
 
-def test_type_narrowing_fixture_documents_current_odcs_model_enum_gap(
-    sample_type_narrowing_base_contract_model,
-):
-    status_prop = next(
-        prop
-        for prop in sample_type_narrowing_base_contract_model.schema_[0].properties
-        if prop.name == "status_code"
-    )  # type: ignore[index]
+def test_type_narrowing_fixture_documents_current_odcs_model_enum_gap(sample_type_narrowing_base_contract_model):
+    status_prop = next(prop for prop in sample_type_narrowing_base_contract_model.schema_[0].properties if prop.name == "status_code")  # type: ignore[index]
 
     # The currently installed ODCS model does not expose enum/enumValues on SchemaProperty,
     # so lifecycle enum-reduction checks are not reachable through file-backed fixtures yet.
     assert getattr(status_prop, "enum", None) is None
     assert getattr(status_prop, "enumValues", None) is None
 
-
-def test_policy_flags_removed_relationship_in_active_contract(
-    relationship_base_contract_model, relationship_target_contract_model
-):
-    evaluation = evaluate_merge_policy(
-        relationship_base_contract_model, relationship_target_contract_model
-    )
+def test_policy_flags_removed_relationship_in_active_contract(relationship_base_contract_model, relationship_target_contract_model):
+    evaluation = evaluate_merge_policy(relationship_base_contract_model, relationship_target_contract_model)
     assert evaluation.valid is False
-    assert any(
-        "Relationship 'foreignKey:orders.user_id->users.id' removed" in item.message
-        for item in evaluation.breaking_changes
-    )
+    assert any("Relationship 'foreignKey:orders.user_id->users.id' removed" in item.message for item in evaluation.breaking_changes)

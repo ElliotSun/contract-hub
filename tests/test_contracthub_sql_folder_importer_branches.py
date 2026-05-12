@@ -45,9 +45,7 @@ def test_sql_folder_importer_accepts_explicit_spark_dialect(tmp_path):
     folder.mkdir()
     (folder / "t.sql").write_text("CREATE TABLE t (id BIGINT);", encoding="utf-8")
 
-    contract = SQLFolderImporter("sql-folder").import_source(
-        str(folder), {"dialect": "spark"}
-    )
+    contract = SQLFolderImporter("sql-folder").import_source(str(folder), {"dialect": "spark"})
     assert contract.schema_ is not None
     assert contract.schema_[0].name == "t"
 

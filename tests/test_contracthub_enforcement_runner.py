@@ -19,16 +19,8 @@ class FakeValidator:
 
 def test_run_contract_tests_on_df_with_sample_spark_df(monkeypatch):
     monkeypatch.setattr(runner, "load_contract", lambda _: object())
-    monkeypatch.setattr(
-        runner,
-        "generate_expectation_suite",
-        lambda contract, schema_name="all": object(),
-    )
-    monkeypatch.setattr(
-        runner,
-        "create_spark_validator",
-        lambda spark_df, expectation_suite: FakeValidator(),
-    )
+    monkeypatch.setattr(runner, "generate_expectation_suite", lambda contract, schema_name="all": object())
+    monkeypatch.setattr(runner, "create_spark_validator", lambda spark_df, expectation_suite: FakeValidator())
 
     result = runner.run_contract_tests_on_df("contract.yaml", FakeSparkDataFrame())
     assert result["success"] is True
@@ -67,9 +59,7 @@ def test_notebook_friendly_api_dispatch(monkeypatch):
     monkeypatch.setattr(
         runner,
         "run_contract_tests_on_df",
-        lambda contract_path, spark_df, schema_name="all", contract_runtime_context=None: {
-            "mode": "df"
-        },
+        lambda contract_path, spark_df, schema_name="all", contract_runtime_context=None: {"mode": "df"},
     )
     monkeypatch.setattr(
         runner,
@@ -79,12 +69,7 @@ def test_notebook_friendly_api_dispatch(monkeypatch):
         },
     )
 
-    assert (
-        runner.run_contract_tests(
-            contract_path="contract.yaml", spark_df=FakeSparkDataFrame()
-        )["mode"]
-        == "df"
-    )
+    assert runner.run_contract_tests(contract_path="contract.yaml", spark_df=FakeSparkDataFrame())["mode"] == "df"
     assert (
         runner.run_contract_tests(
             contract_path="contract.yaml",
@@ -104,16 +89,8 @@ def test_run_contract_tests_on_df_passes_contract_runtime_context(monkeypatch):
         return object()
 
     monkeypatch.setattr(runner, "load_contract", fake_load_contract)
-    monkeypatch.setattr(
-        runner,
-        "generate_expectation_suite",
-        lambda contract, schema_name="all": object(),
-    )
-    monkeypatch.setattr(
-        runner,
-        "create_spark_validator",
-        lambda spark_df, expectation_suite: FakeValidator(),
-    )
+    monkeypatch.setattr(runner, "generate_expectation_suite", lambda contract, schema_name="all": object())
+    monkeypatch.setattr(runner, "create_spark_validator", lambda spark_df, expectation_suite: FakeValidator())
 
     runner.run_contract_tests_on_df(
         "contract.yaml",

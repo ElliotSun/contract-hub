@@ -10,14 +10,7 @@ def test_release_manifest_example_is_valid_json_array():
 
     assert isinstance(payload, list)
     assert payload
-    assert {
-        "base",
-        "candidate",
-        "contract_path",
-        "release_tag",
-        "source_branch",
-        "target_branch",
-    } <= set(payload[0])
+    assert {"base", "candidate", "contract_path", "release_tag", "source_branch", "target_branch"} <= set(payload[0])
 
 
 def test_ci_shell_examples_reference_release_commands():
@@ -30,12 +23,8 @@ def test_ci_shell_examples_reference_release_commands():
 
 
 def test_azure_devops_examples_reference_release_commands():
-    pr_pipeline = Path("examples/azure-devops/contracthub-pr-validation.yml").read_text(
-        encoding="utf-8"
-    )
-    release_pipeline = Path("examples/azure-devops/contracthub-release.yml").read_text(
-        encoding="utf-8"
-    )
+    pr_pipeline = Path("examples/azure-devops/contracthub-pr-validation.yml").read_text(encoding="utf-8")
+    release_pipeline = Path("examples/azure-devops/contracthub-release.yml").read_text(encoding="utf-8")
 
     assert "release classify-repo" in pr_pipeline
     assert "release build-manifest" in release_pipeline

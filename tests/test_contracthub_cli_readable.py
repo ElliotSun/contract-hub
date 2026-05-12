@@ -9,19 +9,14 @@ from contracthub.interfaces import cli
 from contracthub.utils.yaml_utils import dump_yaml, load_yaml
 
 
-def test_cli_import_supports_delta_table_alias(
-    sample_odcs_model, tmp_path, monkeypatch
-):
+def test_cli_import_supports_delta_table_alias(sample_odcs_model, tmp_path, monkeypatch):
     captured: dict[str, Any] = {}
 
     def _fake_import_from_source(**kwargs):
         captured.update(kwargs)
         return sample_odcs_model.model_copy(deep=True)
 
-    monkeypatch.setattr(
-        "datacontract.data_contract.DataContract.import_from_source",
-        _fake_import_from_source,
-    )
+    monkeypatch.setattr("datacontract.data_contract.DataContract.import_from_source", _fake_import_from_source)
     output_path = tmp_path / "out.yaml"
     monkeypatch.setattr(
         "sys.argv",
@@ -50,10 +45,7 @@ def test_cli_import_supports_delta_ddl_alias(sample_odcs_model, tmp_path, monkey
         captured.update(kwargs)
         return sample_odcs_model.model_copy(deep=True)
 
-    monkeypatch.setattr(
-        "datacontract.data_contract.DataContract.import_from_source",
-        _fake_import_from_source,
-    )
+    monkeypatch.setattr("datacontract.data_contract.DataContract.import_from_source", _fake_import_from_source)
     output_path = tmp_path / "out.yaml"
     monkeypatch.setattr(
         "sys.argv",
@@ -75,9 +67,7 @@ def test_cli_import_supports_delta_ddl_alias(sample_odcs_model, tmp_path, monkey
     assert captured["format"] == "delta-ddl"
 
 
-def test_cli_import_uc_runs_unity_enrichment(
-    sample_unity_contract_model, tmp_path, monkeypatch
-):
+def test_cli_import_uc_runs_unity_enrichment(sample_unity_contract_model, tmp_path, monkeypatch):
     captured: dict[str, Any] = {}
 
     def _fake_import_from_source(**kwargs):
@@ -88,14 +78,8 @@ def test_cli_import_uc_runs_unity_enrichment(
         captured["enrich_kwargs"] = kwargs
         return contract
 
-    monkeypatch.setattr(
-        "contracthub.importers.unity_importer.DataContract.import_from_source",
-        _fake_import_from_source,
-    )
-    monkeypatch.setattr(
-        "contracthub.importers.unity_importer.enrich_unity_contract_relationships",
-        _fake_enrich,
-    )
+    monkeypatch.setattr("contracthub.importers.unity_importer.DataContract.import_from_source", _fake_import_from_source)
+    monkeypatch.setattr("contracthub.importers.unity_importer.enrich_unity_contract_relationships", _fake_enrich)
     output_path = tmp_path / "out.yaml"
     monkeypatch.setattr(
         "sys.argv",
@@ -125,9 +109,7 @@ def test_cli_import_uc_runs_unity_enrichment(
     assert captured["enrich_kwargs"]["token"] == "token"
 
 
-def test_cli_release_classify_outputs_per_contract_required_bump(
-    sample_odcs_model, tmp_path, capsys, monkeypatch
-):
+def test_cli_release_classify_outputs_per_contract_required_bump(sample_odcs_model, tmp_path, capsys, monkeypatch):
     base_contract = sample_odcs_model.model_copy(deep=True)
     candidate_contract = sample_odcs_model.model_copy(deep=True)
     assert candidate_contract.description is not None
@@ -159,9 +141,7 @@ def test_cli_release_classify_outputs_per_contract_required_bump(
     assert payload["hasChanges"] is True
 
 
-def test_cli_release_prepare_outputs_promoted_contract(
-    sample_odcs_model, tmp_path, capsys, monkeypatch
-):
+def test_cli_release_prepare_outputs_promoted_contract(sample_odcs_model, tmp_path, capsys, monkeypatch):
     base_contract = sample_odcs_model.model_copy(deep=True)
     candidate_contract = sample_odcs_model.model_copy(deep=True)
     assert candidate_contract.schema_ is not None
@@ -210,9 +190,7 @@ def test_cli_release_prepare_outputs_promoted_contract(
     assert promoted["id"] == str(base_contract.id)
 
 
-def test_cli_release_classify_repo_outputs_per_contract_results(
-    sample_odcs_model, tmp_path, capsys, monkeypatch
-):
+def test_cli_release_classify_repo_outputs_per_contract_results(sample_odcs_model, tmp_path, capsys, monkeypatch):
     base_root = tmp_path / "base"
     candidate_root = tmp_path / "candidate"
     unchanged = sample_odcs_model.model_copy(deep=True)
@@ -248,9 +226,7 @@ def test_cli_release_classify_repo_outputs_per_contract_results(
     assert by_path["changed.yaml"]["suggested_release_version"] is None
 
 
-def test_cli_release_create_prs_outputs_batch_payload(
-    sample_odcs_model, tmp_path, capsys, monkeypatch
-):
+def test_cli_release_create_prs_outputs_batch_payload(sample_odcs_model, tmp_path, capsys, monkeypatch):
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
     base_contract = sample_odcs_model.model_copy(deep=True)
@@ -281,10 +257,7 @@ def test_cli_release_create_prs_outputs_batch_payload(
         "contracthub.devops.release_workflow.create_release_pull_requests_from_manifest",
         lambda **kwargs: [
             {
-                "promotion": {
-                    "contractId": str(base_contract.id),
-                    "targetVersion": "1.1.1",
-                },
+                "promotion": {"contractId": str(base_contract.id), "targetVersion": "1.1.1"},
                 "pullRequest": {"pullRequestId": 88},
             }
         ],
@@ -319,9 +292,7 @@ def test_cli_release_create_prs_outputs_batch_payload(
     assert payload["tasks"][0]["release_tag"] == "orders/v1.1.1"
 
 
-def test_cli_release_build_manifest_writes_json_array_and_summary(
-    sample_odcs_model, tmp_path, capsys, monkeypatch
-):
+def test_cli_release_build_manifest_writes_json_array_and_summary(sample_odcs_model, tmp_path, capsys, monkeypatch):
     base_root = tmp_path / "base"
     candidate_root = tmp_path / "candidate"
     output_path = tmp_path / "release_manifest.json"

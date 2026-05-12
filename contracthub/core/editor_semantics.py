@@ -234,10 +234,8 @@ def _custom_property_models(values: list[Any]) -> list[CustomProperty]:
             models.append(value)
         elif isinstance(value, dict):
             try:
-                from pydantic import ValidationError as PydanticValidationError
-
                 models.append(CustomProperty.model_validate(value))
-            except PydanticValidationError:
+            except Exception:
                 continue
     return models
 

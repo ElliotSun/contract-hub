@@ -5,18 +5,8 @@ import pytest
 
 import contracthub.core.loader as contract_loader
 import contracthub.utils.yaml_utils as yaml_utils
-from contracthub.utils.schema_utils import (
-    contract_to_dict,
-    contract_to_model,
-    ensure_schema_key,
-)
-from contracthub.utils.yaml_utils import (
-    dump_yaml,
-    dump_yaml_text,
-    list_yaml_documents,
-    load_yaml,
-    parse_yaml_text,
-)
+from contracthub.utils.schema_utils import contract_to_dict, contract_to_model, ensure_schema_key
+from contracthub.utils.yaml_utils import dump_yaml, dump_yaml_text, list_yaml_documents, load_yaml, parse_yaml_text
 
 
 def test_yaml_utils_can_load_and_dump_sample_contract(sample_odcs_dict, tmp_path):
@@ -40,7 +30,7 @@ def test_yaml_utils_rejects_non_mapping_yaml(tmp_path):
     invalid_yaml = tmp_path / "invalid.yaml"
     invalid_yaml.write_text("- not-a-mapping", encoding="utf-8")
 
-    with pytest.raises(Exception, match="mapping object"):
+    with pytest.raises(ValueError, match="mapping object"):
         load_yaml(invalid_yaml)
 
 
@@ -68,9 +58,7 @@ def test_yaml_utils_list_yaml_documents_supports_adls2_directory(monkeypatch):
         ],
     )
 
-    discovered = list_yaml_documents(
-        "abfss://contracts@acct.dfs.core.windows.net/contracts"
-    )
+    discovered = list_yaml_documents("abfss://contracts@acct.dfs.core.windows.net/contracts")
 
     assert discovered == [
         "abfss://contracts@acct.dfs.core.windows.net/contracts/a.yaml",
@@ -89,9 +77,7 @@ def test_yaml_utils_load_yaml_metadata_supports_adls2_file(monkeypatch):
         def download_file() -> FakeDownloader:
             return FakeDownloader()
 
-    monkeypatch.setattr(
-        contract_loader, "_create_adls2_file_client", lambda path: FakeFileClient()
-    )
+    monkeypatch.setattr(contract_loader, "_create_adls2_file_client", lambda path: FakeFileClient())
 
     metadata = yaml_utils.load_yaml_metadata(
         "abfss://contracts@acct.dfs.core.windows.net/orders.yaml",
@@ -107,9 +93,7 @@ def test_yaml_utils_load_yaml_metadata_supports_adls2_file(monkeypatch):
     }
 
 
-def test_yaml_utils_load_yaml_metadata_handles_quoted_colons_multiline_and_comments(
-    tmp_path,
-):
+def test_yaml_utils_load_yaml_metadata_handles_quoted_colons_multiline_and_comments(tmp_path):
     contract_file = tmp_path / "metadata.yaml"
     contract_file.write_text(
         """
@@ -139,9 +123,7 @@ description:
     }
 
 
-def test_schema_utils_convert_sample_contract_between_input_types(
-    sample_odcs_dict, sample_odcs_path, sample_odcs_model
-):
+def test_schema_utils_convert_sample_contract_between_input_types(sample_odcs_dict, sample_odcs_path, sample_odcs_model):
     model_from_dict = contract_to_model(sample_odcs_dict)
     model_from_path = contract_to_model(sample_odcs_path)
     model_from_string_path = contract_to_model(str(sample_odcs_path))

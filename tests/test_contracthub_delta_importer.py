@@ -1,3 +1,4 @@
+
 import pandas as pd
 from deltalake import write_deltalake
 
@@ -10,9 +11,7 @@ def test_delta_importer_builds_odcs_contract_from_real_local_delta_table(tmp_pat
         {
             "id": pd.Series([1, 2], dtype="int64"),
             "amount": pd.Series([10.5, 22.75], dtype="float64"),
-            "processed_at": pd.to_datetime(
-                ["2026-04-03T10:00:00Z", "2026-04-03T10:01:00Z"], utc=True
-            ),
+            "processed_at": pd.to_datetime(["2026-04-03T10:00:00Z", "2026-04-03T10:01:00Z"], utc=True),
         }
     )
     write_deltalake(str(table_path), data, mode="overwrite")
@@ -36,9 +35,7 @@ def test_delta_importer_builds_odcs_contract_from_real_local_delta_table(tmp_pat
     assert table_cp["contracthub.delta.version"] == "0"
 
 
-def test_delta_importer_builds_odcs_contract(
-    monkeypatch, delta_finance_transactions_schema_path
-):
+def test_delta_importer_builds_odcs_contract(monkeypatch, delta_finance_transactions_schema_path):
     class FakeSchema:
         @staticmethod
         def json():
@@ -91,14 +88,10 @@ def test_delta_importer_builds_odcs_contract(
     assert events_field.logicalType == "array"
     assert events_field.items is not None
     assert events_field.items.logicalType == "object"
-    attributes_field = next(
-        item for item in table.properties if item.name == "attributes"
-    )
+    attributes_field = next(item for item in table.properties if item.name == "attributes")
     assert attributes_field.logicalType == "object"
     assert attributes_field.logicalTypeOptions is not None
-    assert (
-        str(attributes_field.logicalTypeOptions["keyType"]).lower().startswith("string")
-    )
+    assert str(attributes_field.logicalTypeOptions["keyType"]).lower().startswith("string")
 
     table_cp = {item.property: item.value for item in table.customProperties or []}
     assert table_cp["contracthub.delta.uri"] == "s3://lake/silver/finance_transactions"
@@ -106,9 +99,7 @@ def test_delta_importer_builds_odcs_contract(
     assert table_cp["contracthub.delta.partitionColumns"] == ["id"]
 
 
-def test_delta_importer_supports_multiple_tables(
-    monkeypatch, delta_minimal_schema_path
-):
+def test_delta_importer_supports_multiple_tables(monkeypatch, delta_minimal_schema_path):
     class FakeSchema:
         @staticmethod
         def json():

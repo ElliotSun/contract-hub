@@ -22,14 +22,7 @@ def apply_raw_yaml(raw_yaml: str) -> None:
     try:
         payload = parse_yaml_payload(raw_yaml)
     except Exception as exc:
-        from contracthub.exceptions import ContractHubError
-
-        error_message = (
-            exc.message
-            if isinstance(exc, ContractHubError) and hasattr(exc, "message")
-            else str(exc)
-        )
-        st.session_state["editor_error"] = f"Failed to load YAML: {error_message}"
+        st.session_state["editor_error"] = f"Failed to load YAML: {exc}"
         return
     st.session_state["contract"] = payload
     st.session_state["editor_baseline_yaml"] = raw_yaml
@@ -55,14 +48,7 @@ def validate_raw_yaml(raw_yaml: str) -> None:
     try:
         parse_yaml_payload(raw_yaml)
     except Exception as exc:
-        from contracthub.exceptions import ContractHubError
-
-        error_message = (
-            exc.message
-            if isinstance(exc, ContractHubError) and hasattr(exc, "message")
-            else str(exc)
-        )
-        st.session_state["editor_error"] = f"Validation failed: {error_message}"
+        st.session_state["editor_error"] = f"Validation failed: {exc}"
         return
     st.session_state["editor_notice"] = "Raw YAML is valid."
     st.session_state["editor_warning"] = None

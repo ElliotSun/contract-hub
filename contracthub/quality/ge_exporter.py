@@ -118,9 +118,7 @@ def generate_expectation_suite(
         )
     except ModuleNotFoundError as exc:
         if exc.name == "pyspark":
-            from contracthub.exceptions import LifecycleError
-
-            raise LifecycleError(
+            raise RuntimeError(
                 "datacontract-cli Great Expectations export with engine='spark' requires pyspark to be installed"
             ) from exc
         raise
@@ -194,9 +192,7 @@ def _validate_ge_suite_dict(suite_dict: ExpectationSuiteDict) -> None:
         try:
             expectation_impl = get_expectation_impl(expectation_type)
         except Exception as exc:
-            from contracthub.exceptions import ValidationError
-
-            raise ValidationError(
+            raise ValueError(
                 f"Failed to resolve Great Expectations rule '{expectation_type}'"
             ) from exc
 
@@ -340,9 +336,7 @@ def _load_ge_expectation_registry() -> Any:
 
         return get_expectation_impl
     except Exception as exc:
-        from contracthub.exceptions import LifecycleError
-
-        raise LifecycleError(
+        raise RuntimeError(
             "great_expectations expectation registry is required to validate exported suites"
         ) from exc
 

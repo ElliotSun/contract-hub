@@ -11,9 +11,7 @@ def test_export_contract_to_spark_sql_uses_physical_schema_names_from_sample():
     assert "CREATE OR REPLACE TABLE tbl_1" in ddl
     assert "CREATE OR REPLACE TABLE receivers_master" in ddl
     assert re.search(r"\btxn_ref_dt\s+date\b", ddl, flags=re.IGNORECASE)
-    assert re.search(
-        r"\brcvr_id\s+varchar\(18\)\s+primary key\b", ddl, flags=re.IGNORECASE
-    )
+    assert re.search(r"\brcvr_id\s+varchar\(18\)\s+primary key\b", ddl, flags=re.IGNORECASE)
     assert 'COMMENT "Provides core payment metrics"' in ddl
     assert " None" not in ddl
 
@@ -41,9 +39,7 @@ def test_export_contract_to_spark_sql_appends_not_null_constraint_from_quality_r
     assert "ALTER COLUMN rcvr_cntry_code SET NOT NULL" in ddl
 
 
-def test_export_contract_to_spark_sql_supports_temporal_and_scalar_fixture(
-    sample_temporal_types_contract_path,
-):
+def test_export_contract_to_spark_sql_supports_temporal_and_scalar_fixture(sample_temporal_types_contract_path):
     ddl = export_contract_to_spark_sql(sample_temporal_types_contract_path)
 
     assert "CREATE OR REPLACE TABLE temporal_events" in ddl
@@ -54,9 +50,7 @@ def test_export_contract_to_spark_sql_supports_temporal_and_scalar_fixture(
     assert re.search(r"\braw_payload\s+BINARY\b", ddl, flags=re.IGNORECASE)
 
 
-def test_export_contract_to_spark_sql_supports_nested_fixture(
-    sample_nested_types_contract_path,
-):
+def test_export_contract_to_spark_sql_supports_nested_fixture(sample_nested_types_contract_path):
     ddl = export_contract_to_spark_sql(sample_nested_types_contract_path)
 
     assert "CREATE OR REPLACE TABLE nested_payloads" in ddl

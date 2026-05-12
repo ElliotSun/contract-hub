@@ -23,7 +23,6 @@ dependencies = [
   "streamlit-tags==1.2.7",
   "pandas>=2.0.0",
   "openai>=1.0.0",
-  "litellm>=1.83.14",
 ]
 
 [project.scripts]

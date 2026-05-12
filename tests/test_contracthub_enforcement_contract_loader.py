@@ -88,10 +88,7 @@ def test_load_contract_from_adls2_via_mssparkutils(monkeypatch, runtime_context)
     )
 
     assert loaded.id == "orders"
-    assert (
-        calls["path"]
-        == "abfss://contracts@acct.dfs.core.windows.net/domain/orders.yaml"
-    )
+    assert calls["path"] == "abfss://contracts@acct.dfs.core.windows.net/domain/orders.yaml"
     assert isinstance(calls["max_bytes"], int)
 
 
@@ -108,9 +105,7 @@ def test_load_contract_from_uc_volume_path_uses_mssparkutils_fallback(monkeypatc
     class FakeMSSparkUtils:
         fs = FakeFS()
 
-    monkeypatch.setattr(
-        loader, "_read_local_text", lambda _: (_ for _ in ()).throw(FileNotFoundError())
-    )
+    monkeypatch.setattr(loader, "_read_local_text", lambda _: (_ for _ in ()).throw(FileNotFoundError()))
     monkeypatch.setattr(loader, "_get_mssparkutils", lambda: FakeMSSparkUtils())
 
     loaded = loader.load_contract(
@@ -124,14 +119,14 @@ def test_load_contract_from_uc_volume_path_uses_mssparkutils_fallback(monkeypatc
 
 
 def test_load_contract_invalid_runtime_context_raises():
-    with pytest.raises(Exception, match="runtime_context"):
+    with pytest.raises(ValueError, match="runtime_context"):
         loader.load_contract("contracts/orders.yaml", runtime_context="notebook")
 
 
 def test_load_contract_invalid_yaml_payload_type_raises(tmp_path):
     contract_file = tmp_path / "invalid.yaml"
     contract_file.write_text("- not-a-mapping", encoding="utf-8")
-    with pytest.raises(Exception, match="deserialize into a mapping"):
+    with pytest.raises(ValueError, match="deserialize into a mapping"):
         loader.load_contract(str(contract_file))
 
 
@@ -141,9 +136,7 @@ def test_load_contract_http_path(monkeypatch):
         status_code = 200
         text = CONTRACT_YAML
 
-    monkeypatch.setattr(
-        loader.requests, "get", lambda url, headers, timeout: FakeResponse()
-    )
+    monkeypatch.setattr(loader.requests, "get", lambda url, headers, timeout: FakeResponse())
     loaded = loader.load_contract("https://example.com/contracts/orders.yaml")
     assert loaded.id == "orders"
 
@@ -154,30 +147,24 @@ def test_read_http_text_error_raises(monkeypatch):
         status_code = 403
         text = "forbidden"
 
-    monkeypatch.setattr(
-        loader.requests, "get", lambda url, headers, timeout: FakeResponse()
-    )
+    monkeypatch.setattr(loader.requests, "get", lambda url, headers, timeout: FakeResponse())
 
-    with pytest.raises(Exception, match="status=403"):
+    with pytest.raises(RuntimeError, match="status=403"):
         loader._read_http_text("https://example.com/contracts/orders.yaml", headers={})  # noqa: SLF001
 
 
 def test_uc_volume_auto_runtime_does_not_fallback_to_sparkutils(monkeypatch):
-    monkeypatch.setattr(
-        loader, "_read_local_text", lambda _: (_ for _ in ()).throw(FileNotFoundError())
-    )
+    monkeypatch.setattr(loader, "_read_local_text", lambda _: (_ for _ in ()).throw(FileNotFoundError()))
     monkeypatch.setattr(loader, "_read_with_mssparkutils", lambda _: CONTRACT_YAML)
     with pytest.raises(FileNotFoundError):
-        loader._read_uc_volume_text(
-            "dbfs:/Volumes/main/bronze/contracts/orders.yaml", "auto"
-        )  # noqa: SLF001
+        loader._read_uc_volume_text("dbfs:/Volumes/main/bronze/contracts/orders.yaml", "auto")  # noqa: SLF001
 
 
 def test_unknown_path_uses_sparkutils_only_in_notebook_runtime(monkeypatch):
     monkeypatch.setattr(loader, "_read_with_mssparkutils", lambda _: CONTRACT_YAML)
     text = loader.read_contract_text("s3://bucket/contract.yaml", "synapse")
     assert "apiVersion" in text
-    with pytest.raises(Exception, match="Unsupported contract path"):
+    with pytest.raises(ValueError, match="Unsupported contract path"):
         loader.read_contract_text("s3://bucket/contract.yaml", "auto")
 
 
@@ -211,11 +198,7 @@ def test_get_mssparkutils_resolution_paths(monkeypatch):
     class NotebookUtils:
         mssparkutils = object()
 
-    monkeypatch.setattr(
-        loader.importlib,
-        "import_module",
-        lambda name: NotebookUtils if name == "notebookutils" else None,
-    )
+    monkeypatch.setattr(loader.importlib, "import_module", lambda name: NotebookUtils if name == "notebookutils" else None)
     assert loader._get_mssparkutils() is NotebookUtils.mssparkutils  # noqa: SLF001
 
     def failing_import(name):  # noqa: ANN001
@@ -236,18 +219,12 @@ def test_resolve_runtime_context_from_env_and_local_alias(monkeypatch):
 
 
 def test_adls2_uri_conversion_and_headers(monkeypatch):
-    assert (
-        loader._adls2_to_https_url("https://acct.dfs.core.windows.net/c/path.yaml")
-        == "https://acct.dfs.core.windows.net/c/path.yaml"
-    )  # noqa: E501, SLF001
-    assert (
-        loader._adls2_to_https_url("abfss://c@acct.dfs.core.windows.net/path.yaml")
-        == "https://acct.dfs.core.windows.net/c/path.yaml"
-    )  # noqa: E501, SLF001
+    assert loader._adls2_to_https_url("https://acct.dfs.core.windows.net/c/path.yaml") == "https://acct.dfs.core.windows.net/c/path.yaml"  # noqa: E501, SLF001
+    assert loader._adls2_to_https_url("abfss://c@acct.dfs.core.windows.net/path.yaml") == "https://acct.dfs.core.windows.net/c/path.yaml"  # noqa: E501, SLF001
 
-    with pytest.raises(Exception, match="Unsupported ADLS2 URI scheme"):
+    with pytest.raises(ValueError, match="Unsupported ADLS2 URI scheme"):
         loader._adls2_to_https_url("s3://bucket/path.yaml")  # noqa: SLF001
-    with pytest.raises(Exception, match="format abfss://"):
+    with pytest.raises(ValueError, match="format abfss://"):
         loader._adls2_to_https_url("abfss://acct.dfs.core.windows.net/path.yaml")  # noqa: SLF001
 
 
@@ -255,14 +232,8 @@ def test_read_contract_text_classifiers():
     assert loader.is_uc_volume_path("/Volumes/main/silver/c.yaml") is True
     assert loader.is_uc_volume_path("dbfs:/Volumes/main/silver/c.yaml") is True
     assert loader.is_uc_volume_path("abfss://x@y/c.yaml") is False
-    assert (
-        loader.normalize_uc_volume_local_path("dbfs:/Volumes/main/c.yaml")
-        == "/dbfs/Volumes/main/c.yaml"
-    )
-    assert (
-        loader.normalize_uc_volume_local_path("/Volumes/main/c.yaml")
-        == "/Volumes/main/c.yaml"
-    )
+    assert loader.normalize_uc_volume_local_path("dbfs:/Volumes/main/c.yaml") == "/dbfs/Volumes/main/c.yaml"
+    assert loader.normalize_uc_volume_local_path("/Volumes/main/c.yaml") == "/Volumes/main/c.yaml"
     assert loader.is_local_path("file:///tmp/c.yaml") is True
     assert loader._is_http_path("https://example.com/c.yaml") is True  # noqa: SLF001
     assert loader.is_adls2_path("https://acct.dfs.core.windows.net/c/path.yaml") is True
@@ -287,11 +258,7 @@ def test_read_with_mssparkutils_without_head_returns_none(monkeypatch):
 
 
 def test_get_mssparkutils_returns_none_when_all_imports_fail(monkeypatch):
-    monkeypatch.setattr(
-        loader.importlib,
-        "import_module",
-        lambda name: (_ for _ in ()).throw(ImportError(name)),
-    )
+    monkeypatch.setattr(loader.importlib, "import_module", lambda name: (_ for _ in ()).throw(ImportError(name)))
     assert loader._get_mssparkutils() is None  # noqa: SLF001
 
 
@@ -312,9 +279,7 @@ def test_resolve_adls2_credential_uses_static_token_wrapper(monkeypatch):
         },
     )
 
-    credential = loader._resolve_adls2_credential(
-        "abfss://c@acct.dfs.core.windows.net/path.yaml"
-    )  # noqa: SLF001
+    credential = loader._resolve_adls2_credential("abfss://c@acct.dfs.core.windows.net/path.yaml")  # noqa: SLF001
     token = credential.get_token("https://storage.azure.com/.default")
 
     assert token.token == "token-1"
@@ -337,18 +302,8 @@ def test_resolve_adls2_credential_uses_default_azure_credential(monkeypatch):
             "DataLakeServiceClient": object,
         },
     )
-    monkeypatch.setattr(
-        loader.importlib,
-        "import_module",
-        lambda name: (
-            FakeAzureIdentity
-            if name == "azure.identity"
-            else (_ for _ in ()).throw(ImportError(name))
-        ),
-    )
+    monkeypatch.setattr(loader.importlib, "import_module", lambda name: FakeAzureIdentity if name == "azure.identity" else (_ for _ in ()).throw(ImportError(name)))
 
-    credential = loader._resolve_adls2_credential(
-        "abfss://c@acct.dfs.core.windows.net/path.yaml"
-    )  # noqa: SLF001
+    credential = loader._resolve_adls2_credential("abfss://c@acct.dfs.core.windows.net/path.yaml")  # noqa: SLF001
 
     assert isinstance(credential, FakeDefaultAzureCredential)
