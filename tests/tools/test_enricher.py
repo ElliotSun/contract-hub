@@ -5,16 +5,13 @@ from open_data_contract_standard.model import OpenDataContractStandard
 
 
 def test_contract_enricher(mocker, tmp_path):
-    # Mock OpenAI client
+    # Mock litellm completion
     mock_response = MagicMock()
-    mock_response.choices[
-        0
-    ].message.content = '{"potential_joins": [{"source_column": "rcvr_cntry_code", "target_column": "receiver_name", "edge_label": "MOCKED_LABEL", "confidence": 0.8}]}'
+    mock_response.choices = [MagicMock()]
+    mock_response.choices[0].message.content = '{"potential_joins": [{"source_column": "rcvr_cntry_code", "target_column": "receiver_name", "edge_label": "MOCKED_LABEL", "confidence": 0.8}]}'
 
-    # We patch openai.Client to mock the client instantiation and completions
-    mock_openai_client_class = mocker.patch("openai.Client")
-    mock_client_instance = mock_openai_client_class.return_value
-    mock_client_instance.chat.completions.create.return_value = mock_response
+    # We patch litellm.completion to mock the completion function
+    mock_completion = mocker.patch("litellm.completion", return_value=mock_response)
 
     # Copy the sample odcs to tmp_path
     sample_path = Path("sample_odcs.yaml")
@@ -25,8 +22,8 @@ def test_contract_enricher(mocker, tmp_path):
     enricher = ContractEnricher()
     enricher.process(str(test_path), max_workers=2, mode="infer_joins")
 
-    # Validate OpenAI was called correctly
-    assert mock_client_instance.chat.completions.create.call_count > 0
+    # Validate litellm was called correctly
+    assert mock_completion.call_count > 0
 
     # Read back the enriched YAML
     enriched_odcs = OpenDataContractStandard.from_file(str(test_path))

@@ -16,34 +16,39 @@ class BaseLLMProvider(ABC):
 
 class OpenAILLMProvider(BaseLLMProvider):
     def __init__(self):
-        # Only import openai when instantiated so we don't hard fail if missing
-        import openai
+        # Only import litellm when instantiated so we don't hard fail if missing
 
         self.api_key = os.environ.get("LLM_API_KEY", "")
         self.base_url = os.environ.get("LLM_BASE_URL", None)
         self.model_name = os.environ.get("LLM_MODEL_NAME", "gpt-4-turbo")
 
-        self.client = openai.Client(api_key=self.api_key, base_url=self.base_url)
-
     def generate_json(
         self, system_prompt: str, user_prompt: str, temperature: float = 0.0
     ) -> dict:
         import time
+        from litellm import completion
 
         max_retries = 3
         delay = 2.0
 
         for attempt in range(max_retries + 1):
             try:
-                response = self.client.chat.completions.create(
-                    model=self.model_name,
-                    response_format={"type": "json_object"},
-                    messages=[
+                # Prepare arguments
+                kwargs = {
+                    "model": self.model_name,
+                    "response_format": {"type": "json_object"},
+                    "messages": [
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt},
                     ],
-                    temperature=temperature,
-                )
+                    "temperature": temperature,
+                }
+                if self.api_key:
+                    kwargs["api_key"] = self.api_key
+                if self.base_url:
+                    kwargs["api_base"] = self.base_url
+
+                response = completion(**kwargs)
                 content = response.choices[0].message.content
                 if not content:
                     return {}

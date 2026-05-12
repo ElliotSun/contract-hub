@@ -31,9 +31,9 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     enrich_parser.add_argument(
         "--mode",
-        choices=["label", "infer_joins"],
+        choices=["label", "infer_joins", "describe_tables", "describe_columns", "suggest_quality"],
         default="label",
-        help="Enrichment mode: 'label' tags existing relationships, 'infer_joins' discovers new ones",
+        help="Enrichment mode: 'label' for tagging existing relationships, 'infer_joins' for discovering new semantic relationships, 'describe_tables' for missing table descriptions, 'describe_columns' for missing column descriptions, 'suggest_quality' for generating DataQuality rules.",
     )
 
     plan_parser = subparsers.add_parser(
