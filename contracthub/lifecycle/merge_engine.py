@@ -120,7 +120,9 @@ class ContractMergeEngine:
         analysis = self.analyze(source_model, target_model)
         if fail_on_conflict and analysis.conflicts:
             rules = ", ".join({c.rule for c in analysis.conflicts})
-            raise ValueError(f"Merge conflicts detected: {rules}")
+            from contracthub.exceptions import MergeConflictError
+
+            raise MergeConflictError(f"Merge conflicts detected: {rules}")
 
         merged_model = self._merge_odcs_models(
             target_model=target_model,
@@ -776,10 +778,14 @@ def _to_odcs_model(contract: OpenDataContractStandard) -> OpenDataContractStanda
 def _assert_supported_api_version(api_version: Any) -> None:
     major_minor = _parse_api_major_minor(api_version)
     if major_minor is None:
-        raise ValueError("Contract apiVersion must be set and in v3.0.0+ format")
+        from contracthub.exceptions import ValidationError
+
+        raise ValidationError("Contract apiVersion must be set and in v3.0.0+ format")
     major, minor = major_minor
     if major < 3:
-        raise ValueError(
+        from contracthub.exceptions import ValidationError
+
+        raise ValidationError(
             f"Unsupported apiVersion '{api_version}'. Only v3.0.0 and above are supported"
         )
 

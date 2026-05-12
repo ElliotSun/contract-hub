@@ -4,7 +4,9 @@ import contracthub.importers  # noqa: F401
 from contracthub.importers.sql_importer import SQLFolderImporter
 
 
-def test_sql_folder_importer_parses_real_sparksql_external_table_ddl(spark_ddl_adls2_product_dir):
+def test_sql_folder_importer_parses_real_sparksql_external_table_ddl(
+    spark_ddl_adls2_product_dir,
+):
     importer = SQLFolderImporter("sql-folder")
     contract = importer.import_source(str(spark_ddl_adls2_product_dir), {})
 
@@ -39,13 +41,17 @@ def test_sql_folder_importer_parses_real_sparksql_external_table_ddl(spark_ddl_a
     assert events_field.logicalType == "array"
     assert events_field.items is not None
     assert events_field.items.logicalType == "object"
-    attributes_field = next(item for item in table.properties if item.name == "attributes")
+    attributes_field = next(
+        item for item in table.properties if item.name == "attributes"
+    )
     assert attributes_field.logicalType == "object"
     assert attributes_field.items is not None
     assert attributes_field.items.logicalType == "array"
 
 
-def test_sql_folder_importer_multiple_files_generate_one_contract_with_all_tables(spark_ddl_finance_product_dir):
+def test_sql_folder_importer_multiple_files_generate_one_contract_with_all_tables(
+    spark_ddl_finance_product_dir,
+):
     importer = SQLFolderImporter("sql-folder")
     contract = importer.import_source(str(spark_ddl_finance_product_dir), {})
 
@@ -59,8 +65,12 @@ def test_sql_folder_importer_multiple_files_generate_one_contract_with_all_table
     assert table_names == {"accounts", "transactions", "balances"}
 
 
-def test_sql_folder_importer_extracts_primary_key_unique_and_partition_metadata(spark_ddl_risk_product_dir):
-    contract = SQLFolderImporter("sql-folder").import_source(str(spark_ddl_risk_product_dir), {})
+def test_sql_folder_importer_extracts_primary_key_unique_and_partition_metadata(
+    spark_ddl_risk_product_dir,
+):
+    contract = SQLFolderImporter("sql-folder").import_source(
+        str(spark_ddl_risk_product_dir), {}
+    )
     assert contract.schema_ is not None
     table = contract.schema_[0]
 
@@ -74,8 +84,12 @@ def test_sql_folder_importer_extracts_primary_key_unique_and_partition_metadata(
     assert fields["event_date"].partitionKeyPosition == 1
 
 
-def test_sql_folder_importer_extracts_foreign_key_relationships(spark_ddl_delta_relationship_product_dir):
-    contract = SQLFolderImporter("sql-folder").import_source(str(spark_ddl_delta_relationship_product_dir), {})
+def test_sql_folder_importer_extracts_foreign_key_relationships(
+    spark_ddl_delta_relationship_product_dir,
+):
+    contract = SQLFolderImporter("sql-folder").import_source(
+        str(spark_ddl_delta_relationship_product_dir), {}
+    )
     assert contract.schema_ is not None
     tables = {item.name: item for item in contract.schema_}
     child = tables["children"]
@@ -99,5 +113,7 @@ def test_sql_folder_importer_extracts_foreign_key_relationships(spark_ddl_delta_
 def test_delta_ddl_alias_sets_source_marker(spark_ddl_delta_relationship_product_dir):
     importer = importer_factory.create("delta-ddl")
     contract = importer.import_source(str(spark_ddl_delta_relationship_product_dir), {})
-    source_props = {item.property: item.value for item in contract.customProperties or []}
+    source_props = {
+        item.property: item.value for item in contract.customProperties or []
+    }
     assert source_props["contracthub.source"] == "delta-ddl"
