@@ -93,6 +93,8 @@ def test_enrich_unity_lineage_missing_dependency():
     schema_obj = SchemaObject(name="orders", physicalName="orders", properties=[prop_id])
     contract = OpenDataContractStandard(apiVersion="3.1.0", id="test-contract", schema=[schema_obj])
 
+    # To trigger the ImportError reliably even if the module is actually installed via dev dependencies,
+    # we use mock's sys.modules trick.
     with patch.dict('sys.modules', {'databricks': None, 'databricks.sql': None}):
         with pytest.raises(ImportError, match="databricks-sql-connector"):
             enrich_unity_lineage(

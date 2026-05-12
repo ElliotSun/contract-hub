@@ -541,6 +541,7 @@ databricks = [
     { name = "databricks-sql-connector" },
 ]
 dev = [
+    { name = "databricks-sql-connector" },
     { name = "networkx" },
     { name = "pytest" },
     { name = "pytest-mock" },
@@ -555,6 +556,7 @@ requires-dist = [
     { name = "azure-identity", marker = "extra == 'azure'", specifier = ">=1.16.0" },
     { name = "azure-storage-file-datalake", marker = "extra == 'azure'", specifier = ">=12.16.0" },
     { name = "databricks-sql-connector", marker = "extra == 'databricks'", specifier = ">=3.0.0" },
+    { name = "databricks-sql-connector", marker = "extra == 'dev'", specifier = ">=3.0.0" },
     { name = "datacontract-cli", git = "https://github.com/datacontract/datacontract-cli.git?rev=2dc840ffdc861b0ff091e8f5f124a3caa12e4039" },
     { name = "deltalake", specifier = ">=0.18.0" },
     { name = "great-expectations", specifier = ">=1.0.0" },
