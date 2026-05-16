@@ -22,7 +22,9 @@ def test_build_release_pr_plan_uses_per_contract_defaults(sample_odcs_model):
     assert candidate.schema_ is not None
     assert candidate.schema_[0].properties is not None
     candidate.schema_[0].properties.append(
-        candidate.schema_[0].properties[0].model_copy(update={"name": "new_optional_column", "id": "new_optional_column"})
+        candidate.schema_[0]
+        .properties[0]
+        .model_copy(update={"name": "new_optional_column", "id": "new_optional_column"})
     )
 
     promotion = prepare_release_candidate(base, candidate, "orders/v1.2.0")
@@ -39,7 +41,9 @@ def test_build_release_pr_plan_uses_per_contract_defaults(sample_odcs_model):
     assert "current version" in plan.description
 
 
-def test_create_release_pull_request_writes_contract_and_calls_pr_creator(sample_odcs_model, tmp_path, monkeypatch):
+def test_create_release_pull_request_writes_contract_and_calls_pr_creator(
+    sample_odcs_model, tmp_path, monkeypatch
+):
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
     base = sample_odcs_model.model_copy(deep=True)
@@ -47,7 +51,9 @@ def test_create_release_pull_request_writes_contract_and_calls_pr_creator(sample
     assert candidate.schema_ is not None
     assert candidate.schema_[0].properties is not None
     candidate.schema_[0].properties.append(
-        candidate.schema_[0].properties[0].model_copy(update={"name": "new_optional_column", "id": "new_optional_column"})
+        candidate.schema_[0]
+        .properties[0]
+        .model_copy(update={"name": "new_optional_column", "id": "new_optional_column"})
     )
 
     captured: dict[str, object] = {}
@@ -56,7 +62,10 @@ def test_create_release_pull_request_writes_contract_and_calls_pr_creator(sample
         captured["kwargs"] = kwargs
         return {"pullRequestId": 42}
 
-    monkeypatch.setattr("contracthub.devops.release_workflow.PullRequestCreator.create_update_pr", fake_create_update_pr)
+    monkeypatch.setattr(
+        "contracthub.devops.release_workflow.PullRequestCreator.create_update_pr",
+        fake_create_update_pr,
+    )
 
     payload = create_release_pull_request(
         config=AzureDevOpsConfig(
@@ -84,7 +93,9 @@ def test_create_release_pull_request_writes_contract_and_calls_pr_creator(sample
     assert captured["kwargs"]["push"] is True  # type: ignore[index]
 
 
-def test_cli_release_create_pr_outputs_plan_and_pr_payload(sample_odcs_model, tmp_path, capsys, monkeypatch):
+def test_cli_release_create_pr_outputs_plan_and_pr_payload(
+    sample_odcs_model, tmp_path, capsys, monkeypatch
+):
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
     base = sample_odcs_model.model_copy(deep=True)
@@ -92,7 +103,9 @@ def test_cli_release_create_pr_outputs_plan_and_pr_payload(sample_odcs_model, tm
     assert candidate.schema_ is not None
     assert candidate.schema_[0].properties is not None
     candidate.schema_[0].properties.append(
-        candidate.schema_[0].properties[0].model_copy(update={"name": "new_optional_column", "id": "new_optional_column"})
+        candidate.schema_[0]
+        .properties[0]
+        .model_copy(update={"name": "new_optional_column", "id": "new_optional_column"})
     )
 
     base_path = dump_yaml(base, tmp_path / "base.yaml")
@@ -146,7 +159,9 @@ def test_cli_release_create_pr_outputs_plan_and_pr_payload(sample_odcs_model, tm
     assert payload["plan"]["target_version"] == "1.2.0"
 
 
-def test_classify_contracts_in_repo_reports_changed_added_removed_and_unchanged(sample_odcs_model, tmp_path):
+def test_classify_contracts_in_repo_reports_changed_added_removed_and_unchanged(
+    sample_odcs_model, tmp_path
+):
     base_root = tmp_path / "base"
     candidate_root = tmp_path / "candidate"
 
@@ -165,7 +180,9 @@ def test_classify_contracts_in_repo_reports_changed_added_removed_and_unchanged(
     dump_yaml(sample_odcs_model, base_root / "removed.yaml")
     dump_yaml(added, candidate_root / "added.yaml")
 
-    results = classify_contracts_in_repo(base_root=base_root, candidate_root=candidate_root)
+    results = classify_contracts_in_repo(
+        base_root=base_root, candidate_root=candidate_root
+    )
     by_path = {item.contract_repo_path: item for item in results}
 
     assert by_path["unchanged.yaml"].status == "unchanged"
@@ -176,7 +193,9 @@ def test_classify_contracts_in_repo_reports_changed_added_removed_and_unchanged(
     assert by_path["removed.yaml"].status == "removed"
 
 
-def test_create_release_pull_requests_from_manifest_runs_each_contract(sample_odcs_model, tmp_path, monkeypatch):
+def test_create_release_pull_requests_from_manifest_runs_each_contract(
+    sample_odcs_model, tmp_path, monkeypatch
+):
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
     base_a = sample_odcs_model.model_copy(deep=True)
@@ -184,7 +203,9 @@ def test_create_release_pull_requests_from_manifest_runs_each_contract(sample_od
     assert candidate_a.schema_ is not None
     assert candidate_a.schema_[0].properties is not None
     candidate_a.schema_[0].properties.append(
-        candidate_a.schema_[0].properties[0].model_copy(update={"name": "new_optional_column", "id": "new_optional_column"})
+        candidate_a.schema_[0]
+        .properties[0]
+        .model_copy(update={"name": "new_optional_column", "id": "new_optional_column"})
     )
 
     base_b = sample_odcs_model.model_copy(deep=True)
@@ -193,7 +214,9 @@ def test_create_release_pull_requests_from_manifest_runs_each_contract(sample_od
     assert candidate_b.schema_ is not None
     assert candidate_b.schema_[0].properties is not None
     candidate_b.schema_[0].properties.append(
-        candidate_b.schema_[0].properties[0].model_copy(update={"name": "new_optional_column", "id": "new_optional_column"})
+        candidate_b.schema_[0]
+        .properties[0]
+        .model_copy(update={"name": "new_optional_column", "id": "new_optional_column"})
     )
 
     base_a_path = dump_yaml(base_a, tmp_path / "base-a.yaml")
@@ -207,7 +230,10 @@ def test_create_release_pull_requests_from_manifest_runs_each_contract(sample_od
         calls.append(kwargs["paths"][0])
         return {"pullRequestId": len(calls)}
 
-    monkeypatch.setattr("contracthub.devops.release_workflow.PullRequestCreator.create_update_pr", fake_create_update_pr)
+    monkeypatch.setattr(
+        "contracthub.devops.release_workflow.PullRequestCreator.create_update_pr",
+        fake_create_update_pr,
+    )
 
     results = create_release_pull_requests_from_manifest(
         config=AzureDevOpsConfig(
@@ -257,7 +283,9 @@ def test_build_batch_release_manifest_generates_editable_tasks_and_skips_manual_
     assert additive.schema_ is not None
     assert additive.schema_[0].properties is not None
     additive.schema_[0].properties.append(
-        additive.schema_[0].properties[0].model_copy(update={"name": "new_optional_column", "id": "new_optional_column"})
+        additive.schema_[0]
+        .properties[0]
+        .model_copy(update={"name": "new_optional_column", "id": "new_optional_column"})
     )
 
     added = sample_odcs_model.model_copy(deep=True)
@@ -273,7 +301,9 @@ def test_build_batch_release_manifest_generates_editable_tasks_and_skips_manual_
     dump_yaml(sample_odcs_model, base_root / "removed.yaml")
     dump_yaml(added, candidate_root / "added.yaml")
 
-    build = build_batch_release_manifest(base_root=base_root, candidate_root=candidate_root)
+    build = build_batch_release_manifest(
+        base_root=base_root, candidate_root=candidate_root
+    )
     tasks_by_path = {task.contract_path: task for task in build.tasks}
     skipped_by_path = {item.contract_repo_path: item for item in build.skipped}
 
