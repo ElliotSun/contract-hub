@@ -68,6 +68,7 @@ def _build_parser() -> argparse.ArgumentParser:
     import_parser.add_argument("--runtime-context", default="auto")
     import_parser.add_argument("--workspace-url")
     import_parser.add_argument("--token")
+    import_parser.add_argument("--sql-http-path")
     import_parser.add_argument(
         "--adls-oauth-token", help="OAuth bearer token for ADLS Gen2 access"
     )
@@ -84,6 +85,11 @@ def _build_parser() -> argparse.ArgumentParser:
     import_parser.add_argument(
         "--tables",
         help="Comma-separated list of additional Delta table URIs (used with --format delta or --format delta-table)",
+    )
+    import_parser.add_argument(
+        "--extract-lineage",
+        action="store_true",
+        help="Attempt to extract column-level lineage and logic from source (only supported for uc/unity format)",
     )
 
     merge_parser = subparsers.add_parser(
@@ -500,6 +506,8 @@ def _run_import(args: argparse.Namespace) -> Path:
             table_fqn=args.source,
             workspace_url=args.workspace_url,
             token=args.token,
+            sql_http_path=args.sql_http_path,
+            extract_lineage=args.extract_lineage,
         )
 
     if existing_contract is not None:
