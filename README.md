@@ -116,24 +116,24 @@ contracthub/
 
 ```mermaid
 stateDiagram-v2
+    direction LR
+
     %% State definitions
     state "Draft" as Draft
     state "Active" as Active
     state "Deprecated" as Deprecated
     state "Retired" as Retired
 
-    [*] --> Draft : Create Contract
+    [*] --> Draft : Create
 
     Draft --> Active : Promote
-    Draft --> Draft : Free Evolution
-
-    Active --> Active : Governed Merge
+    Draft --> Draft : Edit
 
     %% Breaking change logic
-    state "Breaking Change?" as breaking_check
-    Active --> breaking_check : Check
-    breaking_check --> Active : Bump Major
-    breaking_check --> Deprecated : Auto-Deprecate
+    state breaking_check <<choice>>
+    Active --> breaking_check : Governed Merge
+    breaking_check --> Active : Safe (Minor Bump)
+    breaking_check --> Deprecated : Breaking (Auto-Deprecate)
 
     Deprecated --> Retired : End of Life
     Retired --> [*] : Archive
