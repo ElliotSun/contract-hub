@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "datacontract-flow"
-version = "1.0.0"
+version = "0.1.0"
 description = "ContractHub importers for generating ODCS contracts from Delta, SQL folders, and Unity Catalog"
 readme = "README.md"
 requires-python = ">=3.11,<3.15"
@@ -63,3 +63,5 @@ branch = "main"
 upload_to_pypi = false
 upload_to_release = true
 build_command = "uv build"
+allow_zero_version = true
+major_on_zero = false
