@@ -349,7 +349,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Install uv and deps
-        run: pip install uv && uv venv && uv pip install datacontract-flow
+        run: pip install uv && uv venv && uv pip install contracthub
       - name: Contract Check
         run: contracthub release classify-repo --base-root contracts-main --candidate-root contracts-feature
 """
@@ -369,7 +369,7 @@ contract_check:
   image: python:3.11-slim
   script:
     - pip install uv
-    - uv venv && uv pip install datacontract-flow
+    - uv venv && uv pip install contracthub
     - contracthub release classify-repo --base-root contracts-main --candidate-root contracts-feature
 """
     with open(".gitlab/ci/contract-check.yml", "w") as f:
@@ -550,7 +550,7 @@ def _resolve_adls_oauth_token(args: argparse.Namespace) -> str | None:
         from contracthub.exceptions import LifecycleError
 
         raise LifecycleError(
-            "azure-identity is required for --use-azure-identity. Install with `pip install datacontract-flow[azure]`."
+            "azure-identity is required for --use-azure-identity. Install with `pip install contracthub[azure]`."
         ) from exc
     credential = DefaultAzureCredential()
     token = credential.get_token(args.azure_scope)

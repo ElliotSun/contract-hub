@@ -257,7 +257,7 @@ def _resolve_adls2_credential(contract_path: str) -> Any | None:
     except ImportError as exc:
         raise RuntimeError(
             "ADLS2 access requires azure-identity or CONTRACTHUB_ADLS_BEARER_TOKEN. "
-            "Install with `pip install datacontract-flow[azure]`."
+            "Install with `pip install contracthub[azure]`."
         ) from exc
 
     return azure_identity.DefaultAzureCredential()
@@ -271,7 +271,7 @@ def _import_azure_datalake_sdk() -> dict[str, Any]:
     except ImportError as exc:
         raise RuntimeError(
             "ADLS2 access requires azure-storage-file-datalake. "
-            "Install with `pip install datacontract-flow[azure]`."
+            "Install with `pip install contracthub[azure]`."
         ) from exc
 
     return {
