@@ -619,7 +619,8 @@ def _run_export(args: argparse.Namespace) -> str:
         # but in datacontract-cli 0.11.x sometimes we need to write manually if custom exporter doesn't handle writing
         # SDK usually returns the exported string.
         if result is not None:
-            Path(args.output).write_text(result, encoding="utf-8")
+            output_data = result[0] if isinstance(result, tuple) else result
+            Path(args.output).write_text(str(output_data), encoding="utf-8")
             return f"Exported to {args.output}"
         return f"Exported to {args.output}"
 

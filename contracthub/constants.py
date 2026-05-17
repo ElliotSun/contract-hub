@@ -77,8 +77,9 @@ CRITICAL RULES:
 1. You MUST output ONLY valid JSON.
 2. The JSON must have exactly one key: "edge_label".
 3. The value MUST be a concise VERB or VERB PHRASE (1 to 3 words maximum).
-4. The value MUST be strictly UPPERCASE with UNDERSCORES separating words (e.g., HAS_ACCOUNT, PURCHASED, BELONGS_TO).
+4. The value MUST be strictly UPPERCASE with UNDERSCORES separating words (e.g., HAS_ACCOUNT, PURCHASED, LIVES_AT).
 5. The verb should describe the action from the SOURCE table to the TARGET table.
+6. AVOID overly generic verbs like BELONGS_TO, HAS, or PART_OF unless no more specific business action (e.g., WORKS_IN, CATEGORIZED_BY, LOCATED_AT) can be inferred.
 """
 
 LABEL_USER_PROMPT_TEMPLATE = """
@@ -110,9 +111,10 @@ CRITICAL RULES:
 4. Each object must have exactly the following keys:
    - "source_column": the name of the column in the Source Entity.
    - "target_column": the name of the column in the Target Entity.
-   - "edge_label": a concise VERB or VERB PHRASE (1 to 3 words maximum), strictly UPPERCASE with UNDERSCORES (e.g., HAS_ACCOUNT, PURCHASED). It should describe the action from the Source Entity to the Target Entity.
+   - "edge_label": a concise VERB or VERB PHRASE (1 to 3 words maximum), strictly UPPERCASE with UNDERSCORES. It should describe the action from the Source Entity to the Target Entity.
    - "confidence": a float between 0.0 and 1.0 representing your confidence in this join.
 5. Only return relationships that make strong semantic sense. If no logical joins exist, return an empty list for "potential_joins".
+6. PREFER specific business actions (e.g., 'OPERATES_IN', 'MANUFACTURED_BY') over generic structural descriptions (e.g., 'HAS_COUNTRY', 'BELONGS_TO').
 """
 
 JOIN_USER_PROMPT_TEMPLATE = """
