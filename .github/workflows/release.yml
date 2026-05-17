@@ -14,9 +14,18 @@ jobs:
     name: Semantic Release & Publish
     runs-on: ubuntu-latest
     steps:
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.RELEASE_BOT_APP_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+        continue-on-error: true
+
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
+          token: ${{ steps.app-token.outputs.token || secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
           fetch-depth: 0    # Critical: fetch all git history for semantic analysis of conventional commits
           persist-credentials: true
 
@@ -38,7 +47,7 @@ jobs:
       - name: Run semantic-release version
         id: version
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
@@ -54,7 +63,7 @@ jobs:
       - name: Publish to GitHub Releases
         id: publish-gh
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
         run: |
           semantic-release -v publish
 
