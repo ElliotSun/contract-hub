@@ -1,5 +1,20 @@
 from __future__ import annotations
 
+import sys
+# Preload numpy and great_expectations submodules at startup.
+# This prevents "ImportError: cannot load module more than once per process"
+# caused by test-level monkeypatching of sys.modules on Python 3.11/3.12.
+if sys.version_info < (3, 13):
+    try:
+        import numpy
+        import scipy.stats
+        import great_expectations
+        import great_expectations.core.expectation_configuration
+        import great_expectations.core.expectation_suite
+        import great_expectations.expectations.registry
+    except ImportError:
+        pass
+
 from pathlib import Path
 from typing import Any
 

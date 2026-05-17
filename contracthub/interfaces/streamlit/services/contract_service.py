@@ -76,7 +76,7 @@ from contracthub.utils.yaml_utils import (
 
 DEFAULT_CONTRACTS_DIR = Path("contracts")
 DEFAULT_DRAFTS_DIR = Path(".contracthub/drafts")
-DEFAULT_SAMPLE_CONTRACT_PATH = Path("sample_odcs.yaml")
+DEFAULT_SAMPLE_CONTRACT_PATH = Path("examples/sample_odcs.yaml")
 ContractInput = OpenDataContractStandard | dict[str, Any]
 
 

@@ -30,18 +30,24 @@ dependencies = [
 contracthub = "contracthub.interfaces.cli:main"
 
 [project.optional-dependencies]
+databricks = [
+  "databricks-sql-connector>=3.0.0",
+]
 azure = [
   "azure-identity>=1.16.0",
   "azure-storage-file-datalake>=12.16.0",
-]
+ ]
 graph = [
   "networkx>=3.0",
 ]
+
+[dependency-groups]
 dev = [
   "pytest>=8.2.0",
   "pytest-mock>=3.14.0",
   "networkx>=3.0",
   "types-PyYAML>=6.0.0",
+  "databricks-sql-connector>=3.0.0",
 ]
 
 [tool.pytest.ini_options]
@@ -50,3 +56,10 @@ addopts = "-q"
 
 [tool.setuptools.packages.find]
 include = ["contracthub*"]
+
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+branch = "main"
+upload_to_pypi = false
+upload_to_release = true
+build_command = "uv build"

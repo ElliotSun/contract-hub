@@ -14,7 +14,7 @@ def test_contract_enricher(mocker, tmp_path):
     mock_completion = mocker.patch("litellm.completion", return_value=mock_response)
 
     # Copy the sample odcs to tmp_path
-    sample_path = Path("sample_odcs.yaml")
+    sample_path = Path("examples/sample_odcs.yaml")
     test_path = tmp_path / "test_odcs.yaml"
     with open(sample_path, "r") as f:
         test_path.write_text(f.read())

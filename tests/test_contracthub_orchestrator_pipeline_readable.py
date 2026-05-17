@@ -184,7 +184,7 @@ def test_pipeline_run_raises_on_failed_contract_validation(
         pipeline.run(
             source_type="sql",
             source="sql_folder",
-            business_contract_path="sample_odcs.yaml",
+            business_contract_path="examples/sample_odcs.yaml",
             merged_contract_output_path="/tmp/merged.yaml",
             ge_suite_output_path="/tmp/suite.json",
             ci_manifest_output_path="/tmp/manifest.json",
@@ -228,7 +228,7 @@ def test_pipeline_run_raises_on_failed_lifecycle_policy(monkeypatch, sample_odcs
         pipeline.run(
             source_type="sql",
             source="sql_folder",
-            business_contract_path="sample_odcs.yaml",
+            business_contract_path="examples/sample_odcs.yaml",
             merged_contract_output_path="/tmp/merged.yaml",
             ge_suite_output_path="/tmp/suite.json",
             ci_manifest_output_path="/tmp/manifest.json",
@@ -284,7 +284,7 @@ def test_pipeline_run_does_not_block_non_version_policy_findings(
     artifacts = pipeline.run(
         source_type="sql",
         source="sql_folder",
-        business_contract_path="sample_odcs.yaml",
+        business_contract_path="examples/sample_odcs.yaml",
         merged_contract_output_path=str(tmp_path / "merged2.yaml"),
         ge_suite_output_path=str(tmp_path / "suite2.json"),
         ci_manifest_output_path=str(tmp_path / "manifest2.json"),
@@ -309,7 +309,7 @@ def test_pipeline_run_blocks_retired_contract(monkeypatch, sample_odcs_model):
         pipeline.run(
             source_type="sql",
             source="sql_folder",
-            business_contract_path="sample_odcs.yaml",
+            business_contract_path="examples/sample_odcs.yaml",
             merged_contract_output_path="/tmp/merged.yaml",
             ge_suite_output_path="/tmp/suite.json",
             ci_manifest_output_path="/tmp/manifest.json",
@@ -339,7 +339,7 @@ def test_pipeline_run_blocks_when_merge_returns_none_contract(
         pipeline.run(
             source_type="sql",
             source="sql_folder",
-            business_contract_path="sample_odcs.yaml",
+            business_contract_path="examples/sample_odcs.yaml",
             merged_contract_output_path="/tmp/merged.yaml",
             ge_suite_output_path="/tmp/suite.json",
             ci_manifest_output_path="/tmp/manifest.json",
@@ -376,7 +376,7 @@ def test_pipeline_run_blocks_on_conflicts_when_fail_on_conflict(
         pipeline.run(
             source_type="sql",
             source="sql_folder",
-            business_contract_path="sample_odcs.yaml",
+            business_contract_path="examples/sample_odcs.yaml",
             merged_contract_output_path="/tmp/merged.yaml",
             ge_suite_output_path="/tmp/suite.json",
             ci_manifest_output_path="/tmp/manifest.json",
@@ -430,7 +430,7 @@ def test_pipeline_run_returns_artifacts_on_success(
     artifacts = pipeline.run(
         source_type="sql",
         source="sql_folder",
-        business_contract_path="sample_odcs.yaml",
+        business_contract_path="examples/sample_odcs.yaml",
         merged_contract_output_path=str(tmp_path / "merged2.yaml"),
         ge_suite_output_path=str(tmp_path / "suite2.json"),
         ci_manifest_output_path=str(tmp_path / "manifest2.json"),
@@ -716,7 +716,7 @@ def test_pipeline_run_blocks_root_version_change_outside_release_flow(
         pipeline.run(
             source_type="sql",
             source="sql_folder",
-            business_contract_path="sample_odcs.yaml",
+            business_contract_path="examples/sample_odcs.yaml",
             merged_contract_output_path="/tmp/merged.yaml",
             ge_suite_output_path="/tmp/suite.json",
             ci_manifest_output_path="/tmp/manifest.json",
@@ -755,7 +755,7 @@ def test_pipeline_run_blocks_root_id_change_after_contract_creation(
         pipeline.run(
             source_type="sql",
             source="sql_folder",
-            business_contract_path="sample_odcs.yaml",
+            business_contract_path="examples/sample_odcs.yaml",
             merged_contract_output_path="/tmp/merged.yaml",
             ge_suite_output_path="/tmp/suite.json",
             ci_manifest_output_path="/tmp/manifest.json",

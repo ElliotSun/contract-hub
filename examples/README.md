@@ -14,6 +14,13 @@ This folder contains reference assets for wiring ContractHub into CI/CD.
 - `ci/release.example.sh`
   - multi-contract release build example
 
+## GitHub Actions Examples
+
+- `github/contracthub-enrich.yml`
+  - on-demand LLM contract enrichment trigger
+- `github/contracthub-release.yml`
+  - release promotion trigger
+
 ## Azure DevOps Examples
 
 - `azure-devops/contracthub-pr-validation.yml`

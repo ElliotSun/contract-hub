@@ -40,13 +40,13 @@ contracthub/
 
 ```bash
 # Basic setup with dev tools
-uv sync --extra dev
+uv sync --group dev
 
 # With Azure-backed contract storage support
-uv sync --extra dev --extra azure
+uv sync --group dev --extra azure
 
 # With Graph network capabilities
-uv sync --extra dev --extra graph
+uv sync --group dev --extra graph
 ```
 
 ## Core Components & Features
