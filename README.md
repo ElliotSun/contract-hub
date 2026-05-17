@@ -23,22 +23,22 @@ graph LR
     end
 
     subgraph ContractHub_GitOps [ContractHub GitOps Pipeline]
-        Merge[Merge Engine\n(Deterministic)]:::engine
-        Policy[Lifecycle Policy\n(Breaking Checks)]:::engine
-        Graph[Graph Exporter\n(Cross-Domain)]:::engine
+        Merge["Merge Engine<br>(Deterministic)"]:::engine
+        Policy["Lifecycle Policy<br>(Breaking Checks)"]:::engine
+        Graph["Graph Exporter<br>(Cross-Domain)"]:::engine
 
         Merge --> Policy
         Policy --> Graph
 
         %% Blocking node
-        Block>Breaking Change Blocked!]:::alert
+        Block>"Breaking Change Blocked!"]:::alert
         Policy -.-> |Fails Validation| Block
     end
 
     subgraph Downstream_Targets [Production Environments]
-        UC[(Databricks\nUnity Catalog)]:::target
-        Neo4j[(Neo4j\nLineage Graph)]:::target
-        GE[Great Expectations\nQuality Rules]:::target
+        UC[("Databricks<br>Unity Catalog")]:::target
+        Neo4j[("Neo4j<br>Lineage Graph")]:::target
+        GE["Great Expectations<br>Quality Rules"]:::target
     end
 
     %% Connections
@@ -116,37 +116,26 @@ contracthub/
 
 ```mermaid
 stateDiagram-v2
+    direction LR
+
     %% State definitions
     state "Draft" as Draft
     state "Active" as Active
     state "Deprecated" as Deprecated
     state "Retired" as Retired
 
-    [*] --> Draft : Create Contract
+    [*] --> Draft : Create
 
-    Draft --> Active : Promote / Merge to Main\n(CI Passed)
-    Draft --> Draft : Free Evolution\n(No checks)
-
-    Active --> Active : Governed Merge\n(Non-breaking changes)
+    Draft --> Active : Promote
+    Draft --> Draft : Edit
 
     %% Breaking change logic
-    state fork_breaking <<fork>>
-    Active --> fork_breaking : Breaking Change Detected
-    fork_breaking --> Active : Bump Major Version
-    fork_breaking --> Deprecated : Auto-Deprecate Source\n(Keep for compatibility)
+    state breaking_check <<choice>>
+    Active --> breaking_check : Governed Merge
+    breaking_check --> Active : Safe (Minor Bump)
+    breaking_check --> Deprecated : Breaking (Auto-Deprecate)
 
     Deprecated --> Retired : End of Life
-
-    note right of Active
-      - Strict structural checks
-      - Downstream guarantees
-    end note
-
-    note right of Deprecated
-      - Metadata updates only
-      - Frozen structure
-    end note
-
     Retired --> [*] : Archive
 ```
 
