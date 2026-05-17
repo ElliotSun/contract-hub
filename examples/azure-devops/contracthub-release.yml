@@ -16,7 +16,7 @@ steps:
 
   - script: |
       python -m pip install uv
-      uv sync --extra dev --frozen
+      uv sync --group dev --frozen
     displayName: Install dependencies
 
   - script: |

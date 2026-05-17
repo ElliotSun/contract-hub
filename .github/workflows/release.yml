@@ -35,7 +35,7 @@ jobs:
         uses: astral-sh/setup-uv@v5
 
       - name: Install dependencies
-        run: uv sync --extra dev --frozen
+        run: uv sync --group dev --frozen
 
       - name: Build Release Manifest
         run: |
