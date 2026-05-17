@@ -130,8 +130,8 @@ stateDiagram-v2
     Active --> Active : Governed Merge
 
     %% Breaking change logic
-    state breaking_check <<choice>>
-    Active --> breaking_check : Breaking Change
+    state "Breaking Change?" as breaking_check
+    Active --> breaking_check : Check
     breaking_check --> Active : Bump Major
     breaking_check --> Deprecated : Auto-Deprecate
 
