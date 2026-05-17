@@ -2,16 +2,23 @@ name: Release
 
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
+
+permissions:
+  contents: write    # Crucial for pushing commits, tags, and creating releases
+  id-token: write    # Crucial for PyPI trusted publishing OIDC authentication
 
 jobs:
-  build:
-    name: Build source distribution and wheel
+  release:
+    name: Semantic Release & Publish
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0    # Critical: fetch all git history for semantic analysis of conventional commits
+          persist-credentials: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -21,55 +28,38 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
 
+      # Install python-semantic-release in the runner environment
+      - name: Install python-semantic-release
+        run: |
+          uv pip install --system python-semantic-release
+
+      # Run semantic-release version to check if a new version is warranted.
+      # If so, it updates pyproject.toml, builds CHANGELOG.md, commits, tags, and pushes back to main.
+      - name: Run semantic-release version
+        id: version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Check if we should release and perform version bump + git commit/tag push
+          semantic-release -v version
+
+      # Build the final wheel and source distribution artifacts
       - name: Build package
         run: uv build
 
-      - name: Upload dist artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: dist/
+      # Run semantic-release publish to upload built artifacts to GitHub Releases
+      - name: Publish to GitHub Releases
+        id: publish-gh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          semantic-release -v publish
 
-  publish-github:
-    name: Create GitHub Release
-    needs: [build]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download dist artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/*
-          generate_release_notes: true
-          draft: false
-          prerelease: false
-
-  publish-pypi:
-    name: Publish to PyPI
-    needs: [build]
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write  # Crucial for PyPI trusted publishing OIDC authentication
-    steps:
-      - name: Download dist artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-
-      # Official PyPA publisher that uses GitHub OIDC trust instead of raw API passwords
+      # Publish the built distribution wheels to PyPI using PyPA official OIDC Action
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-        # Set to skip_existing so it's idempotent and won't fail if a tag is retried
         with:
           skip-existing: true
