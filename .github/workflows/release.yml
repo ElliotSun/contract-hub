@@ -59,7 +59,8 @@ jobs:
           semantic-release -v publish
 
       # Publish the built distribution wheels to PyPI using PyPA official OIDC Action
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          skip-existing: true
+      # (Temporarily commented out: uncomment this step and configure PyPI Trusted Publishing when ready to release publicly)
+      # - name: Publish to PyPI
+      #   uses: pypa/gh-action-pypi-publish@release/v1
+      #   with:
+      #     skip-existing: true
