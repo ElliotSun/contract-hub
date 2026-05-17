@@ -124,29 +124,18 @@ stateDiagram-v2
 
     [*] --> Draft : Create Contract
 
-    Draft --> Active : Promote / Merge to Main<br>(CI Passed)
-    Draft --> Draft : Free Evolution<br>(No checks)
+    Draft --> Active : Promote
+    Draft --> Draft : Free Evolution
 
-    Active --> Active : Governed Merge<br>(Non-breaking changes)
+    Active --> Active : Governed Merge
 
     %% Breaking change logic
     state fork_breaking <<fork>>
-    Active --> fork_breaking : Breaking Change Detected
-    fork_breaking --> Active : Bump Major Version
-    fork_breaking --> Deprecated : Auto-Deprecate Source<br>(Keep for compatibility)
+    Active --> fork_breaking : Breaking Change
+    fork_breaking --> Active : Bump Major
+    fork_breaking --> Deprecated : Auto-Deprecate
 
     Deprecated --> Retired : End of Life
-
-    note right of Active
-      - Strict structural checks
-      - Downstream guarantees
-    end note
-
-    note right of Deprecated
-      - Metadata updates only
-      - Frozen structure
-    end note
-
     Retired --> [*] : Archive
 ```
 
