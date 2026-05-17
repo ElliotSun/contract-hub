@@ -130,10 +130,10 @@ stateDiagram-v2
     Active --> Active : Governed Merge
 
     %% Breaking change logic
-    state fork_breaking <<fork>>
-    Active --> fork_breaking : Breaking Change
-    fork_breaking --> Active : Bump Major
-    fork_breaking --> Deprecated : Auto-Deprecate
+    state breaking_check <<choice>>
+    Active --> breaking_check : Breaking Change
+    breaking_check --> Active : Bump Major
+    breaking_check --> Deprecated : Auto-Deprecate
 
     Deprecated --> Retired : End of Life
     Retired --> [*] : Archive
