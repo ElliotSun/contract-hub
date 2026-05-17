@@ -36,10 +36,12 @@ databricks = [
 azure = [
   "azure-identity>=1.16.0",
   "azure-storage-file-datalake>=12.16.0",
-]
+ ]
 graph = [
   "networkx>=3.0",
 ]
+
+[dependency-groups]
 dev = [
   "pytest>=8.2.0",
   "pytest-mock>=3.14.0",
