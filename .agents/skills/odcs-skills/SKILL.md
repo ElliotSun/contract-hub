@@ -1,67 +1,30 @@
 ---
 name: odcs-skills
-description: Implement and review Open Data Contract Standard workflows in ContractHub. Use when importing schema metadata into ODCS, performing lifecycle-aware contract merges, enforcing deterministic GitOps-safe ordering, or exporting contract quality rules and metadata.
+description: Implement and review Open Data Contract Standard (ODCS) extensions and integrations in ContractHub. Use when importing schema metadata, applying deterministic field ordering, or customizing upstream validator behavior.
 ---
 
-# ODCS Skills
+# ODCS Skills & Upstream Compatibility
 
-## Overview
+This skill outlines how ContractHub interfaces with the upstream Open Data Contract Standard (ODCS) models and `datacontract-cli` dependencies.
 
-Use ODCS models as the single contract representation.
-Prefer lifecycle-aware merge behavior: existing contract governs business context, imported contract contributes technical updates.
-
-## Workflow
-
-1. Normalize every input into `OpenDataContractStandard`.
-2. Analyze lifecycle scope before applying updates.
-3. Apply merge updates in deterministic identity order.
-4. Merge lifecycle entities by identity instead of overwriting blindly.
-5. Validate the merged result as ODCS.
-
-## Lifecycle Rules
-
-- Treat contract `status=active` as governed scope for breaking checks and auto-deprecation.
-- Skip breaking checks and auto-deprecation for draft/deprecated contract scope.
-- Treat schema/property identity as `name` only.
-- Merge quality rules by `name`.
-- Merge customProperties by `property`.
-- Mark removed active entities as deprecated using lifecycle metadata.
-
-## Breaking Change Rules
-
-- Flag logical type mismatch.
-- Flag physical type changes.
-- For decimal types, flag precision reduction and scale reduction.
-- Allow decimal widening.
-- Flag required tightening (`optional -> required`).
-
-## Deterministic Output
-
-- Sort schemas by `name`.
-- Sort properties by `name`.
-- Sort quality rules by `name`.
-- Sort customProperties by `property`.
-
-## Design References
-
-Load these references as needed:
-
-- `references/ContractHub Lifecycle Policy.md`
-  Use for lifecycle gating, merge policy checks, and deprecation rules.
-- `references/ContractHub Architechture.md`
-  Use for package/module boundaries and architecture alignment decisions.
-- `references/ContractHub DevOps Workflow.md`
-  Use for GitOps flow, CI/CD expectations, and delivery workflow constraints.
-- `reference/ContractHub Streamlit UI.md`
-  Use for any UI related developments, make sure UI does not have any business logics.
-## Repository Pointers
-
-- Use `sample_odcs.yaml` as baseline ODCS shape.
-- Use `contracthub/lifecycle/merge_engine.py` as the lifecycle merge implementation.
-
-## Upstream Dependency Directives (CRITICAL)
-
+## 1. Upstream Dependency Directives (CRITICAL)
 - **Do NOT reinvent `datacontract-cli` internals.** ContractHub is an extension layer above `datacontract-cli`.
-- **Validation:** Always use upstream validators for core ODCS schema validation (structure, types, quality rules formatting). Custom validation implemented in ContractHub should ONLY be for ContractHub-specific metadata or business constraints.
-- **Importers/Exporters:** Custom importers must subclass or conform strictly to upstream importer protocols, and must be registered via `importer_factory`.
-- **Error Handling:** Expose formal, typed custom domain exceptions for any business constraint violations so CI/CD pipelines can catch them, rather than relying on generic `ValueError` or `Exception`.
+- **Core Validation:** Always use upstream validators (`datacontract-cli` pydantic/schema logic) for core ODCS schema validation (structure, data types, standard quality rules formatting). 
+- **Custom Validation:** Custom validators implemented inside ContractHub must ONLY target ContractHub-specific metadata rules, business constraints, or semantic relationship policies.
+- **Importers/Exporters:** Custom importers (e.g. Unity, DDL, SQL folder) must inherit from or conform strictly to upstream importer protocols, and register via the standard factory.
+
+## 2. Deterministic Serialization & GitOps Ordering
+To prevent erratic Git diffs and support seamless GitOps branch comparisons, all generated ODCS YAML files must apply strict lexicographical sorting:
+- Sort `schema` (tables) by `name`.
+- Sort `properties` (columns) by `name`.
+- Sort `quality` rules by the target entity/column `name`.
+- Sort `customProperties` by property key name.
+
+## 3. Extension & Custom Metadata Mapping
+ContractHub extends the core ODCS with custom properties located strictly in the `customProperties` section:
+- Use `graph_semantic.edge_label` for relationship mapping.
+- Use `graph_semantic.provenance` to track metadata origin (e.g. `DDL`, `LLM_INFERRED`).
+- Use `graph_export.is_junction_edge` for collapsing join relationships.
+
+## 4. Policy Delegation
+- All rules regarding **breaking changes**, **auto-deprecation**, and **lifecycle states** are governed exclusively by the [lifecycle-policy](../lifecycle-policy/SKILL.md) skill. Do NOT redefine or duplicate these rules here.
