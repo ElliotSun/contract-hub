@@ -85,10 +85,8 @@ When reviewing a ContractHub service module, check:
 6. Does it avoid overwriting the main contract in draft flows?
 
 ------------------------------------------------
-REPOSITORY REFERENCES
+Read these first-class Agent Skills when needed:
 
-Read these repo documents when needed:
-
-- `.agents/skills/odcs-skills/references/ContractHub Architechture.md`
-- `.agents/skills/odcs-skills/references/ContractHub Lifecycle Policy.md`
-- `.agents/skills/odcs-skills/references/ContractHub Streamlit UI.md`
+- [contracthub-system](../../contracthub-system/SKILL.md) for system architecture rules
+- [lifecycle-policy](../../lifecycle-policy/SKILL.md) for contract lifecycle and deprecation logic
+- [streamlit-ui](../../streamlit-ui/SKILL.md) for UI UX guidelines

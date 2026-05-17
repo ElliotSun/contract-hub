@@ -1,56 +1,48 @@
 ---
 name: contracthub-system
-description: Defines the core operating model of ContractHub including draft-based editing, immutable main contracts, and change-driven workflows.
+description: Defines the core operating model, layered architecture boundaries, and change-driven workflow of ContractHub. Apply this skill when refactoring components, implementing new modules, or deciding boundary placement.
 ---
 
-# ContractHub System Model
+# ContractHub System Model & Architecture Rules
 
-ContractHub is a **contract governance platform**, not a CRUD system.
+ContractHub is an enterprise data contract control plane and governance platform. It follows a strict layered architecture and a change-driven operating model.
 
-------------------------------------------------
-CORE PRINCIPLE
+## 1. Core Workflow Principles
+- **Change-Driven System:** All UI edits must happen via drafts.
+  - Save = save draft copy.
+  - Publish/Promote = run governance checks and promote draft.
+- **Immutability of Main:** Main production contracts are immutable from direct UI edits. They are only updated via governed merge operations.
+- **Immutability of Identity:** The contract `id` is immutable once created.
+- **Release Gating:** Contract `version` is release-managed and only changes through an explicit release/promotion path.
 
-ContractHub is a CHANGE-DRIVEN system.
+## 2. Layered Architecture Boundaries (CRITICAL)
 
-- Save = save draft
-- Publish = promote draft
+### A. Ingestion / Import Layer
+- **Role:** Converts external data structures (Delta Tables, Spark DDL, Unity Catalog) into Open Data Contract Standard (ODCS) models.
+- **Rules:**
+  - Must remain strictly stateless and idempotent.
+  - **NEVER** place merge, governance, or GitOps logic inside importers.
 
-------------------------------------------------
-SYSTEM LAYERS (RUNTIME MODEL)
+### B. Core Contract Model
+- **Role:** Single canonical representation of the schema and metadata.
+- **Rules:**
+  - The ODCS YAML/Pydantic model is the single source of truth across the architecture. No alternative models are allowed.
 
-1. MAIN CONTRACT
-- Source of truth
-- Immutable from UI
+### C. Lifecycle Governance Layer
+- **Role:** Handles breaking change checks, deprecation rules, merge policies, and version bump calculations.
+- **Rules:**
+  - This is the **ONLY** place where contract lifecycle logic is allowed.
+  - It must remain fully decoupled from the UI and ingestion layers.
 
-2. DRAFT CONTRACT
-- User working copy
-- All edits happen here
+### D. Export Layer
+- **Role:** Converts contracts to downstream assets (Great Expectations suites, Spark DDL, Graph cypher).
+- **Rules:**
+  - Exporters must be read-only and **NEVER** modify the original contracts.
 
-3. GOVERNANCE RESULT
-- Produced by analysis
-- Determines merge safety
+### E. Orchestration Layer
+- **Role:** Coordinates multi-step workflows (e.g. import → merge → export → PR).
+- **Rules:**
+  - Coordinates execution paths but must NOT contain custom business logic.
 
-------------------------------------------------
-STRICT RULES
-
-- UI must NEVER overwrite main contract
-- Version must NOT change during editing
-- All changes must go through draft
-- Governance analysis is mandatory before promotion
-- Version governance is PER CONTRACT, not per repo
-- Contract `id` is immutable once created
-- Contract `version` changes only through an explicit release/promotion path
-
-------------------------------------------------
-RELATION TO ARCHITECTURE
-
-This model must be enforced by:
-
-- service-layer (execution)
-- governance-analysis (validation)
-- devops-workflow (promotion)
-
-------------------------------------------------
-GOAL
-
-Provide a Git-like workflow for safe contract evolution.
+### F. DevOps Layer
+- **Role:** Automates PR creation, version bumps, release manifest building, and metadata auditing.
