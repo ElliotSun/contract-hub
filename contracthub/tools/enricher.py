@@ -44,11 +44,11 @@ class ContractEnricher:
         elif mode == "infer_joins":
             self._process_infer_joins(odcs, contract_path, domain_context, max_workers, system_prompt, user_prompt)
         elif mode == "describe_tables":
-            self._process_describe_tables(odcs, contract_path, domain_context, max_workers)
+            self._process_describe_tables(odcs, contract_path, domain_context, max_workers, system_prompt, user_prompt)
         elif mode == "describe_columns":
-            self._process_describe_columns(odcs, contract_path, domain_context, max_workers)
+            self._process_describe_columns(odcs, contract_path, domain_context, max_workers, system_prompt, user_prompt)
         elif mode == "suggest_quality":
-            self._process_suggest_quality(odcs, contract_path, domain_context, max_workers)
+            self._process_suggest_quality(odcs, contract_path, domain_context, max_workers, system_prompt, user_prompt)
         else:
             raise ValueError(f"Unknown mode: {mode}")
 
@@ -329,10 +329,13 @@ class ContractEnricher:
         with open(contract_path, "w") as f:
             f.write(odcs.to_yaml())
 
-    def _process_describe_tables(self, odcs, contract_path, domain_context, max_workers):
-        system_prompt = TABLE_DESC_SYSTEM_PROMPT_TEMPLATE.replace(
-            "{domain_context}", domain_context
-        )
+    def _process_describe_tables(self, odcs, contract_path, domain_context, max_workers, system_prompt_override=None, user_prompt_override=None):
+        if system_prompt_override:
+            system_prompt = system_prompt_override.replace("{domain_context}", domain_context)
+        else:
+            system_prompt = TABLE_DESC_SYSTEM_PROMPT_TEMPLATE.replace(
+                "{domain_context}", domain_context
+            )
         tasks = []
         if odcs.schema_:
             for schema in odcs.schema_:
@@ -349,7 +352,8 @@ class ContractEnricher:
                     all_auth_defs = contract_auth_defs + schema_auth_defs
                     auth_defs_str = ", ".join([str(a) for a in all_auth_defs]) if all_auth_defs else "None"
 
-                    user_prompt = TABLE_DESC_USER_PROMPT_TEMPLATE.format(
+                    user_prompt_template = user_prompt_override or TABLE_DESC_USER_PROMPT_TEMPLATE
+                    user_prompt = user_prompt_template.format(
                         table_name=table_name,
                         columns_info=columns_info_str,
                         authoritative_definitions=auth_defs_str
@@ -376,10 +380,13 @@ class ContractEnricher:
         with open(contract_path, "w") as f:
             f.write(odcs.to_yaml())
 
-    def _process_describe_columns(self, odcs, contract_path, domain_context, max_workers):
-        system_prompt = COLUMN_DESC_SYSTEM_PROMPT_TEMPLATE.replace(
-            "{domain_context}", domain_context
-        )
+    def _process_describe_columns(self, odcs, contract_path, domain_context, max_workers, system_prompt_override=None, user_prompt_override=None):
+        if system_prompt_override:
+            system_prompt = system_prompt_override.replace("{domain_context}", domain_context)
+        else:
+            system_prompt = COLUMN_DESC_SYSTEM_PROMPT_TEMPLATE.replace(
+                "{domain_context}", domain_context
+            )
         tasks = []
         if odcs.schema_:
             for schema in odcs.schema_:
@@ -401,7 +408,8 @@ class ContractEnricher:
                             all_auth_defs = contract_auth_defs + schema_auth_defs + prop_auth_defs
                             auth_defs_str = ", ".join([str(a) for a in all_auth_defs]) if all_auth_defs else "None"
 
-                            user_prompt = COLUMN_DESC_USER_PROMPT_TEMPLATE.format(
+                            user_prompt_template = user_prompt_override or COLUMN_DESC_USER_PROMPT_TEMPLATE
+                            user_prompt = user_prompt_template.format(
                                 table_name=table_name,
                                 table_description=table_desc,
                                 column_name=prop.name,
@@ -431,10 +439,13 @@ class ContractEnricher:
         with open(contract_path, "w") as f:
             f.write(odcs.to_yaml())
 
-    def _process_suggest_quality(self, odcs, contract_path, domain_context, max_workers):
-        system_prompt = QUALITY_SUGGESTION_SYSTEM_PROMPT_TEMPLATE.replace(
-            "{domain_context}", domain_context
-        )
+    def _process_suggest_quality(self, odcs, contract_path, domain_context, max_workers, system_prompt_override=None, user_prompt_override=None):
+        if system_prompt_override:
+            system_prompt = system_prompt_override.replace("{domain_context}", domain_context)
+        else:
+            system_prompt = QUALITY_SUGGESTION_SYSTEM_PROMPT_TEMPLATE.replace(
+                "{domain_context}", domain_context
+            )
         tasks = []
         if odcs.schema_:
             for schema in odcs.schema_:
@@ -448,7 +459,8 @@ class ContractEnricher:
                         all_auth_defs = contract_auth_defs + schema_auth_defs + prop_auth_defs
                         auth_defs_str = ", ".join([str(a) for a in all_auth_defs]) if all_auth_defs else "None"
 
-                        user_prompt = QUALITY_SUGGESTION_USER_PROMPT_TEMPLATE.format(
+                        user_prompt_template = user_prompt_override or QUALITY_SUGGESTION_USER_PROMPT_TEMPLATE
+                        user_prompt = user_prompt_template.format(
                             table_name=table_name,
                             column_name=prop.name,
                             column_description=prop.description or "No description.",

@@ -35,6 +35,12 @@ def _build_parser() -> argparse.ArgumentParser:
         default="label",
         help="Enrichment mode: 'label' for tagging existing relationships, 'infer_joins' for discovering new semantic relationships, 'describe_tables' for missing table descriptions, 'describe_columns' for missing column descriptions, 'suggest_quality' for generating DataQuality rules.",
     )
+    enrich_parser.add_argument(
+        "--system-prompt", help="Override the system prompt template sent to the LLM"
+    )
+    enrich_parser.add_argument(
+        "--user-prompt", help="Override the user prompt template sent to the LLM"
+    )
 
     plan_parser = subparsers.add_parser(
         "plan", help="Dry run and summarize changes between source and base contract"
@@ -810,7 +816,11 @@ def _run_enrich(args: argparse.Namespace) -> str:
 
     enricher = ContractEnricher()
     enricher.process(
-        args.contract, max_workers=args.concurrency, mode=getattr(args, "mode", "label")
+        args.contract,
+        max_workers=args.concurrency,
+        mode=getattr(args, "mode", "label"),
+        system_prompt=getattr(args, "system_prompt", None),
+        user_prompt=getattr(args, "user_prompt", None),
     )
     return f"Successfully enriched {args.contract} (mode: {getattr(args, 'mode', 'label')})"
 
