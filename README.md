@@ -23,22 +23,22 @@ graph LR
     end
 
     subgraph ContractHub_GitOps [ContractHub GitOps Pipeline]
-        Merge[Merge Engine\n(Deterministic)]:::engine
-        Policy[Lifecycle Policy\n(Breaking Checks)]:::engine
-        Graph[Graph Exporter\n(Cross-Domain)]:::engine
+        Merge["Merge Engine<br>(Deterministic)"]:::engine
+        Policy["Lifecycle Policy<br>(Breaking Checks)"]:::engine
+        Graph["Graph Exporter<br>(Cross-Domain)"]:::engine
 
         Merge --> Policy
         Policy --> Graph
 
         %% Blocking node
-        Block>Breaking Change Blocked!]:::alert
+        Block>"Breaking Change Blocked!"]:::alert
         Policy -.-> |Fails Validation| Block
     end
 
     subgraph Downstream_Targets [Production Environments]
-        UC[(Databricks\nUnity Catalog)]:::target
-        Neo4j[(Neo4j\nLineage Graph)]:::target
-        GE[Great Expectations\nQuality Rules]:::target
+        UC[("Databricks<br>Unity Catalog")]:::target
+        Neo4j[("Neo4j<br>Lineage Graph")]:::target
+        GE["Great Expectations<br>Quality Rules"]:::target
     end
 
     %% Connections
@@ -124,16 +124,16 @@ stateDiagram-v2
 
     [*] --> Draft : Create Contract
 
-    Draft --> Active : Promote / Merge to Main\n(CI Passed)
-    Draft --> Draft : Free Evolution\n(No checks)
+    Draft --> Active : Promote / Merge to Main<br>(CI Passed)
+    Draft --> Draft : Free Evolution<br>(No checks)
 
-    Active --> Active : Governed Merge\n(Non-breaking changes)
+    Active --> Active : Governed Merge<br>(Non-breaking changes)
 
     %% Breaking change logic
     state fork_breaking <<fork>>
     Active --> fork_breaking : Breaking Change Detected
     fork_breaking --> Active : Bump Major Version
-    fork_breaking --> Deprecated : Auto-Deprecate Source\n(Keep for compatibility)
+    fork_breaking --> Deprecated : Auto-Deprecate Source<br>(Keep for compatibility)
 
     Deprecated --> Retired : End of Life
 
