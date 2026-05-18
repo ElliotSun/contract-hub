@@ -74,6 +74,12 @@ def _build_parser() -> argparse.ArgumentParser:
         default="label",
         help="Enrichment mode: 'label' for tagging existing relationships, 'infer_joins' for discovering new semantic relationships, 'describe_tables' for missing table descriptions, 'describe_columns' for missing column descriptions, 'suggest_quality' for generating DataQuality rules.",
     )
+    enrich_parser.add_argument(
+        "--system-prompt", help="Override the system prompt template sent to the LLM"
+    )
+    enrich_parser.add_argument(
+        "--user-prompt", help="Override the user prompt template sent to the LLM"
+    )
 
     plan_parser = subparsers.add_parser(
         "plan", help="Dry run and summarize changes between source and base contract"
@@ -382,7 +388,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Install uv and deps
-        run: pip install uv && uv venv && uv pip install datacontract-flow
+        run: pip install uv && uv venv && uv pip install contracthub
       - name: Contract Check
         run: contracthub release classify-repo --base-root contracts-main --candidate-root contracts-feature
 """
@@ -402,7 +408,7 @@ contract_check:
   image: python:3.11-slim
   script:
     - pip install uv
-    - uv venv && uv pip install datacontract-flow
+    - uv venv && uv pip install contracthub
     - contracthub release classify-repo --base-root contracts-main --candidate-root contracts-feature
 """
     with open(".gitlab/ci/contract-check.yml", "w") as f:
@@ -583,7 +589,7 @@ def _resolve_adls_oauth_token(args: argparse.Namespace) -> str | None:
         from contracthub.exceptions import LifecycleError
 
         raise LifecycleError(
-            "azure-identity is required for --use-azure-identity. Install with `pip install datacontract-flow[azure]`."
+            "azure-identity is required for --use-azure-identity. Install with `pip install contracthub[azure]`."
         ) from exc
     credential = DefaultAzureCredential()
     token = credential.get_token(args.azure_scope)
@@ -658,7 +664,8 @@ def _run_export(args: argparse.Namespace) -> str:
         # but in datacontract-cli 0.11.x sometimes we need to write manually if custom exporter doesn't handle writing
         # SDK usually returns the exported string.
         if result is not None:
-            Path(args.output).write_text(result, encoding="utf-8")
+            output_data = result[0] if isinstance(result, tuple) else result
+            Path(args.output).write_text(str(output_data), encoding="utf-8")
             return f"Exported to {args.output}"
         return f"Exported to {args.output}"
 
@@ -860,7 +867,11 @@ def _run_enrich(args: argparse.Namespace) -> str:
 
     enricher = ContractEnricher()
     enricher.process(
-        args.contract, max_workers=args.concurrency, mode=getattr(args, "mode", "label")
+        args.contract,
+        max_workers=args.concurrency,
+        mode=getattr(args, "mode", "label"),
+        system_prompt=getattr(args, "system_prompt", None),
+        user_prompt=getattr(args, "user_prompt", None),
     )
     return f"Successfully enriched {args.contract} (mode: {getattr(args, 'mode', 'label')})"
 

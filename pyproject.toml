@@ -3,8 +3,8 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "datacontract-flow"
-version = "0.1.0"
+name = "contracthub"
+version = "0.2.0"
 description = "ContractHub importers for generating ODCS contracts from Delta, SQL folders, and Unity Catalog"
 readme = "README.md"
 requires-python = ">=3.11,<3.15"
