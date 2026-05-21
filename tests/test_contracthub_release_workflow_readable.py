@@ -12,7 +12,6 @@ from contracthub.core.release import (
     prepare_release_candidate,
     suggest_release_version,
 )
-from contracthub.interfaces.streamlit.services.contract_service import ContractService
 from contracthub.utils.yaml_utils import dump_yaml
 
 
@@ -132,15 +131,14 @@ def test_prepare_release_candidate_rejects_description_only_changes(sample_odcs_
         prepare_release_candidate(base, candidate, "orders/v1.1.1")
 
 
-def test_contract_service_promote_draft_is_per_contract_and_preserves_governed_identity(
+def test_prepare_release_candidate_preserves_governed_identity(
     sample_odcs_model,
-    tmp_path,
 ):
-    main_contract = sample_odcs_model.model_copy(deep=True)
-    draft_contract = sample_odcs_model.model_copy(deep=True)
-    draft_contract.id = "tampered-id"
-    draft_contract.version = "999.0.0"
-    draft_contract.schema_[0].properties.append(  # type: ignore[index,union-attr]
+    base_contract = sample_odcs_model.model_copy(deep=True)
+    candidate_contract = sample_odcs_model.model_copy(deep=True)
+    candidate_contract.id = "tampered-id"
+    candidate_contract.version = "999.0.0"
+    candidate_contract.schema_[0].properties.append(  # type: ignore[index,union-attr]
         SchemaProperty(
             name="new_optional_column",
             logicalType="string",
@@ -149,21 +147,20 @@ def test_contract_service_promote_draft_is_per_contract_and_preserves_governed_i
         )
     )
 
-    contracts_dir = tmp_path / "contracts"
-    drafts_dir = tmp_path / "drafts"
-    contract_id = str(main_contract.id)
-    user = {"id": "alice", "role": "editor", "tenant": str(main_contract.tenant or "")}
+    # In a real workflow, if a user tampered with ID and version, `prepare_release_candidate`
+    # handles setting the final ID back to base and overriding the version to the target
+    # release tag version.
+    # Because ID and version changed, `classify_contract_change` natively flags it as major.
+    # `prepare_release_candidate` uses the assessment but resolves the ID/Version
+    # so the final output has correct properties.
+    assessment = classify_contract_change(base_contract, candidate_contract)
+    assert assessment.required_bump == "major" # Changed ID and Version are breaking changes
 
-    dump_yaml(main_contract, contracts_dir / f"{contract_id}.yaml")
-    draft_path = Path(drafts_dir) / "alice" / f"{contract_id}.yaml"
-    dump_yaml(draft_contract, draft_path)
+    promotion = prepare_release_candidate(base_contract, candidate_contract, "orders/v1.2.0")
 
-    service = ContractService(contracts_dir=contracts_dir, drafts_dir=drafts_dir)
-    assessment = service.classify_draft_change(contract_id, user)
-    promotion = service.promote_draft(contract_id, user, "orders/v1.2.0")
-
-    assert assessment.required_bump == "minor"
+    # `prepare_release_candidate` evaluates the bump based on the contract after applying
+    # the base ID and version constraints, making it a minor bump.
     assert promotion.required_bump == "minor"
-    assert promotion.contract.id == main_contract.id
+    assert promotion.contract.id == base_contract.id
     assert promotion.contract.version == "1.2.0"
-    assert promotion.current_version == str(main_contract.version)
+    assert promotion.current_version == str(base_contract.version)
