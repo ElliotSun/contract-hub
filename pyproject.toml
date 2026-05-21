@@ -19,11 +19,10 @@ dependencies = [
   "great_expectations>=1.0.0",
   "pyodbc>=5.1.0",
   "oracledb>=2.2.0",
-  "streamlit>=1.32.0",
-  "streamlit-tags==1.2.7",
   "pandas>=2.0.0",
   "openai>=1.0.0",
   "litellm>=1.83.14",
+  "pyarrow>=14.0.0",
 ]
 
 [project.scripts]

@@ -12,7 +12,6 @@ from contracthub.core.release import (
     prepare_release_candidate,
     suggest_release_version,
 )
-from contracthub.interfaces.streamlit.services.contract_service import ContractService
 from contracthub.utils.yaml_utils import dump_yaml
 
 
@@ -132,38 +131,3 @@ def test_prepare_release_candidate_rejects_description_only_changes(sample_odcs_
         prepare_release_candidate(base, candidate, "orders/v1.1.1")
 
 
-def test_contract_service_promote_draft_is_per_contract_and_preserves_governed_identity(
-    sample_odcs_model,
-    tmp_path,
-):
-    main_contract = sample_odcs_model.model_copy(deep=True)
-    draft_contract = sample_odcs_model.model_copy(deep=True)
-    draft_contract.id = "tampered-id"
-    draft_contract.version = "999.0.0"
-    draft_contract.schema_[0].properties.append(  # type: ignore[index,union-attr]
-        SchemaProperty(
-            name="new_optional_column",
-            logicalType="string",
-            physicalType="STRING",
-            required=False,
-        )
-    )
-
-    contracts_dir = tmp_path / "contracts"
-    drafts_dir = tmp_path / "drafts"
-    contract_id = str(main_contract.id)
-    user = {"id": "alice", "role": "editor", "tenant": str(main_contract.tenant or "")}
-
-    dump_yaml(main_contract, contracts_dir / f"{contract_id}.yaml")
-    draft_path = Path(drafts_dir) / "alice" / f"{contract_id}.yaml"
-    dump_yaml(draft_contract, draft_path)
-
-    service = ContractService(contracts_dir=contracts_dir, drafts_dir=drafts_dir)
-    assessment = service.classify_draft_change(contract_id, user)
-    promotion = service.promote_draft(contract_id, user, "orders/v1.2.0")
-
-    assert assessment.required_bump == "minor"
-    assert promotion.required_bump == "minor"
-    assert promotion.contract.id == main_contract.id
-    assert promotion.contract.version == "1.2.0"
-    assert promotion.current_version == str(main_contract.version)
