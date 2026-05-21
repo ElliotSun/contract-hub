@@ -2,6 +2,31 @@
 
 <!-- version list -->
 
+## v0.3.0 (2026-05-21)
+
+### Documentation
+
+- Fix mermaid rendering errors
+  ([`fd31730`](https://github.com/ElliotSun/contract-hub/commit/fd3173055622a8f6331ed0f55fc7cff37f015098))
+
+- Optimize mermaid state diagram layout
+  ([`0cd80fe`](https://github.com/ElliotSun/contract-hub/commit/0cd80fe19829051681d7f92055d9bcc7a7c56ffb))
+
+- Simplify lifecycle state diagram to reduce clutter
+  ([`a63a2af`](https://github.com/ElliotSun/contract-hub/commit/a63a2af52e14f16bac2d403204571d4b337de238))
+
+- Use choice instead of fork in mermaid state diagram
+  ([`babfc65`](https://github.com/ElliotSun/contract-hub/commit/babfc65bafe8c19422aaed183fd009fdad54d9b6))
+
+- Use regular text node for choice box in diagram
+  ([`51176c5`](https://github.com/ElliotSun/contract-hub/commit/51176c5892a9a6482731f244f96094e19738c3ea))
+
+### Refactoring
+
+- Rename package and installation instructions to `contracthub`
+  ([`047c0f3`](https://github.com/ElliotSun/contract-hub/commit/047c0f37aba2edcd2fc33428de7b25f245cd2d4b))
+
+
 ## v0.2.0 (2026-05-17)
 
 ### Continuous Integration
