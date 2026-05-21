@@ -7,6 +7,7 @@ from open_data_contract_standard.model import OpenDataContractStandard, SchemaOb
 
 LOGGER = logging.getLogger(__name__)
 
+
 def enrich_unity_lineage(
     contract: OpenDataContractStandard,
     *,
@@ -25,11 +26,15 @@ def enrich_unity_lineage(
         ) from exc
 
     if not sql_http_path:
-        LOGGER.warning("Skipping lineage extraction: --sql-http-path is required when using databricks-sql-connector")
+        LOGGER.warning(
+            "Skipping lineage extraction: --sql-http-path is required when using databricks-sql-connector"
+        )
         return contract
 
     # Remove protocol prefix if accidentally included
-    server_hostname = workspace_url.replace("https://", "").replace("http://", "").rstrip("/")
+    server_hostname = (
+        workspace_url.replace("https://", "").replace("http://", "").rstrip("/")
+    )
 
     try:
         with sql.connect(
@@ -41,11 +46,16 @@ def enrich_unity_lineage(
                 _apply_lineage_to_contract(contract, table_fqn, cursor)
                 _apply_logic_to_contract(contract, table_fqn, cursor)
     except Exception as exc:
-        LOGGER.warning("Failed to fetch lineage or logic from Databricks system tables: %s", exc)
+        LOGGER.warning(
+            "Failed to fetch lineage or logic from Databricks system tables: %s", exc
+        )
 
     return contract
 
-def _apply_lineage_to_contract(contract: OpenDataContractStandard, table_fqn: str, cursor: Any) -> None:
+
+def _apply_lineage_to_contract(
+    contract: OpenDataContractStandard, table_fqn: str, cursor: Any
+) -> None:
     schema_obj = _resolve_target_schema(contract, table_fqn=table_fqn)
     if schema_obj is None:
         return
@@ -95,7 +105,10 @@ def _apply_lineage_to_contract(contract: OpenDataContractStandard, table_fqn: st
             if existing:
                 property_obj.transformSourceObjects = existing
 
-def _apply_logic_to_contract(contract: OpenDataContractStandard, table_fqn: str, cursor: Any) -> None:
+
+def _apply_logic_to_contract(
+    contract: OpenDataContractStandard, table_fqn: str, cursor: Any
+) -> None:
     schema_obj = _resolve_target_schema(contract, table_fqn=table_fqn)
     if schema_obj is None:
         return
@@ -122,7 +135,7 @@ def _apply_logic_to_contract(contract: OpenDataContractStandard, table_fqn: str,
     if row and row.statement_text:
         statement = row.statement_text
         # Apply the logic to all properties that don't have one
-        for prop in (schema_obj.properties or []):
+        for prop in schema_obj.properties or []:
             if not prop.transformLogic:
                 prop.transformLogic = statement
 

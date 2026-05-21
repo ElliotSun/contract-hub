@@ -8,7 +8,9 @@ def test_contract_enricher(mocker, tmp_path):
     # Mock litellm completion
     mock_response = MagicMock()
     mock_response.choices = [MagicMock()]
-    mock_response.choices[0].message.content = '{"potential_joins": [{"source_column": "rcvr_cntry_code", "target_column": "receiver_name", "edge_label": "MOCKED_LABEL", "confidence": 0.8}]}'
+    mock_response.choices[
+        0
+    ].message.content = '{"potential_joins": [{"source_column": "rcvr_cntry_code", "target_column": "receiver_name", "edge_label": "MOCKED_LABEL", "confidence": 0.8}]}'
 
     # We patch litellm.completion to mock the completion function
     mock_completion = mocker.patch("litellm.completion", return_value=mock_response)

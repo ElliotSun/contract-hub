@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+
 # Preload numpy and great_expectations submodules at startup.
 # This prevents "ImportError: cannot load module more than once per process"
 # caused by test-level monkeypatching of sys.modules on Python 3.11/3.12.

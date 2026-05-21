@@ -19,6 +19,7 @@ from contracthub.constants import (
     QUALITY_SUGGESTION_USER_PROMPT_TEMPLATE,
 )
 
+
 class ContractEnricher:
     def __init__(self, llm_provider: BaseLLMProvider = None):
         self.llm_provider = llm_provider or OpenAILLMProvider()
@@ -347,22 +348,32 @@ class ContractEnricher:
                             cols_info.append(f"{p.name} ({p.logicalType})")
                     columns_info_str = ", ".join(cols_info)
 
-                    contract_auth_defs = getattr(odcs.info, "authoritativeDefinitions", []) if getattr(odcs, "info", None) else []
+                    contract_auth_defs = (
+                        getattr(odcs.info, "authoritativeDefinitions", [])
+                        if getattr(odcs, "info", None)
+                        else []
+                    )
                     schema_auth_defs = schema.authoritativeDefinitions or []
                     all_auth_defs = contract_auth_defs + schema_auth_defs
-                    auth_defs_str = ", ".join([str(a) for a in all_auth_defs]) if all_auth_defs else "None"
+                    auth_defs_str = (
+                        ", ".join([str(a) for a in all_auth_defs])
+                        if all_auth_defs
+                        else "None"
+                    )
 
                     user_prompt_template = user_prompt_override or TABLE_DESC_USER_PROMPT_TEMPLATE
                     user_prompt = user_prompt_template.format(
                         table_name=table_name,
                         columns_info=columns_info_str,
-                        authoritative_definitions=auth_defs_str
+                        authoritative_definitions=auth_defs_str,
                     )
-                    tasks.append({
-                        "schema_ref": schema,
-                        "system_prompt": system_prompt,
-                        "user_prompt": user_prompt
-                    })
+                    tasks.append(
+                        {
+                            "schema_ref": schema,
+                            "system_prompt": system_prompt,
+                            "user_prompt": user_prompt,
+                        }
+                    )
 
         results = self._run_tasks_concurrently(tasks, max_workers)
 
@@ -402,11 +413,23 @@ class ContractEnricher:
                 if schema.properties:
                     for prop in schema.properties:
                         if not prop.description:
-                            contract_auth_defs = getattr(odcs.info, "authoritativeDefinitions", []) if getattr(odcs, "info", None) else []
+                            contract_auth_defs = (
+                                getattr(odcs.info, "authoritativeDefinitions", [])
+                                if getattr(odcs, "info", None)
+                                else []
+                            )
                             schema_auth_defs = schema.authoritativeDefinitions or []
-                            prop_auth_defs = getattr(prop, "authoritativeDefinitions", []) or []
-                            all_auth_defs = contract_auth_defs + schema_auth_defs + prop_auth_defs
-                            auth_defs_str = ", ".join([str(a) for a in all_auth_defs]) if all_auth_defs else "None"
+                            prop_auth_defs = (
+                                getattr(prop, "authoritativeDefinitions", []) or []
+                            )
+                            all_auth_defs = (
+                                contract_auth_defs + schema_auth_defs + prop_auth_defs
+                            )
+                            auth_defs_str = (
+                                ", ".join([str(a) for a in all_auth_defs])
+                                if all_auth_defs
+                                else "None"
+                            )
 
                             user_prompt_template = user_prompt_override or COLUMN_DESC_USER_PROMPT_TEMPLATE
                             user_prompt = user_prompt_template.format(
@@ -415,13 +438,15 @@ class ContractEnricher:
                                 column_name=prop.name,
                                 column_type=prop.logicalType,
                                 other_columns_info=other_columns_info_str,
-                                authoritative_definitions=auth_defs_str
+                                authoritative_definitions=auth_defs_str,
                             )
-                            tasks.append({
-                                "prop_ref": prop,
-                                "system_prompt": system_prompt,
-                                "user_prompt": user_prompt
-                            })
+                            tasks.append(
+                                {
+                                    "prop_ref": prop,
+                                    "system_prompt": system_prompt,
+                                    "user_prompt": user_prompt,
+                                }
+                            )
 
         results = self._run_tasks_concurrently(tasks, max_workers)
 
@@ -453,11 +478,23 @@ class ContractEnricher:
 
                 if schema.properties:
                     for prop in schema.properties:
-                        contract_auth_defs = getattr(odcs.info, "authoritativeDefinitions", []) if getattr(odcs, "info", None) else []
+                        contract_auth_defs = (
+                            getattr(odcs.info, "authoritativeDefinitions", [])
+                            if getattr(odcs, "info", None)
+                            else []
+                        )
                         schema_auth_defs = schema.authoritativeDefinitions or []
-                        prop_auth_defs = getattr(prop, "authoritativeDefinitions", []) or []
-                        all_auth_defs = contract_auth_defs + schema_auth_defs + prop_auth_defs
-                        auth_defs_str = ", ".join([str(a) for a in all_auth_defs]) if all_auth_defs else "None"
+                        prop_auth_defs = (
+                            getattr(prop, "authoritativeDefinitions", []) or []
+                        )
+                        all_auth_defs = (
+                            contract_auth_defs + schema_auth_defs + prop_auth_defs
+                        )
+                        auth_defs_str = (
+                            ", ".join([str(a) for a in all_auth_defs])
+                            if all_auth_defs
+                            else "None"
+                        )
 
                         user_prompt_template = user_prompt_override or QUALITY_SUGGESTION_USER_PROMPT_TEMPLATE
                         user_prompt = user_prompt_template.format(
@@ -467,20 +504,24 @@ class ContractEnricher:
                             column_type=prop.logicalType,
                             is_required=prop.required,
                             is_primary_key=prop.primaryKey,
-                            authoritative_definitions=auth_defs_str
+                            authoritative_definitions=auth_defs_str,
                         )
-                        tasks.append({
-                            "prop_ref": prop,
-                            "system_prompt": system_prompt,
-                            "user_prompt": user_prompt
-                        })
+                        tasks.append(
+                            {
+                                "prop_ref": prop,
+                                "system_prompt": system_prompt,
+                                "user_prompt": user_prompt,
+                            }
+                        )
 
         results = self._run_tasks_concurrently(tasks, max_workers)
 
         for task, response in results:
             if response and "quality_rules" in response:
                 prop = task["prop_ref"]
-                existing_metrics = [q.metric for q in (prop.quality or []) if getattr(q, 'metric', None)]
+                existing_metrics = [
+                    q.metric for q in (prop.quality or []) if getattr(q, "metric", None)
+                ]
 
                 rules_to_add = []
                 for rule_dict in response["quality_rules"]:
@@ -498,7 +539,9 @@ class ContractEnricher:
                     if not data_quality.customProperties:
                         data_quality.customProperties = []
                     data_quality.customProperties.append(
-                        CustomProperty(property="graph_semantic.provenance", value="LLM_INFERRED")
+                        CustomProperty(
+                            property="graph_semantic.provenance", value="LLM_INFERRED"
+                        )
                     )
 
                     rules_to_add.append(data_quality)
@@ -516,7 +559,9 @@ class ContractEnricher:
         results = []
         if tasks:
             if max_workers > 1:
-                with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                with concurrent.futures.ThreadPoolExecutor(
+                    max_workers=max_workers
+                ) as executor:
                     futures = {
                         executor.submit(self._execute_inference, task): task
                         for task in tasks

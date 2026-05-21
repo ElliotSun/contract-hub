@@ -20,6 +20,39 @@ def _build_parser() -> argparse.ArgumentParser:
         "setup", help="Bootstrap repository with GitOps templates and CI pipelines"
     )
 
+    lifecycle_parser = subparsers.add_parser(
+        "lifecycle", help="Manage contract, schema, or property lifecycle status"
+    )
+    lifecycle_subparsers = lifecycle_parser.add_subparsers(
+        dest="lifecycle_command", required=True
+    )
+
+    promote_parser = lifecycle_subparsers.add_parser(
+        "promote", help="Promote entity to active status"
+    )
+    promote_parser.add_argument("--runtime-context", default=None)
+    promote_parser.add_argument(
+        "--contract", required=True, help="Path to the YAML contract"
+    )
+    promote_parser.add_argument("--schema", help="Target schema name")
+    promote_parser.add_argument("--property", help="Target property name")
+    promote_parser.add_argument(
+        "--output", help="Output path (defaults to overwriting contract)"
+    )
+
+    deprecate_parser = lifecycle_subparsers.add_parser(
+        "deprecate", help="Deprecate entity status"
+    )
+    deprecate_parser.add_argument("--runtime-context", default=None)
+    deprecate_parser.add_argument(
+        "--contract", required=True, help="Path to the YAML contract"
+    )
+    deprecate_parser.add_argument("--schema", help="Target schema name")
+    deprecate_parser.add_argument("--property", help="Target property name")
+    deprecate_parser.add_argument(
+        "--output", help="Output path (defaults to overwriting contract)"
+    )
+
     enrich_parser = subparsers.add_parser(
         "enrich", help="Enrich data contract with semantic relationship labels via LLM"
     )
@@ -31,7 +64,13 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     enrich_parser.add_argument(
         "--mode",
-        choices=["label", "infer_joins", "describe_tables", "describe_columns", "suggest_quality"],
+        choices=[
+            "label",
+            "infer_joins",
+            "describe_tables",
+            "describe_columns",
+            "suggest_quality",
+        ],
         default="label",
         help="Enrichment mode: 'label' for tagging existing relationships, 'infer_joins' for discovering new semantic relationships, 'describe_tables' for missing table descriptions, 'describe_columns' for missing column descriptions, 'suggest_quality' for generating DataQuality rules.",
     )
@@ -811,6 +850,18 @@ def _run_release_create_pr(args: argparse.Namespace) -> dict[str, Any]:
     return payload
 
 
+def _run_lifecycle_promote(args: argparse.Namespace) -> dict[str, Any]:
+    from contracthub.core.lifecycle_cli import apply_lifecycle
+
+    return apply_lifecycle(args, is_promote=True)
+
+
+def _run_lifecycle_deprecate(args: argparse.Namespace) -> dict[str, Any]:
+    from contracthub.core.lifecycle_cli import apply_lifecycle
+
+    return apply_lifecycle(args, is_promote=False)
+
+
 def _run_enrich(args: argparse.Namespace) -> str:
     from contracthub.tools.enricher import ContractEnricher
 
@@ -858,6 +909,16 @@ def main() -> int:
         if args.command == "setup":
             _run_setup(args)
             return 0
+
+        if args.command == "lifecycle":
+            if args.lifecycle_command == "promote":
+                payload = _run_lifecycle_promote(args)
+                print(json.dumps(payload, indent=2, sort_keys=True))
+                return 0
+            if args.lifecycle_command == "deprecate":
+                payload = _run_lifecycle_deprecate(args)
+                print(json.dumps(payload, indent=2, sort_keys=True))
+                return 0
 
         if args.command == "enrich":
             output = _run_enrich(args)
