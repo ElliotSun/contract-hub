@@ -2,6 +2,22 @@
 
 <!-- version list -->
 
+## v0.4.0 (2026-05-26)
+
+### Features
+
+- Add dynamic textual tui for contracthub commands
+  ([`3234dd9`](https://github.com/ElliotSun/contract-hub/commit/3234dd90c6283abd348b3908fdc591e00ae558fa))
+
+### Refactoring
+
+- Remove Streamlit UI components and stabilize pyarrow dependency
+  ([`d5a6c4e`](https://github.com/ElliotSun/contract-hub/commit/d5a6c4e15b6badfef01110369e3a041173ed6714))
+
+- Remove Streamlit UI components to keep contracthub as a backend-only CLI
+  ([`945d45d`](https://github.com/ElliotSun/contract-hub/commit/945d45d2d14173352a1bc08acc54ea26a0edaa2f))
+
+
 ## v0.3.0 (2026-05-21)
 
 ### Documentation
