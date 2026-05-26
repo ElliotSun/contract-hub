@@ -14,7 +14,11 @@ DEFAULT_AZURE_STORAGE_SCOPE = "https://storage.azure.com/.default"
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="contracthub")
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers = parser.add_subparsers(dest="command", required=False)
+
+    subparsers.add_parser(
+        "tui", help="Launch the interactive Terminal User Interface (k9s style)"
+    )
 
     subparsers.add_parser(
         "setup", help="Bootstrap repository with GitOps templates and CI pipelines"
@@ -905,7 +909,17 @@ def main() -> int:
     except SystemExit as exc:
         return exc.code if isinstance(exc.code, int) else 2
 
+    if not args.command:
+        parser.print_help()
+        return 0
+
     try:
+        if args.command == "tui":
+            from contracthub.tui.app import ContractHubTUI
+            app = ContractHubTUI()
+            app.run()
+            return 0
+
         if args.command == "setup":
             _run_setup(args)
             return 0
