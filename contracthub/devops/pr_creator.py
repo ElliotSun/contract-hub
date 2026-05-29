@@ -2,12 +2,37 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
 import requests
+
+
+def _get_git_config(repo_path: str, key: str) -> str | None:
+    try:
+        result = subprocess.run(
+            ["git", "-C", repo_path, "config", "--local", "--get", key],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except Exception:
+        pass
+    return None
+
+
+def _set_git_config(repo_path: str, key: str, value: str) -> None:
+    try:
+        subprocess.run(
+            ["git", "-C", repo_path, "config", "--local", key, value], check=True
+        )
+    except Exception:
+        pass
 
 
 class GitProviderConfig(Protocol):
@@ -47,6 +72,7 @@ class GitProvider(Protocol):
         title: str,
         description: str,
         reviewers: list[str] | None = None,
+        repo_path: str | None = None,
     ) -> dict[str, Any]: ...
 
 
@@ -55,6 +81,168 @@ class AzureDevOpsProvider:
         self.config = config
 
     def create_pull_request(
+        self,
+        *,
+        source_branch: str,
+        target_branch: str,
+        title: str,
+        description: str,
+        reviewers: list[str] | None = None,
+        repo_path: str | None = None,
+    ) -> dict[str, Any]:
+        """Create an Azure DevOps pull request, prioritizing CLI then falling back to REST API."""
+        method_override = os.environ.get("CONTRACTHUB_PR_METHOD")
+
+        if method_override == "api":
+            return self._create_pull_request_api(
+                source_branch=source_branch,
+                target_branch=target_branch,
+                title=title,
+                description=description,
+                reviewers=reviewers,
+            )
+
+        if method_override == "cli":
+            return self._create_pull_request_cli(
+                source_branch=source_branch,
+                target_branch=target_branch,
+                title=title,
+                description=description,
+                reviewers=reviewers,
+                repo_path=repo_path,
+            )
+
+        # Fallback chain with caching
+        cache_key = "contracthub.pr-auth-method"
+        cached_method = _get_git_config(repo_path, cache_key) if repo_path else None
+
+        if cached_method == "cli":
+            try:
+                return self._create_pull_request_cli(
+                    source_branch=source_branch,
+                    target_branch=target_branch,
+                    title=title,
+                    description=description,
+                    reviewers=reviewers,
+                    repo_path=repo_path,
+                )
+            except Exception:
+                pass # Fall through to fallback chain
+
+        if cached_method == "api":
+            try:
+                return self._create_pull_request_api(
+                    source_branch=source_branch,
+                    target_branch=target_branch,
+                    title=title,
+                    description=description,
+                    reviewers=reviewers,
+                )
+            except Exception:
+                pass # Fall through to fallback chain
+
+        # 1. Native CLI
+        try:
+            result = self._create_pull_request_cli(
+                source_branch=source_branch,
+                target_branch=target_branch,
+                title=title,
+                description=description,
+                reviewers=reviewers,
+                repo_path=repo_path,
+            )
+            if repo_path:
+                _set_git_config(repo_path, cache_key, "cli")
+            return result
+        except Exception:
+            pass
+
+        # 2. CLI with token
+        try:
+            result = self._create_pull_request_cli(
+                source_branch=source_branch,
+                target_branch=target_branch,
+                title=title,
+                description=description,
+                reviewers=reviewers,
+                repo_path=repo_path,
+                inject_token=True,
+            )
+            if repo_path:
+                _set_git_config(repo_path, cache_key, "cli")
+            return result
+        except Exception:
+            pass
+
+        # 3. API Fallback
+        result = self._create_pull_request_api(
+            source_branch=source_branch,
+            target_branch=target_branch,
+            title=title,
+            description=description,
+            reviewers=reviewers,
+        )
+        if repo_path:
+            _set_git_config(repo_path, cache_key, "api")
+        return result
+
+    def _create_pull_request_cli(
+        self,
+        *,
+        source_branch: str,
+        target_branch: str,
+        title: str,
+        description: str,
+        reviewers: list[str] | None = None,
+        repo_path: str | None = None,
+        inject_token: bool = False,
+    ) -> dict[str, Any]:
+        if not repo_path:
+            raise RuntimeError("repo_path is required for CLI PR creation")
+
+        cmd = [
+            "az",
+            "repos",
+            "pr",
+            "create",
+            "--source-branch",
+            source_branch,
+            "--target-branch",
+            target_branch,
+            "--title",
+            title,
+            "--description",
+            description,
+            "--output",
+            "json",
+        ]
+
+        if reviewers:
+            cmd.extend(["--reviewers", *reviewers])
+
+        env = os.environ.copy()
+        if inject_token:
+            env["AZURE_DEVOPS_EXT_PAT"] = self.config.pat_token
+
+        result = subprocess.run(
+            cmd,
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"Failed to create PR in Azure DevOps via CLI: {result.stderr}"
+            )
+
+        try:
+            return json.loads(result.stdout)
+        except json.JSONDecodeError:
+            return {"raw_output": result.stdout}
+
+    def _create_pull_request_api(
         self,
         *,
         source_branch: str,
@@ -102,6 +290,171 @@ class GitHubProvider:
         self.config = config
 
     def create_pull_request(
+        self,
+        *,
+        source_branch: str,
+        target_branch: str,
+        title: str,
+        description: str,
+        reviewers: list[str] | None = None,
+        repo_path: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a GitHub pull request, prioritizing CLI then falling back to REST API."""
+        method_override = os.environ.get("CONTRACTHUB_PR_METHOD")
+
+        if method_override == "api":
+            return self._create_pull_request_api(
+                source_branch=source_branch,
+                target_branch=target_branch,
+                title=title,
+                description=description,
+                reviewers=reviewers,
+            )
+
+        if method_override == "cli":
+            return self._create_pull_request_cli(
+                source_branch=source_branch,
+                target_branch=target_branch,
+                title=title,
+                description=description,
+                reviewers=reviewers,
+                repo_path=repo_path,
+            )
+
+        # Fallback chain with caching
+        cache_key = "contracthub.pr-auth-method"
+        cached_method = _get_git_config(repo_path, cache_key) if repo_path else None
+
+        if cached_method == "cli":
+            try:
+                return self._create_pull_request_cli(
+                    source_branch=source_branch,
+                    target_branch=target_branch,
+                    title=title,
+                    description=description,
+                    reviewers=reviewers,
+                    repo_path=repo_path,
+                )
+            except Exception:
+                pass # Fall through to fallback chain
+
+        if cached_method == "api":
+            try:
+                return self._create_pull_request_api(
+                    source_branch=source_branch,
+                    target_branch=target_branch,
+                    title=title,
+                    description=description,
+                    reviewers=reviewers,
+                )
+            except Exception:
+                pass # Fall through to fallback chain
+
+        # 1. Native CLI
+        try:
+            result = self._create_pull_request_cli(
+                source_branch=source_branch,
+                target_branch=target_branch,
+                title=title,
+                description=description,
+                reviewers=reviewers,
+                repo_path=repo_path,
+            )
+            if repo_path:
+                _set_git_config(repo_path, cache_key, "cli")
+            return result
+        except Exception:
+            pass
+
+        # 2. CLI with token
+        try:
+            result = self._create_pull_request_cli(
+                source_branch=source_branch,
+                target_branch=target_branch,
+                title=title,
+                description=description,
+                reviewers=reviewers,
+                repo_path=repo_path,
+                inject_token=True,
+            )
+            if repo_path:
+                _set_git_config(repo_path, cache_key, "cli")
+            return result
+        except Exception:
+            pass
+
+        # 3. API Fallback
+        result = self._create_pull_request_api(
+            source_branch=source_branch,
+            target_branch=target_branch,
+            title=title,
+            description=description,
+            reviewers=reviewers,
+        )
+        if repo_path:
+            _set_git_config(repo_path, cache_key, "api")
+        return result
+
+    def _create_pull_request_cli(
+        self,
+        *,
+        source_branch: str,
+        target_branch: str,
+        title: str,
+        description: str,
+        reviewers: list[str] | None = None,
+        repo_path: str | None = None,
+        inject_token: bool = False,
+    ) -> dict[str, Any]:
+        if not repo_path:
+            raise RuntimeError("repo_path is required for CLI PR creation")
+
+        cmd = [
+            "gh",
+            "pr",
+            "create",
+            "--base",
+            target_branch,
+            "--head",
+            source_branch,
+            "--title",
+            title,
+            "--body",
+            description,
+        ]
+
+        if reviewers:
+            for reviewer in reviewers:
+                cmd.extend(["--reviewer", reviewer])
+
+        env = os.environ.copy()
+        if inject_token:
+            env["GH_TOKEN"] = self.config.token
+
+        result = subprocess.run(
+            cmd,
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"Failed to create PR in GitHub via CLI: {result.stderr}"
+            )
+
+        # Try to return standard API format if possible, otherwise wrap the URL string
+        stdout_str = result.stdout.strip()
+        if stdout_str.startswith("http"):
+            return {"url": stdout_str, "html_url": stdout_str}
+
+        try:
+            return json.loads(stdout_str)
+        except json.JSONDecodeError:
+            return {"raw_output": stdout_str}
+
+    def _create_pull_request_api(
         self,
         *,
         source_branch: str,
@@ -205,6 +558,7 @@ class PullRequestCreator:
         title: str,
         description: str,
         reviewers: list[str] | None = None,
+        repo_path: str | None = None,
     ) -> dict[str, Any]:
         """Create a pull request using the configured provider."""
         return self.provider.create_pull_request(
@@ -213,6 +567,7 @@ class PullRequestCreator:
             title=title,
             description=description,
             reviewers=reviewers,
+            repo_path=repo_path,
         )
 
     def create_update_pr(
@@ -244,6 +599,7 @@ class PullRequestCreator:
             target_branch=target_branch,
             title=title,
             description=description,
+            repo_path=repo_path,
         )
 
     @staticmethod
