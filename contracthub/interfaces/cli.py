@@ -217,7 +217,7 @@ def _build_parser() -> argparse.ArgumentParser:
     pr_parser.add_argument(
         "--pat-token", default=os.environ.get("CONTRACTHUB_PAT_TOKEN")
     )
-    pr_parser.add_argument("--repo-path", required=True)
+    pr_parser.add_argument("--repo-path", help="Local repository path")
     pr_parser.add_argument("--source-branch", required=True)
     pr_parser.add_argument("--target-branch", required=True)
     pr_parser.add_argument("--commit-message", required=True)
@@ -277,7 +277,7 @@ def _build_parser() -> argparse.ArgumentParser:
     release_pr_parser.add_argument("--base", required=True)
     release_pr_parser.add_argument("--candidate", required=True)
     release_pr_parser.add_argument("--release-tag", required=True)
-    release_pr_parser.add_argument("--repo-path", required=True)
+    release_pr_parser.add_argument("--repo-path", help="Local repository path")
     release_pr_parser.add_argument("--contract-path", required=True)
     release_pr_parser.add_argument("--source-branch", required=True)
     release_pr_parser.add_argument("--target-branch", required=True)
@@ -318,7 +318,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Run explicit per-contract release PR automation from a batch manifest",
     )
     release_prs_parser.add_argument("--manifest", required=True)
-    release_prs_parser.add_argument("--repo-path", required=True)
+    release_prs_parser.add_argument("--repo-path", help="Local repository path")
     release_prs_parser.add_argument(
         "--git-provider",
         choices=["azure", "github"],
@@ -694,13 +694,31 @@ def _run_export_ge(args: argparse.Namespace) -> Path:
         raise
 
 
+def _get_repo_path(args: argparse.Namespace) -> str:
+    if getattr(args, "repo_path", None):
+        return args.repo_path
+
+    gh_workspace = os.environ.get("GITHUB_WORKSPACE")
+    if gh_workspace:
+        return gh_workspace
+
+    az_workspace = os.environ.get("BUILD_SOURCESDIRECTORY")
+    if az_workspace:
+        return az_workspace
+
+    raise ValueError(
+        "Could not determine repository path. Please provide --repo-path "
+        "or set GITHUB_WORKSPACE / BUILD_SOURCESDIRECTORY environment variables."
+    )
+
+
 def _run_create_pr(args: argparse.Namespace) -> dict[str, Any]:
     from contracthub.devops.pr_creator import PullRequestCreator
 
     config = _build_git_config(args)
     manager = PullRequestCreator(config=config)
     return manager.create_update_pr(
-        repo_path=args.repo_path,
+        repo_path=_get_repo_path(args),
         source_branch=args.source_branch,
         target_branch=args.target_branch,
         commit_message=args.commit_message,
@@ -838,7 +856,7 @@ def _run_release_create_pr(args: argparse.Namespace) -> dict[str, Any]:
     config = _build_git_config(args)
     payload = create_release_pull_request(
         config=config,
-        repo_path=args.repo_path,
+        repo_path=_get_repo_path(args),
         contract_repo_path=args.contract_path,
         base_contract=base_contract,
         candidate_contract=candidate_contract,
@@ -891,7 +909,7 @@ def _run_release_create_prs(args: argparse.Namespace) -> dict[str, Any]:
     tasks = load_batch_release_tasks(args.manifest)
     payload = create_release_pull_requests_from_manifest(
         config=config,
-        repo_path=args.repo_path,
+        repo_path=_get_repo_path(args),
         tasks=tasks,
         push=args.push,
     )
