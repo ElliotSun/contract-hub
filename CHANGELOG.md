@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.5.0 (2026-05-30)
+
+### Features
+
+- Implement CLI prioritization and intelligent fallback for PR creation
+  ([`17595e7`](https://github.com/ElliotSun/contract-hub/commit/17595e7f34969df83b2650c145fe0aa6161f6c77))
+
+
 ## v0.4.0 (2026-05-26)
 
 ### Features
