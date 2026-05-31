@@ -65,10 +65,13 @@ class GreatExpectationsExporter:
         *,
         schema_name: str = "all",
         suite_name: str | None = None,
+        engine: str = "pandas",
     ) -> Any:
         model = contract_to_model(contract)
+        if not hasattr(model, "schema_"):
+            setattr(model, "schema_", getattr(model, "schema", None))
         return generate_expectation_suite(
-            model, schema_name=schema_name, suite_name=suite_name
+            model, schema_name=schema_name, suite_name=suite_name, engine=engine
         )
 
     def export_to_path(
@@ -78,9 +81,10 @@ class GreatExpectationsExporter:
         *,
         schema_name: str = "all",
         suite_name: str | None = None,
+        engine: str = "pandas",
     ) -> Path:
         suite = self.generate_suite(
-            contract, schema_name=schema_name, suite_name=suite_name
+            contract, schema_name=schema_name, suite_name=suite_name, engine=engine
         )
         path = Path(output_path).expanduser().resolve()
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -100,6 +104,7 @@ def generate_expectation_suite(
     contract: OpenDataContractStandard,
     schema_name: str = "all",
     suite_name: Optional[str] = None,
+    engine: str = "pandas",
 ) -> Any:
     """Generate a Great Expectations suite using datacontract-cli exporter.
 
@@ -114,10 +119,10 @@ def generate_expectation_suite(
             schema_name=schema_name,
             server=None,
             sql_server_type="auto",
-            export_args={"engine": "spark", "suite_name": suite_name},
+            export_args={"engine": engine, "suite_name": suite_name},
         )
     except ModuleNotFoundError as exc:
-        if exc.name == "pyspark":
+        if exc.name == "pyspark" and engine == "spark":
             from contracthub.exceptions import LifecycleError
 
             raise LifecycleError(

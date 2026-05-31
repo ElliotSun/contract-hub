@@ -194,8 +194,38 @@ The ContractHub CLI offers commands for the full contract lifecycle:
 
 **Setup & Environment**
 ```bash
-contracthub setup
+# Initialize a local configuration file (.contracthub.yaml) in the current directory.
+# This configures your local CLI/TUI environment and eliminates the need for environment variables.
+contracthub init
+
+# Bootstrap your git repository with CI/CD pipelines and GitOps templates.
+# Use this when setting up a new centralized data contract repository for the first time.
+contracthub init --scaffold
 ```
+
+The `--scaffold` flag will bootstrap a brand new Git repository with standard CI/CD and GitOps templates. It automatically generates:
+- **Folder Structure**: Creates the default `contracts` directory.
+- **CI/CD Pipelines**: Creates a `.github/workflows/contract-check.yaml` (GitHub), `.gitlab/ci/contract-check.yml` (GitLab), or `azure-pipelines.yml` (Azure DevOps) based on the `git.provider` setting in your `.contracthub.yaml`.
+- **Sample Contract**: Generates a dummy `contracts/sample.yaml` to help you get started.
+
+The `contracthub init` command will generate a `.contracthub.yaml` file that looks like this:
+```yaml
+azure:
+  auth_method: cli
+  scope: https://storage.azure.com/.default
+git:
+  provider: azure
+  organization: your-organization
+  project: your-project
+  repository_id: your-repo-id
+core:
+  enforce_lifecycle: true
+llm:
+  model_name: gpt-4-turbo
+  api_key: ""
+  base_url: ""
+```
+This configuration is automatically picked up by the CLI and the TUI.
 
 **Importing Data Contracts**
 ```bash
@@ -227,14 +257,7 @@ contracthub merge --base ./generated.yaml --business ./contracts/orders.yaml --o
 # Run dry run plan of changes
 contracthub plan --source ./generated.yaml --base ./contracts/orders.yaml
 
-# Configure your LLM Provider (Examples)
-export LLM_MODEL_NAME="gpt-4o"
-export LLM_API_KEY="sk-..."
-
-# For Azure AI Foundry
-# export LLM_MODEL_NAME="azure/gpt-4o"
-# export LLM_API_KEY="azure-key"
-# export LLM_BASE_URL="https://your-endpoint.openai.azure.com/"
+# Note: LLM credentials (model_name, api_key, base_url) should be configured in your .contracthub.yaml file
 
 # Enrich contract metadata via LLM (e.g. generate missing descriptions)
 contracthub enrich --contract ./contracts/orders.yaml --mode describe_columns --concurrency 2

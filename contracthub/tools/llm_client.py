@@ -17,10 +17,11 @@ class BaseLLMProvider(ABC):
 class OpenAILLMProvider(BaseLLMProvider):
     def __init__(self):
         # Only import litellm when instantiated so we don't hard fail if missing
+        from contracthub.core.config import config_manager
 
-        self.api_key = os.environ.get("LLM_API_KEY", "")
-        self.base_url = os.environ.get("LLM_BASE_URL", None)
-        self.model_name = os.environ.get("LLM_MODEL_NAME", "gpt-4-turbo")
+        self.api_key = config_manager.get("llm.api_key", "LLM_API_KEY", "")
+        self.base_url = config_manager.get("llm.base_url", "LLM_BASE_URL", None)
+        self.model_name = config_manager.get("llm.model_name", "LLM_MODEL_NAME", "gpt-4-turbo")
 
     def generate_json(
         self, system_prompt: str, user_prompt: str, temperature: float = 0.0

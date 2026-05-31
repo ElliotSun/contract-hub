@@ -11,7 +11,46 @@ from textual.widgets.option_list import Option
 from textual.binding import Binding
 from textual import work
 
+from textual.screen import ModalScreen
+from textual.containers import Grid
 from contracthub.interfaces.cli import _build_parser, main as cli_main
+
+class InitConfigModal(ModalScreen[bool]):
+    CSS = """
+    InitConfigModal {
+        align: center middle;
+    }
+    #dialog {
+        grid-size: 2;
+        grid-gutter: 1 2;
+        grid-rows: 1fr 3;
+        padding: 0 1;
+        width: 60;
+        height: 11;
+        border: thick $background 80%;
+        background: $surface;
+    }
+    #question {
+        column-span: 2;
+        height: 1fr;
+        width: 1fr;
+        content-align: center middle;
+    }
+    Button {
+        width: 100%;
+    }
+    """
+
+    def compose(self) -> ComposeResult:
+        yield Grid(
+            Label("No configuration file found.\\nWould you like to generate a default .contracthub.yaml?", id="question"),
+            Button("Yes, generate it", variant="primary", id="yes"),
+            Button("No, maybe later", variant="error", id="no"),
+            id="dialog"
+        )
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        self.dismiss(event.button.id == "yes")
 
 class DynamicForm(Container):
     """A dynamically generated form based on argparse arguments."""
@@ -41,7 +80,8 @@ class DynamicForm(Container):
             if action.choices:
                 # Provide a Select for choices
                 options = [(str(c), str(c)) for c in action.choices]
-                select = Select(options, id=field_id, prompt="Select an option")
+                default_val = str(action.default) if action.default is not None and str(action.default) in action.choices else Select.BLANK
+                select = Select(options, id=field_id, prompt="Select an option", value=default_val)
                 self.fields[action.dest] = select
                 yield select
             elif action.nargs == 0 or isinstance(action, argparse._StoreTrueAction):
@@ -51,7 +91,8 @@ class DynamicForm(Container):
                 yield select
             else:
                 # Regular text input
-                input_widget = Input(placeholder=action.help or "", id=field_id)
+                default_val = str(action.default) if action.default is not None and action.default != argparse.SUPPRESS else ""
+                input_widget = Input(placeholder=action.help or "", id=field_id, value=default_val)
                 self.fields[action.dest] = input_widget
                 yield input_widget
 
@@ -151,8 +192,23 @@ class ContractHubTUI(App):
         yield Footer()
 
     def on_mount(self) -> None:
-        if self.commands:
-            self.load_command_form(self.commands[0])
+        from contracthub.core.config import config_manager
+        
+        def handle_init(result: bool) -> None:
+            if result:
+                import argparse
+                from contracthub.interfaces.cli import _run_init
+                _run_init(argparse.Namespace())
+                config_manager._load_configs()
+                
+            if self.commands:
+                self.load_command_form(self.commands[0])
+
+        if not config_manager.config_data:
+            self.push_screen(InitConfigModal(), handle_init)
+        else:
+            if self.commands:
+                self.load_command_form(self.commands[0])
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
         command_name = event.option.id

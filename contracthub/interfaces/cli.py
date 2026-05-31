@@ -6,6 +6,8 @@ import os
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
+from contracthub.core.config import config_manager
+
 if TYPE_CHECKING:
     from contracthub.devops.pr_creator import GitProviderConfig
 
@@ -20,8 +22,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "tui", help="Launch the interactive Terminal User Interface (k9s style)"
     )
 
-    subparsers.add_parser(
-        "setup", help="Bootstrap repository with GitOps templates and CI pipelines"
+    init_parser = subparsers.add_parser(
+        "init", help="Initialize configuration and optionally bootstrap repository templates"
+    )
+    init_parser.add_argument(
+        "--scaffold", action="store_true", help="Bootstrap repository with GitOps templates and CI pipelines"
     )
 
     lifecycle_parser = subparsers.add_parser(
@@ -191,31 +196,32 @@ def _build_parser() -> argparse.ArgumentParser:
     ge_parser.add_argument("--output", required=True)
     ge_parser.add_argument("--schema-name", default="all")
     ge_parser.add_argument("--suite-name")
+    ge_parser.add_argument("--engine", choices=["spark", "pandas"], default="pandas", help="Validation engine for Great Expectations")
 
     pr_parser = subparsers.add_parser("create-pr", help="Create Azure DevOps PR")
     pr_parser.add_argument(
         "--git-provider",
         choices=["azure", "github"],
-        default=os.environ.get("CONTRACTHUB_GIT_PROVIDER", "azure"),
+        default=config_manager.get("git.provider", "CONTRACTHUB_GIT_PROVIDER", "azure"),
     )
     pr_parser.add_argument(
-        "--organization", default=os.environ.get("CONTRACTHUB_ORGANIZATION")
+        "--organization", default=config_manager.get("git.organization", "CONTRACTHUB_ORGANIZATION")
     )
     pr_parser.add_argument(
-        "--github-owner", default=os.environ.get("CONTRACTHUB_GITHUB_OWNER")
+        "--github-owner", default=config_manager.get("git.github_owner", "CONTRACTHUB_GITHUB_OWNER")
     )
     pr_parser.add_argument(
-        "--github-repo", default=os.environ.get("CONTRACTHUB_GITHUB_REPO")
+        "--github-repo", default=config_manager.get("git.github_repo", "CONTRACTHUB_GITHUB_REPO")
     )
     pr_parser.add_argument(
-        "--github-token", default=os.environ.get("CONTRACTHUB_GITHUB_TOKEN")
+        "--github-token", default=config_manager.get("git.github_token", "CONTRACTHUB_GITHUB_TOKEN")
     )
-    pr_parser.add_argument("--project", default=os.environ.get("CONTRACTHUB_PROJECT"))
+    pr_parser.add_argument("--project", default=config_manager.get("git.project", "CONTRACTHUB_PROJECT"))
     pr_parser.add_argument(
-        "--repository-id", default=os.environ.get("CONTRACTHUB_REPOSITORY_ID")
+        "--repository-id", default=config_manager.get("git.repository_id", "CONTRACTHUB_REPOSITORY_ID")
     )
     pr_parser.add_argument(
-        "--pat-token", default=os.environ.get("CONTRACTHUB_PAT_TOKEN")
+        "--pat-token", default=config_manager.get("git.pat_token", "CONTRACTHUB_PAT_TOKEN")
     )
     pr_parser.add_argument("--repo-path", help="Local repository path")
     pr_parser.add_argument("--source-branch", required=True)
@@ -284,28 +290,28 @@ def _build_parser() -> argparse.ArgumentParser:
     release_pr_parser.add_argument(
         "--git-provider",
         choices=["azure", "github"],
-        default=os.environ.get("CONTRACTHUB_GIT_PROVIDER", "azure"),
+        default=config_manager.get("git.provider", "CONTRACTHUB_GIT_PROVIDER", "azure"),
     )
     release_pr_parser.add_argument(
-        "--organization", default=os.environ.get("CONTRACTHUB_ORGANIZATION")
+        "--organization", default=config_manager.get("git.organization", "CONTRACTHUB_ORGANIZATION")
     )
     release_pr_parser.add_argument(
-        "--github-owner", default=os.environ.get("CONTRACTHUB_GITHUB_OWNER")
+        "--github-owner", default=config_manager.get("git.github_owner", "CONTRACTHUB_GITHUB_OWNER")
     )
     release_pr_parser.add_argument(
-        "--github-repo", default=os.environ.get("CONTRACTHUB_GITHUB_REPO")
+        "--github-repo", default=config_manager.get("git.github_repo", "CONTRACTHUB_GITHUB_REPO")
     )
     release_pr_parser.add_argument(
-        "--github-token", default=os.environ.get("CONTRACTHUB_GITHUB_TOKEN")
+        "--github-token", default=config_manager.get("git.github_token", "CONTRACTHUB_GITHUB_TOKEN")
     )
     release_pr_parser.add_argument(
-        "--project", default=os.environ.get("CONTRACTHUB_PROJECT")
+        "--project", default=config_manager.get("git.project", "CONTRACTHUB_PROJECT")
     )
     release_pr_parser.add_argument(
-        "--repository-id", default=os.environ.get("CONTRACTHUB_REPOSITORY_ID")
+        "--repository-id", default=config_manager.get("git.repository_id", "CONTRACTHUB_REPOSITORY_ID")
     )
     release_pr_parser.add_argument(
-        "--pat-token", default=os.environ.get("CONTRACTHUB_PAT_TOKEN")
+        "--pat-token", default=config_manager.get("git.pat_token", "CONTRACTHUB_PAT_TOKEN")
     )
     release_pr_parser.add_argument("--title")
     release_pr_parser.add_argument("--description")
@@ -322,28 +328,28 @@ def _build_parser() -> argparse.ArgumentParser:
     release_prs_parser.add_argument(
         "--git-provider",
         choices=["azure", "github"],
-        default=os.environ.get("CONTRACTHUB_GIT_PROVIDER", "azure"),
+        default=config_manager.get("git.provider", "CONTRACTHUB_GIT_PROVIDER", "azure"),
     )
     release_prs_parser.add_argument(
-        "--organization", default=os.environ.get("CONTRACTHUB_ORGANIZATION")
+        "--organization", default=config_manager.get("git.organization", "CONTRACTHUB_ORGANIZATION")
     )
     release_prs_parser.add_argument(
-        "--github-owner", default=os.environ.get("CONTRACTHUB_GITHUB_OWNER")
+        "--github-owner", default=config_manager.get("git.github_owner", "CONTRACTHUB_GITHUB_OWNER")
     )
     release_prs_parser.add_argument(
-        "--github-repo", default=os.environ.get("CONTRACTHUB_GITHUB_REPO")
+        "--github-repo", default=config_manager.get("git.github_repo", "CONTRACTHUB_GITHUB_REPO")
     )
     release_prs_parser.add_argument(
-        "--github-token", default=os.environ.get("CONTRACTHUB_GITHUB_TOKEN")
+        "--github-token", default=config_manager.get("git.github_token", "CONTRACTHUB_GITHUB_TOKEN")
     )
     release_prs_parser.add_argument(
-        "--project", default=os.environ.get("CONTRACTHUB_PROJECT")
+        "--project", default=config_manager.get("git.project", "CONTRACTHUB_PROJECT")
     )
     release_prs_parser.add_argument(
-        "--repository-id", default=os.environ.get("CONTRACTHUB_REPOSITORY_ID")
+        "--repository-id", default=config_manager.get("git.repository_id", "CONTRACTHUB_REPOSITORY_ID")
     )
     release_prs_parser.add_argument(
-        "--pat-token", default=os.environ.get("CONTRACTHUB_PAT_TOKEN")
+        "--pat-token", default=config_manager.get("git.pat_token", "CONTRACTHUB_PAT_TOKEN")
     )
     release_prs_parser.add_argument("--push", action="store_true")
 
@@ -368,56 +374,142 @@ def _build_git_config(args: argparse.Namespace) -> "GitProviderConfig":
     )
 
 
-def _run_setup(args: argparse.Namespace) -> None:
+def _run_init(args: argparse.Namespace) -> None:
+    import yaml
     import os
+    
+    config_path = Path.cwd() / ".contracthub.yaml"
+    if not config_path.exists():
+        default_config = {
+            "azure": {
+                "auth_method": "cli",
+                "scope": "https://storage.azure.com/.default"
+            },
+            "git": {
+                "provider": "azure",
+                "organization": "your-organization",
+                "project": "your-project",
+                "repository_id": "your-repo-id",
+            },
+            "core": {
+                "enforce_lifecycle": True
+            },
+            "llm": {
+                "model_name": "gpt-4-turbo",
+                "api_key": "",
+                "base_url": ""
+            }
+        }
+        
+        with open(config_path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(default_config, f, default_flow_style=False, sort_keys=False)
+        
+        from contracthub.core.config import config_manager
+        config_manager._load_configs()
+        
+        print(f"✅ Successfully generated default configuration at {config_path}")
+        print("   💡 Default git.provider is set to 'azure'. Edit this file to use 'github' or 'gitlab' instead.")
+        if not getattr(args, "scaffold", False):
+            print("   💡 Run `contracthub init --scaffold` to bootstrap a repository with CI/CD pipelines based on this configuration.")
+    else:
+        print(f"✅ Configuration file already exists at {config_path}")
 
-    print("🚀 Bootstrapping ContractHub repository...")
+    if getattr(args, "scaffold", False):
+        from contracthub.core.config import config_manager
+        provider = config_manager.get("git.provider", "CONTRACTHUB_GIT_PROVIDER", "azure").lower()
+        print(f"🚀 Bootstrapping ContractHub repository (using git.provider: '{provider}')...")
 
-    dirs = [
-        "contracts",
-        "contracts-main",
-        "contracts-feature",
-        ".github/workflows",
-        ".gitlab/ci",
-    ]
-    for d in dirs:
-        os.makedirs(d, exist_ok=True)
-        print(f"📁 Created directory: {d}")
+        # Base directories
+        dirs = ["contracts"]
+        if provider == "github":
+            dirs.append(".github/workflows")
+        elif provider == "gitlab":
+            dirs.append(".gitlab/ci")
+            
+        for d in dirs:
+            os.makedirs(d, exist_ok=True)
+            print(f"📁 Created directory: {d}")
 
-    github_action = """name: Contract Check
+        if provider == "github":
+            github_action = """name: Contract Check
 on: [pull_request]
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout Base Branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.base_ref }}
+          path: contracts-main
+      - name: Checkout PR Branch
+        uses: actions/checkout@v4
+        with:
+          path: contracts-feature
       - name: Install uv and deps
         run: pip install uv && uv venv && uv pip install contracthub
       - name: Contract Check
-        run: contracthub release classify-repo --base-root contracts-main --candidate-root contracts-feature
+        run: contracthub release classify-repo --base-root contracts-main/contracts --candidate-root contracts-feature/contracts
 """
-    gh_action_path = ".github/workflows/contract-check.yaml"
-    if not os.path.exists(gh_action_path):
-        with open(gh_action_path, "w") as f:
-            f.write(github_action)
-        print(f"📄 Created GitHub Actions workflow: {gh_action_path}")
-    else:
-        print(f"⏭️ Skipped existing GitHub Actions workflow: {gh_action_path}")
+            gh_action_path = ".github/workflows/contract-check.yaml"
+            if not os.path.exists(gh_action_path):
+                with open(gh_action_path, "w") as f:
+                    f.write(github_action)
+                print(f"📄 Created GitHub Actions workflow: {gh_action_path}")
+            else:
+                print(f"⏭️ Skipped existing GitHub Actions workflow: {gh_action_path}")
 
-    gitlab_ci = """stages:
+        elif provider == "gitlab":
+            gitlab_ci = """stages:
   - validate
 
 contract_check:
   stage: validate
   image: python:3.11-slim
   script:
+    - git clone --depth 1 --branch $CI_MERGE_REQUEST_TARGET_BRANCH_NAME $CI_REPOSITORY_URL contracts-main
+    - git clone --depth 1 --branch $CI_COMMIT_REF_NAME $CI_REPOSITORY_URL contracts-feature
     - pip install uv
     - uv venv && uv pip install contracthub
-    - contracthub release classify-repo --base-root contracts-main --candidate-root contracts-feature
+    - contracthub release classify-repo --base-root contracts-main/contracts --candidate-root contracts-feature/contracts
 """
-    with open(".gitlab/ci/contract-check.yml", "w") as f:
-        f.write(gitlab_ci)
-    print("📝 Created .gitlab/ci/contract-check.yml")
+            with open(".gitlab/ci/contract-check.yml", "w") as f:
+                f.write(gitlab_ci)
+            print("📝 Created .gitlab/ci/contract-check.yml")
+            
+        elif provider == "azure":
+            azure_pipeline = """trigger: none
+
+pr:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  - checkout: self
+    path: contracts-feature
+
+  - script: |
+      git clone --depth 1 --branch main https://$(System.AccessToken)@dev.azure.com/$(System.TeamFoundationCollectionUri)/$(System.TeamProject)/_git/$(Build.Repository.Name) $(Agent.BuildDirectory)/contracts-main
+    displayName: Checkout Base Branch
+
+  - script: |
+      python -m pip install uv
+      uv venv && uv pip install contracthub
+    displayName: Install dependencies
+
+  - script: |
+      contracthub release classify-repo \\
+        --base-root $(Agent.BuildDirectory)/contracts-main/contracts \\
+        --candidate-root $(Agent.BuildDirectory)/contracts-feature/contracts
+    displayName: Classify per-contract required bumps
+"""
+            with open("azure-pipelines.yml", "w") as f:
+                f.write(azure_pipeline)
+            print("📝 Created azure-pipelines.yml")
 
     # Try to initialize a default contract using datacontract-cli
     try:
@@ -687,6 +779,7 @@ def _run_export_ge(args: argparse.Namespace) -> Path:
             args.output,
             schema_name=args.schema_name,
             suite_name=args.suite_name,
+            engine=args.engine,
         )
     except (RuntimeError, ImportError) as exc:
         if "requires pyspark to be installed" in str(exc) or "pyspark" in str(exc):
@@ -938,8 +1031,8 @@ def main() -> int:
             app.run()
             return 0
 
-        if args.command == "setup":
-            _run_setup(args)
+        if args.command == "init":
+            _run_init(args)
             return 0
 
         if args.command == "lifecycle":

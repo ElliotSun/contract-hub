@@ -5,18 +5,22 @@ import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal, Optional, cast
+from typing import TYPE_CHECKING, Any, Literal, Optional, cast
 from urllib.parse import urlparse
+
+if TYPE_CHECKING:
+    from azure.core.credentials import TokenCredential
 
 import requests
 import yaml
 from open_data_contract_standard.model import OpenDataContractStandard
 
+from contracthub.core.config import config_manager
 from contracthub.exceptions import StorageError
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_SPARKUTILS_MAX_BYTES = int(
-    os.getenv("CONTRACTHUB_SPARKUTILS_MAX_BYTES", str(10 * 1024 * 1024))
+    config_manager.get("core.sparkutils_max_bytes", "CONTRACTHUB_SPARKUTILS_MAX_BYTES", str(10 * 1024 * 1024))
 )
 RuntimeContext = Literal["auto", "synapse", "fabric"]
 
@@ -32,22 +36,28 @@ class ContractLoader:
     - Always return an `OpenDataContractStandard` model, since we only support ODCS.
 
     Storage/auth scope:
-    - ADLS2 access is SDK-based and uses either a configured bearer token or
-      `azure.identity.DefaultAzureCredential`.
+    - ADLS2 access is SDK-based and uses either a configured bearer token,
+      a custom passed credential, or `azure.identity.DefaultAzureCredential`.
     - Unity Catalog external volumes are treated as mounted paths and read via
       the local/Databricks filesystem layer, not via ContractHub-managed cloud auth.
     - SAS URL authentication is intentionally not supported.
     """
 
     runtime_context: RuntimeContext = "auto"
+    credential: TokenCredential | None = None
 
     def load(self, contract_path: str) -> OpenDataContractStandard:
-        return load_contract(contract_path, runtime_context=self.runtime_context)
+        return load_contract(
+            contract_path,
+            runtime_context=self.runtime_context,
+            credential=self.credential,
+        )
 
 
 def load_contract(
     contract_path: str,
     runtime_context: RuntimeContext | str | None = None,
+    credential: TokenCredential | None = None,
 ) -> OpenDataContractStandard:
     """Load an ODCS contract from local or remote YAML sources.
 
@@ -56,14 +66,20 @@ def load_contract(
     notebook-only access methods (`mssparkutils`).
     """
     resolved_context = _resolve_runtime_context(runtime_context)
-    contract_text = read_contract_text(contract_path, resolved_context)
+    contract_text = read_contract_text(
+        contract_path, resolved_context, credential=credential
+    )
     payload = yaml.safe_load(contract_text)
     if not isinstance(payload, dict):
         raise ValueError("Contract YAML must deserialize into a mapping object")
     return OpenDataContractStandard.model_validate(payload)
 
 
-def read_contract_text(contract_path: str, runtime_context: RuntimeContext) -> str:
+def read_contract_text(
+    contract_path: str,
+    runtime_context: RuntimeContext,
+    credential: TokenCredential | None = None,
+) -> str:
     """Return raw YAML text from the supported storage backends."""
     if is_uc_volume_path(contract_path):
         return _read_uc_volume_text(contract_path, runtime_context)
@@ -76,7 +92,7 @@ def read_contract_text(contract_path: str, runtime_context: RuntimeContext) -> s
             via_sparkutils = _read_with_mssparkutils(contract_path)
             if via_sparkutils is not None:
                 return via_sparkutils
-        return _read_adls2_text(contract_path)
+        return _read_adls2_text(contract_path, credential=credential)
 
     if _is_http_path(contract_path):
         return _read_http_text(contract_path)
@@ -112,13 +128,18 @@ def _read_local_text(contract_path: str) -> str:
     return local_path.read_text(encoding="utf-8")
 
 
-def _read_adls2_text(contract_path: str) -> str:
+def _read_adls2_text(
+    contract_path: str, credential: TokenCredential | None = None
+) -> str:
     """Read ADLS2 content via Azure Storage SDK.
 
     We prefer the Microsoft SDK here so auth can follow Azure-native patterns
     such as `DefaultAzureCredential` instead of custom REST handling.
     """
-    file_client = _create_adls2_file_client(contract_path)
+    if credential is not None:
+        file_client = _create_adls2_file_client(contract_path, credential)
+    else:
+        file_client = _create_adls2_file_client(contract_path)
     downloader = file_client.download_file()
     payload = downloader.readall()
     if isinstance(payload, bytes):
@@ -140,13 +161,18 @@ def _read_http_text(url: str, headers: Optional[dict[str, str]] = None) -> str:
         raise StorageError(f"Network error while fetching contract from {url}") from exc
 
 
-def list_adls2_paths(root_path: str) -> list[str]:
+def list_adls2_paths(
+    root_path: str, credential: TokenCredential | None = None
+) -> list[str]:
     """List YAML documents under an ADLS2 root using the Azure SDK."""
     parsed_root = _parse_adls2_path(root_path)
     if _looks_like_yaml_path(parsed_root["relative_path"]):
         return [root_path]
 
-    filesystem_client = _create_adls2_filesystem_client(root_path)
+    if credential is not None:
+        filesystem_client = _create_adls2_filesystem_client(root_path, credential)
+    else:
+        filesystem_client = _create_adls2_filesystem_client(root_path)
     discovered: list[str] = []
     for entry in filesystem_client.get_paths(
         path=parsed_root["relative_path"] or None, recursive=True
@@ -214,36 +240,51 @@ def _get_mssparkutils() -> Any:
         return None
 
 
-def _create_adls2_file_client(contract_path: str) -> Any:
+def _create_adls2_file_client(
+    contract_path: str, credential: TokenCredential | None = None
+) -> Any:
     """Create a `DataLakeFileClient` for a single ADLS2 file path."""
     sdk = _import_azure_datalake_sdk()
     parsed = _parse_adls2_path(contract_path)
-    credential = _resolve_adls2_credential(contract_path)
+    if credential is not None:
+        resolved_credential = _resolve_adls2_credential(contract_path, credential)
+    else:
+        resolved_credential = _resolve_adls2_credential(contract_path)
     return sdk["DataLakeFileClient"](
         account_url=parsed["account_url"],
         file_system_name=parsed["filesystem"],
         file_path=parsed["relative_path"],
-        credential=credential,
+        credential=resolved_credential,
     )
 
 
-def _create_adls2_filesystem_client(root_path: str) -> Any:
+def _create_adls2_filesystem_client(
+    root_path: str, credential: TokenCredential | None = None
+) -> Any:
     """Create a `DataLakeFileSystemClient` for ADLS2 directory listing."""
     sdk = _import_azure_datalake_sdk()
     parsed = _parse_adls2_path(root_path)
-    credential = _resolve_adls2_credential(root_path)
+    if credential is not None:
+        resolved_credential = _resolve_adls2_credential(root_path, credential)
+    else:
+        resolved_credential = _resolve_adls2_credential(root_path)
     service_client = sdk["DataLakeServiceClient"](
         account_url=parsed["account_url"],
-        credential=credential,
+        credential=resolved_credential,
     )
     return service_client.get_file_system_client(file_system=parsed["filesystem"])
 
 
-def _resolve_adls2_credential(contract_path: str) -> Any | None:
-    """Resolve Azure auth using bearer token or `DefaultAzureCredential`.
+def _resolve_adls2_credential(
+    contract_path: str, credential: TokenCredential | None = None
+) -> Any | None:
+    """Resolve Azure auth using bearer token, custom credential, or `DefaultAzureCredential`.
 
     ContractHub does not support SAS-based ADLS2 authentication.
     """
+    if credential is not None:
+        return credential
+
     sdk = _import_azure_datalake_sdk()
     token = os.getenv("CONTRACTHUB_ADLS_BEARER_TOKEN")
     if token:
@@ -259,6 +300,14 @@ def _resolve_adls2_credential(contract_path: str) -> Any | None:
             "ADLS2 access requires azure-identity or CONTRACTHUB_ADLS_BEARER_TOKEN. "
             "Install with `pip install contracthub[azure]`."
         ) from exc
+
+    auth_method = config_manager.get("azure.auth_method", "CONTRACTHUB_AZURE_AUTH_METHOD", "default").lower().strip()
+    if auth_method in {"azurecli", "cli"}:
+        return azure_identity.AzureCliCredential()
+    if auth_method in {"managedidentity", "msi"}:
+        return azure_identity.ManagedIdentityCredential()
+    if auth_method in {"environment", "env"}:
+        return azure_identity.EnvironmentCredential()
 
     return azure_identity.DefaultAzureCredential()
 

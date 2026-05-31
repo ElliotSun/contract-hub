@@ -352,3 +352,140 @@ def test_resolve_adls2_credential_uses_default_azure_credential(monkeypatch):
     )  # noqa: SLF001
 
     assert isinstance(credential, FakeDefaultAzureCredential)
+
+
+def test_resolve_adls2_credential_uses_custom_passed_credential():
+    custom_credential = object()
+    credential = loader._resolve_adls2_credential(
+        "abfss://c@acct.dfs.core.windows.net/path.yaml",
+        credential=custom_credential,
+    )  # noqa: SLF001
+    assert credential is custom_credential
+
+
+def test_load_contract_uses_custom_passed_credential(monkeypatch):
+    calls = {}
+    custom_credential = object()
+
+    class FakeDownloader:
+        @staticmethod
+        def readall() -> bytes:
+            return CONTRACT_YAML.encode("utf-8")
+
+    class FakeFileClient:
+        def __init__(self, account_url, file_system_name, file_path, credential):  # noqa: ANN001
+            calls["credential"] = credential
+
+        @staticmethod
+        def download_file() -> FakeDownloader:
+            return FakeDownloader()
+
+    monkeypatch.setattr(
+        loader,
+        "_import_azure_datalake_sdk",
+        lambda: {
+            "AccessToken": object,
+            "DataLakeFileClient": FakeFileClient,
+            "DataLakeServiceClient": object,
+        },
+    )
+
+    loaded = loader.load_contract(
+        "abfss://contracts@acct.dfs.core.windows.net/domain/orders.yaml",
+        credential=custom_credential,
+    )
+    assert loaded.id == "orders"
+    assert calls["credential"] is custom_credential
+
+
+def test_contract_loader_class_uses_custom_passed_credential(monkeypatch):
+    calls = {}
+    custom_credential = object()
+
+    class FakeDownloader:
+        @staticmethod
+        def readall() -> bytes:
+            return CONTRACT_YAML.encode("utf-8")
+
+    class FakeFileClient:
+        def __init__(self, account_url, file_system_name, file_path, credential):  # noqa: ANN001
+            calls["credential"] = credential
+
+        @staticmethod
+        def download_file() -> FakeDownloader:
+            return FakeDownloader()
+
+    monkeypatch.setattr(
+        loader,
+        "_import_azure_datalake_sdk",
+        lambda: {
+            "AccessToken": object,
+            "DataLakeFileClient": FakeFileClient,
+            "DataLakeServiceClient": object,
+        },
+    )
+
+    contract_loader = loader.ContractLoader(credential=custom_credential)
+    loaded = contract_loader.load("abfss://contracts@acct.dfs.core.windows.net/domain/orders.yaml")
+    assert loaded.id == "orders"
+    assert calls["credential"] is custom_credential
+
+
+def test_resolve_adls2_credential_respects_auth_method_env(monkeypatch):
+    class FakeAzureCliCredential:
+        pass
+
+    class FakeManagedIdentityCredential:
+        pass
+
+    class FakeEnvironmentCredential:
+        pass
+
+    class FakeDefaultAzureCredential:
+        pass
+
+    class FakeAzureIdentity:
+        AzureCliCredential = FakeAzureCliCredential
+        ManagedIdentityCredential = FakeManagedIdentityCredential
+        EnvironmentCredential = FakeEnvironmentCredential
+        DefaultAzureCredential = FakeDefaultAzureCredential
+
+    monkeypatch.delenv("CONTRACTHUB_ADLS_BEARER_TOKEN", raising=False)
+    monkeypatch.setattr(
+        loader,
+        "_import_azure_datalake_sdk",
+        lambda: {
+            "AccessToken": object,
+            "DataLakeFileClient": object,
+            "DataLakeServiceClient": object,
+        },
+    )
+    monkeypatch.setattr(
+        loader.importlib,
+        "import_module",
+        lambda name: (
+            FakeAzureIdentity
+            if name == "azure.identity"
+            else (_ for _ in ()).throw(ImportError(name))
+        ),
+    )
+
+    # 1. Test "cli" / "azurecli"
+    monkeypatch.setenv("CONTRACTHUB_AZURE_AUTH_METHOD", "cli")
+    credential = loader._resolve_adls2_credential("abfss://c@acct.dfs.core.windows.net/path.yaml")  # noqa: SLF001
+    assert isinstance(credential, FakeAzureCliCredential)
+
+    # 2. Test "msi" / "managedidentity"
+    monkeypatch.setenv("CONTRACTHUB_AZURE_AUTH_METHOD", "managedidentity")
+    credential = loader._resolve_adls2_credential("abfss://c@acct.dfs.core.windows.net/path.yaml")  # noqa: SLF001
+    assert isinstance(credential, FakeManagedIdentityCredential)
+
+    # 3. Test "env" / "environment"
+    monkeypatch.setenv("CONTRACTHUB_AZURE_AUTH_METHOD", "env")
+    credential = loader._resolve_adls2_credential("abfss://c@acct.dfs.core.windows.net/path.yaml")  # noqa: SLF001
+    assert isinstance(credential, FakeEnvironmentCredential)
+
+    # 4. Test "default" / unset
+    monkeypatch.setenv("CONTRACTHUB_AZURE_AUTH_METHOD", "default")
+    credential = loader._resolve_adls2_credential("abfss://c@acct.dfs.core.windows.net/path.yaml")  # noqa: SLF001
+    assert isinstance(credential, FakeDefaultAzureCredential)
