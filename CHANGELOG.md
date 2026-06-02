@@ -2,6 +2,33 @@
 
 <!-- version list -->
 
+## v0.6.0 (2026-06-02)
+
+### Documentation
+
+- Refactor dependency installation documentation and update CI pipelines to use all-extras for
+  development environments
+  ([`0665e7d`](https://github.com/ElliotSun/contract-hub/commit/0665e7d86385667132918e9729dddbba4f1cf906))
+
+### Features
+
+- Implement dynamic configuration for Databricks credentials and add AI agent documentation
+  ([`1ee4ae4`](https://github.com/ElliotSun/contract-hub/commit/1ee4ae4068aed243c95986951245e347fadd3a70))
+
+- Introduce configuration management system and refine dependency organization with optional feature
+  sets
+  ([`0960b63`](https://github.com/ElliotSun/contract-hub/commit/0960b63c4d75cf5c3523f79e8665826ebd345633))
+
+- Update contract loader to support apiVersion and v3 prefix, and adjust test error matching and
+  configuration mocks
+  ([`464e72b`](https://github.com/ElliotSun/contract-hub/commit/464e72b77f6160e5cd1c2ddae59be04c508b81c7))
+
+### Testing
+
+- Add apiVersion to test fixtures and mock ADLS OAuth token resolution in CLI tests
+  ([`f46a045`](https://github.com/ElliotSun/contract-hub/commit/f46a045da2af56521f33dc86f5e59ab717540bbe))
+
+
 ## v0.5.0 (2026-05-30)
 
 ### Features
