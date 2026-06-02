@@ -327,6 +327,8 @@ def test_resolve_adls2_credential_uses_default_azure_credential(monkeypatch):
     class FakeAzureIdentity:
         DefaultAzureCredential = FakeDefaultAzureCredential
 
+    monkeypatch.setattr(loader.config_manager, "get", lambda *args, **kwargs: "default")
+
     monkeypatch.delenv("CONTRACTHUB_ADLS_BEARER_TOKEN", raising=False)
     monkeypatch.setattr(
         loader,
