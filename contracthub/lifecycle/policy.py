@@ -5,7 +5,6 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-LOGGER = logging.getLogger(__name__)
 from open_data_contract_standard.model import (
     OpenDataContractStandard,
     SchemaObject,
@@ -19,6 +18,8 @@ from contracthub.lifecycle.helpers import (
     normalize_status,
     schema_items,
 )
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)

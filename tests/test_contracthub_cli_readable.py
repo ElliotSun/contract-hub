@@ -22,6 +22,10 @@ def test_cli_import_supports_delta_table_alias(
         "datacontract.data_contract.DataContract.import_from_source",
         _fake_import_from_source,
     )
+    monkeypatch.setattr(
+        "contracthub.interfaces.cli._resolve_adls_oauth_token_from_config",
+        lambda: "fake-token",
+    )
     output_path = tmp_path / "out.yaml"
     monkeypatch.setattr(
         "sys.argv",

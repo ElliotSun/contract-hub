@@ -14,7 +14,7 @@ class GraphNode:
     name: str
     id: str = ""
     type: str = "Table"
-    properties: Dict[str, Any] = None
+    properties: Dict[str, Any] | None = None
 
     def __post_init__(self):
         if self.properties is None:
@@ -30,7 +30,7 @@ class GraphEdge:
     label: str
     is_junction_edge: bool = False
     type: str = ""
-    properties: Dict[str, Any] = None
+    properties: Dict[str, Any] | None = None
 
     def __post_init__(self):
         if self.properties is None:
@@ -162,12 +162,12 @@ class GraphExporter(Exporter):
         schema_name: str = "all",
         server: str = "",
         sql_server_type: str = "",
-        export_args: Dict[str, Any] = None,
-    ) -> tuple[List[GraphNode], List[GraphEdge]]:
+        export_args: Dict[Any, Any] | None = None,
+    ) -> Any:
         nodes: List[GraphNode] = []
         edges: List[GraphEdge] = []
 
-        def is_truthy(val) -> bool:
+        def is_truthy(val: Any) -> bool:
             if val is True:
                 return True
             if isinstance(val, str) and val.lower() in ("true", "1"):
@@ -180,7 +180,7 @@ class GraphExporter(Exporter):
             if schema_name != "all" and schema_obj.name != schema_name:
                 continue
 
-            table_name = schema_obj.name
+            table_name = schema_obj.name or ""
 
             # Add Table Node
             table_props = {
@@ -394,8 +394,8 @@ class GraphExporter(Exporter):
 
     @classmethod
     def from_yaml(
-        cls, file_path: Union[str, Path], export_args: Dict[str, Any] = None
-    ) -> Union[tuple[List[GraphNode], List[GraphEdge]], str]:
+        cls, file_path: Union[str, Path], export_args: Dict[Any, Any] | None = None
+    ) -> Any:
         contract = contract_to_model(file_path)
         exporter = cls()
         return exporter.export(data_contract=contract, export_args=export_args)

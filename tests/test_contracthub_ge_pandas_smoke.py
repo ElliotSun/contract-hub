@@ -47,7 +47,7 @@ def test_generate_expectation_suite_can_validate_pandas_dataframe_with_real_ge_r
         def export(data_contract, schema_name, server, sql_server_type, export_args):
             assert data_contract == sample_custom_ge_quality_contract_model
             assert schema_name == "orders"
-            assert export_args["engine"] == "spark"
+            assert export_args["engine"] == "pandas"
             return json.dumps(
                 {
                     "name": "suite.orders",

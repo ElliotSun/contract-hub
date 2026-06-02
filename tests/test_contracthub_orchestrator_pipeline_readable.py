@@ -49,7 +49,7 @@ def test_pipeline_import_schema_supports_delta_and_sql(monkeypatch):
 def test_pipeline_import_schema_requires_uc_credentials():
     pipeline = ContractPipeline()
 
-    with pytest.raises(Exception, match="workspace_url and token"):
+    with pytest.raises(Exception, match="databricks.workspace_url and databricks.token"):
         pipeline.import_schema("uc", "main.silver.orders")
 
 

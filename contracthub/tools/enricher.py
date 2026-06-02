@@ -21,10 +21,10 @@ from contracthub.constants import (
 
 
 class ContractEnricher:
-    def __init__(self, llm_provider: BaseLLMProvider = None):
+    def __init__(self, llm_provider: BaseLLMProvider | None = None):
         self.llm_provider = llm_provider or OpenAILLMProvider()
 
-    def process(self, contract_path: str, max_workers: int = 1, mode: str = "label", system_prompt: str = None, user_prompt: str = None):
+    def process(self, contract_path: str, max_workers: int = 1, mode: str = "label", system_prompt: str | None = None, user_prompt: str | None = None) -> None:
         """
         Process the contract.
         mode can be 'label' (for tagging existing relationships), 'infer_joins' (for discovering new ones),
@@ -35,10 +35,10 @@ class ContractEnricher:
         domain_context = "Unknown"
         if odcs.domain:
             domain_context = odcs.domain
-        elif getattr(odcs, "info", None) and getattr(odcs.info, "title", None):
-            domain_context = odcs.info.title
-        elif getattr(odcs, "info", None) and getattr(odcs.info, "description", None):
-            domain_context = odcs.info.description
+        elif odcs.name:
+            domain_context = odcs.name
+        elif odcs.description:
+            domain_context = str(odcs.description)
 
         if mode == "label":
             self._process_labels(odcs, contract_path, domain_context, max_workers, system_prompt, user_prompt)
@@ -348,11 +348,7 @@ class ContractEnricher:
                             cols_info.append(f"{p.name} ({p.logicalType})")
                     columns_info_str = ", ".join(cols_info)
 
-                    contract_auth_defs = (
-                        getattr(odcs.info, "authoritativeDefinitions", [])
-                        if getattr(odcs, "info", None)
-                        else []
-                    )
+                    contract_auth_defs = getattr(odcs, "authoritativeDefinitions", []) or []
                     schema_auth_defs = schema.authoritativeDefinitions or []
                     all_auth_defs = contract_auth_defs + schema_auth_defs
                     auth_defs_str = (
@@ -413,11 +409,7 @@ class ContractEnricher:
                 if schema.properties:
                     for prop in schema.properties:
                         if not prop.description:
-                            contract_auth_defs = (
-                                getattr(odcs.info, "authoritativeDefinitions", [])
-                                if getattr(odcs, "info", None)
-                                else []
-                            )
+                            contract_auth_defs = getattr(odcs, "authoritativeDefinitions", []) or []
                             schema_auth_defs = schema.authoritativeDefinitions or []
                             prop_auth_defs = (
                                 getattr(prop, "authoritativeDefinitions", []) or []
@@ -478,11 +470,7 @@ class ContractEnricher:
 
                 if schema.properties:
                     for prop in schema.properties:
-                        contract_auth_defs = (
-                            getattr(odcs.info, "authoritativeDefinitions", [])
-                            if getattr(odcs, "info", None)
-                            else []
-                        )
+                        contract_auth_defs = getattr(odcs, "authoritativeDefinitions", []) or []
                         schema_auth_defs = schema.authoritativeDefinitions or []
                         prop_auth_defs = (
                             getattr(prop, "authoritativeDefinitions", []) or []

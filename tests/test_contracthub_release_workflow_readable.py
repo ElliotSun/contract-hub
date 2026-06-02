@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 
 import pytest
 from open_data_contract_standard.model import CustomProperty, SchemaProperty
@@ -12,7 +11,6 @@ from contracthub.core.release import (
     prepare_release_candidate,
     suggest_release_version,
 )
-from contracthub.utils.yaml_utils import dump_yaml
 
 
 def test_release_classification_returns_none_for_description_only_change(

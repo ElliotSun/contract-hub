@@ -67,16 +67,17 @@ class ContractValidator:
         cli_dc = DataContract(data_contract=contract)
         run_result = cli_dc.lint()
 
-        for check in run_result.checks:
-            # check.result is an enum DataContract ResultEnum
-            if check.result.name != "passed":
-                issues.append(
-                    ValidationIssue(
-                        path="datacontract-cli",
-                        message=check.reason or check.name or "Validation failed",
-                        severity="error",
+        if run_result and run_result.checks:
+            for check in run_result.checks:
+                # check.result is an enum DataContract ResultEnum, but mypy might not know
+                if check.result and getattr(check.result, "name", str(check.result)) != "passed":
+                    issues.append(
+                        ValidationIssue(
+                            path="datacontract-cli",
+                            message=check.reason or getattr(check, "name", "Validation failed"),
+                            severity="error",
+                        )
                     )
-                )
 
         # 3. Advanced semantic checks
         if contract and contract.schema_:

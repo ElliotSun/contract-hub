@@ -262,4 +262,4 @@ def test_generate_expectation_suite_surfaces_clear_error_when_pyspark_is_missing
     monkeypatch.setattr(ge_adapter.exporter_factory, "create", lambda _: FakeExporter())
 
     with pytest.raises(Exception, match="requires pyspark"):
-        ge_adapter.generate_expectation_suite(contract=object(), schema_name="all")
+        ge_adapter.generate_expectation_suite(contract=object(), schema_name="all", engine="spark")

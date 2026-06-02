@@ -26,7 +26,9 @@ LOGGER = logging.getLogger(__name__)
 
 
 @contextlib.contextmanager
-def _databricks_env(workspace_url: str, token: str) -> Iterator[None]:
+def _databricks_env(
+    workspace_url: str | None, token: str | None, profile: str | None
+) -> Iterator[None]:
     """Temporarily set Databricks env vars and restore them on exit.
 
     This context manager ensures the process-global environment is restored
@@ -35,10 +37,15 @@ def _databricks_env(workspace_url: str, token: str) -> Iterator[None]:
     env_keys = (
         "DATACONTRACT_DATABRICKS_SERVER_HOSTNAME",
         "DATACONTRACT_DATABRICKS_TOKEN",
+        "DATABRICKS_CONFIG_PROFILE",
     )
     backup = {key: os.environ.get(key) for key in env_keys}
-    os.environ["DATACONTRACT_DATABRICKS_SERVER_HOSTNAME"] = workspace_url
-    os.environ["DATACONTRACT_DATABRICKS_TOKEN"] = token
+    if workspace_url:
+        os.environ["DATACONTRACT_DATABRICKS_SERVER_HOSTNAME"] = workspace_url
+    if token:
+        os.environ["DATACONTRACT_DATABRICKS_TOKEN"] = token
+    if profile:
+        os.environ["DATABRICKS_CONFIG_PROFILE"] = profile
     try:
         yield
     finally:
@@ -52,8 +59,8 @@ def _databricks_env(workspace_url: str, token: str) -> Iterator[None]:
 def import_unity_contract(
     *,
     table_fqn: str,
-    workspace_url: str | None,
-    token: str | None,
+    workspace_url: str | None = None,
+    token: str | None = None,
     sql_http_path: str | None = None,
     extract_lineage: bool = False,
 ) -> OpenDataContractStandard:
@@ -61,13 +68,19 @@ def import_unity_contract(
 
     Raises ``ValueError`` when required credentials are missing.
     """
-    if not workspace_url or not token:
+    from contracthub.core.config import config_manager
+    workspace_url = workspace_url or config_manager.get("databricks.workspace_url")
+    token = token or config_manager.get("databricks.token")
+    sql_http_path = sql_http_path or config_manager.get("databricks.sql_http_path")
+    profile = config_manager.get("databricks.profile")
+
+    if not profile and (not workspace_url or not token):
         raise ValueError(
-            "workspace_url and token are required for Unity Catalog imports"
+            "databricks.workspace_url and databricks.token (or databricks.profile) are required for Unity Catalog imports"
         )
 
     LOGGER.info("Importing Unity Catalog contract: %s", table_fqn)
-    with _databricks_env(workspace_url, token):
+    with _databricks_env(workspace_url, token, profile):
         imported = DataContract.import_from_source(
             format="unity",
             source=None,

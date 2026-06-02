@@ -10,8 +10,6 @@ from open_data_contract_standard.model import (
     SchemaProperty,
 )
 
-LOGGER = logging.getLogger(__name__)
-
 from contracthub.constants import (
     EDITABLE_PROPERTY_FIELDS,
     EDITABLE_SCHEMA_FIELDS,
@@ -22,6 +20,8 @@ from contracthub.utils.schema_utils import (
     contract_to_model,
     ensure_schema_key,
 )
+
+LOGGER = logging.getLogger(__name__)
 
 
 def normalize_draft_contract(
