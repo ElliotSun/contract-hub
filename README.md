@@ -149,15 +149,37 @@ stateDiagram-v2
 
 ### Installation Details
 
+ContractHub is designed to be lightweight by default. Core functionality (like basic GitOps and schema validation) requires minimal dependencies. You can install specific feature sets using optional extras:
+
+| Extra Group | Description | Key Dependencies Installed |
+|---|---|---|
+| **`core`** | (Default) Basic schema validation and GitOps engine. | `pydantic`, `PyYAML`, `datacontract-cli` |
+| **`delta`** | Required for `delta-table` and `delta-ddl` format importers. | `deltalake`, `pyarrow`, `pandas` |
+| **`sql`** | Required for SQL dialect parsing and `sql-folder` imports. | `SQLAlchemy`, `sqlglot` |
+| **`databricks`**| Required for Unity Catalog integration. | `databricks-sql-connector`, `pyspark` |
+| **`azure`** | Required for ADLS2 (`abfss://`) native storage access. | `azure-identity`, `azure-storage-file-datalake` |
+| **`quality`** | Required for exporting Great Expectations (`export-ge`). | `great_expectations`, `pandas` |
+| **`llm`** | Required for LLM Semantic Enrichment (`enrich`). | `openai`, `litellm` |
+| **`graph`** | Required for Neo4j/Cypher Graph exports. | `networkx` |
+| **`tui`** | Required to launch the interactive graphical interface. | `textual` |
+| **`all`** | Installs all of the above for a complete environment. | *All optional dependencies* |
+
+**Installation Examples:**
 ```bash
-# Basic setup with dev tools
-uv sync --group dev
+# Basic installation (Core only)
+pip install contract-hub
 
-# With Azure-backed contract storage support
-uv sync --group dev --extra azure
+# Install with TUI and Unity Catalog support
+pip install "contract-hub[tui,databricks]"
 
-# With Graph network capabilities
-uv sync --group dev --extra graph
+# Install EVERYTHING
+pip install "contract-hub[all]"
+```
+
+*If you are using `uv` for local development:*
+```bash
+# Sync all dependencies including dev tools and all extras
+uv sync --all-extras --group dev --frozen
 ```
 
 ### Core Components & Features
