@@ -8,7 +8,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
+import logging
 import requests
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _get_git_config(repo_path: str, key: str) -> str | None:
@@ -21,8 +24,8 @@ def _get_git_config(repo_path: str, key: str) -> str | None:
         )
         if result.returncode == 0 and result.stdout.strip():
             return result.stdout.strip()
-    except Exception:
-        pass
+    except Exception as e:
+        LOGGER.debug(f"Failed to get git config {key}: {e}")
     return None
 
 
@@ -31,8 +34,8 @@ def _set_git_config(repo_path: str, key: str, value: str) -> None:
         subprocess.run(
             ["git", "-C", repo_path, "config", "--local", key, value], check=True
         )
-    except Exception:
-        pass
+    except Exception as e:
+        LOGGER.debug(f"Failed to set git config {key}: {e}")
 
 
 class GitProviderConfig(Protocol):
@@ -126,8 +129,8 @@ class AzureDevOpsProvider:
                     reviewers=reviewers,
                     repo_path=repo_path,
                 )
-            except Exception:
-                pass # Fall through to fallback chain
+            except Exception as e:
+                LOGGER.debug(f"Cached CLI method failed: {e}")
 
         if cached_method == "api":
             try:
@@ -138,8 +141,8 @@ class AzureDevOpsProvider:
                     description=description,
                     reviewers=reviewers,
                 )
-            except Exception:
-                pass # Fall through to fallback chain
+            except Exception as e:
+                LOGGER.debug(f"Cached API method failed: {e}")
 
         # 1. Native CLI
         try:
@@ -154,8 +157,8 @@ class AzureDevOpsProvider:
             if repo_path:
                 _set_git_config(repo_path, cache_key, "cli")
             return result
-        except Exception:
-            pass
+        except Exception as e:
+            LOGGER.debug(f"Native CLI PR creation failed: {e}")
 
         # 2. CLI with token
         try:
@@ -171,8 +174,8 @@ class AzureDevOpsProvider:
             if repo_path:
                 _set_git_config(repo_path, cache_key, "cli")
             return result
-        except Exception:
-            pass
+        except Exception as e:
+            LOGGER.debug(f"CLI with token PR creation failed: {e}")
 
         # 3. API Fallback
         result = self._create_pull_request_api(
@@ -335,8 +338,8 @@ class GitHubProvider:
                     reviewers=reviewers,
                     repo_path=repo_path,
                 )
-            except Exception:
-                pass # Fall through to fallback chain
+            except Exception as e:
+                LOGGER.debug(f"Cached CLI method failed (GitHub): {e}")
 
         if cached_method == "api":
             try:
@@ -347,8 +350,8 @@ class GitHubProvider:
                     description=description,
                     reviewers=reviewers,
                 )
-            except Exception:
-                pass # Fall through to fallback chain
+            except Exception as e:
+                LOGGER.debug(f"Cached API method failed (GitHub): {e}")
 
         # 1. Native CLI
         try:
@@ -363,8 +366,8 @@ class GitHubProvider:
             if repo_path:
                 _set_git_config(repo_path, cache_key, "cli")
             return result
-        except Exception:
-            pass
+        except Exception as e:
+            LOGGER.debug(f"Native CLI PR creation failed (GitHub): {e}")
 
         # 2. CLI with token
         try:
@@ -380,8 +383,8 @@ class GitHubProvider:
             if repo_path:
                 _set_git_config(repo_path, cache_key, "cli")
             return result
-        except Exception:
-            pass
+        except Exception as e:
+            LOGGER.debug(f"CLI with token PR creation failed (GitHub): {e}")
 
         # 3. API Fallback
         result = self._create_pull_request_api(

@@ -5,8 +5,6 @@ from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from typing import Any, Iterable
 
-LOGGER = logging.getLogger(__name__)
-
 from open_data_contract_standard.model import (
     CustomProperty,
     DataQuality,
@@ -14,6 +12,8 @@ from open_data_contract_standard.model import (
     SchemaObject,
     SchemaProperty,
 )
+
+LOGGER = logging.getLogger(__name__)
 
 BUSINESS_METADATA_KEYS = {
     "description",

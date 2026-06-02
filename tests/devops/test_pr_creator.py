@@ -1,7 +1,6 @@
-import pytest
-import subprocess
 from unittest.mock import patch, MagicMock
-from contracthub.devops.pr_creator import _get_git_config, _set_git_config
+from contracthub.devops.pr_creator import _get_git_config, _set_git_config, GitHubConfig, GitHubProvider, AzureDevOpsConfig, AzureDevOpsProvider
+import os
 
 @patch("contracthub.devops.pr_creator.subprocess.run")
 def test_get_git_config_success(mock_run):
@@ -41,9 +40,6 @@ def test_set_git_config_exception_swallowed(mock_run):
     mock_run.side_effect = Exception("git error")
     # Should not raise
     _set_git_config("/mock/repo", "contracthub.pr-auth-method", "api")
-
-import os
-from contracthub.devops.pr_creator import GitHubConfig, GitHubProvider
 
 @patch.dict(os.environ, {"CONTRACTHUB_PR_METHOD": "api"}, clear=True)
 @patch.object(GitHubProvider, "_create_pull_request_api")
@@ -154,8 +150,6 @@ def test_github_provider_fallback_chain(mock_cli, mock_api, mock_set_cache, mock
     # Assert cache was set to api
     mock_set_cache.assert_called_once_with("/mock/repo", "contracthub.pr-auth-method", "api")
 
-
-from contracthub.devops.pr_creator import AzureDevOpsConfig, AzureDevOpsProvider
 
 @patch.dict(os.environ, {}, clear=True)
 @patch("contracthub.devops.pr_creator._get_git_config")

@@ -99,7 +99,7 @@ class SparkSqlContractExporter:
         ddl = exporter.export(
             data_contract=prepared_contract,
             schema_name="all",
-            server=None,
+            server="",
             sql_server_type=sql_server_type,
             export_args=export_args,
         )

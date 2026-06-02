@@ -1,0 +1,19 @@
+azure:
+  auth_method: cli
+  scope: https://storage.azure.com/.default
+git:
+  provider: azure
+  organization: your-organization
+  project: your-project
+  repository_id: your-repo-id
+databricks:
+  profile: ''
+  workspace_url: ''
+  token: ''
+  sql_http_path: ''
+core:
+  enforce_lifecycle: true
+llm:
+  model_name: gpt-4-turbo
+  api_key: ''
+  base_url: ''

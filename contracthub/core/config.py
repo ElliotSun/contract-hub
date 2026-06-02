@@ -2,6 +2,9 @@ import os
 import yaml
 from pathlib import Path
 from typing import Any, Optional, Dict
+import logging
+
+LOGGER = logging.getLogger(__name__)
 
 class ConfigManager:
     """
@@ -24,8 +27,8 @@ class ConfigManager:
                 with open(global_config_path, "r", encoding="utf-8") as f:
                     global_data = yaml.safe_load(f) or {}
                     self._update_nested(self.config_data, global_data)
-            except Exception:
-                pass # Fail silently if global config is malformed or unreadable
+            except Exception as e:
+                LOGGER.warning(f"Failed to load global config from {global_config_path}: {e}")
 
         # Load local overriding global
         local_config_path = Path.cwd() / ".contracthub.yaml"
@@ -34,8 +37,25 @@ class ConfigManager:
                 with open(local_config_path, "r", encoding="utf-8") as f:
                     local_data = yaml.safe_load(f) or {}
                     self._update_nested(self.config_data, local_data)
-            except Exception:
-                pass # Fail silently if local config is malformed
+            except Exception as e:
+                LOGGER.warning(f"Failed to load local config from {local_config_path}: {e}")
+
+    def load_from_path(self, path: str | Path) -> None:
+        """Load configuration from a specific YAML file path, overriding current settings."""
+        config_path = Path(path)
+        if config_path.exists():
+            try:
+                with open(config_path, "r", encoding="utf-8") as f:
+                    data = yaml.safe_load(f) or {}
+                    self._update_nested(self.config_data, data)
+            except Exception as e:
+                LOGGER.warning(f"Failed to load custom config from {config_path}: {e}")
+        else:
+            LOGGER.warning(f"Custom config file not found: {config_path}")
+
+    def update_config(self, config_dict: Dict[str, Any]) -> None:
+        """Inject a dictionary of configurations directly into the manager."""
+        self._update_nested(self.config_data, config_dict)
 
     def _update_nested(self, d: Dict[str, Any], u: Dict[str, Any]) -> Dict[str, Any]:
         for k, v in u.items():

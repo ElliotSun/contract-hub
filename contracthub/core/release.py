@@ -5,8 +5,6 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-LOGGER = logging.getLogger(__name__)
-
 from open_data_contract_standard.model import OpenDataContractStandard
 
 from contracthub.lifecycle.helpers import (
@@ -16,6 +14,8 @@ from contracthub.lifecycle.helpers import (
 )
 from contracthub.lifecycle.policy import BreakingChange, evaluate_merge_policy
 from contracthub.utils.schema_utils import contract_to_dict, contract_to_model
+
+LOGGER = logging.getLogger(__name__)
 
 RequiredBump = Literal["none", "minor", "major"]
 ActualVersionBump = Literal["patch", "minor", "major"]

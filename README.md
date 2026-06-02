@@ -4,9 +4,9 @@
 [![Python versions](https://img.shields.io/pypi/pyversions/contract-hub.svg)](https://pypi.org/project/contract-hub/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Production-grade Lifecycle Governance for Open Data Contracts (ODCS).
+Production-grade Lifecycle Governance for Open Data Contracts (ODCS v3.0+).
 
-Stop managing isolated YAML files. ContractHub elevates data contracts from mere format validators to enterprise-grade, lifecycle-aware infrastructure. Designed for Data Mesh and Modern Data Stack environments, it enforces deterministic merges, graph-native lineage, and CI/CD promotion for entire Data Products.
+Stop managing isolated YAML files. ContractHub elevates data contracts from mere format validators to enterprise-grade, lifecycle-aware infrastructure. Designed for Data Mesh and Modern Data Stack environments, it enforces deterministic merges, graph-native lineage, and CI/CD promotion for entire Data Products. All powered by a dynamic configuration system that eliminates hardcoded CLI credentials.
 
 ```mermaid
 graph LR
@@ -55,6 +55,14 @@ While basic tools validate single-table schema syntax, ContractHub tackles the r
 * **🚦 Strict Lifecycle State Machine**: Built-in rules for draft -> active -> deprecated. Active contracts cannot be silently broken.
 * **🛡️ Invisible GitOps**: Deterministic merge engines that catch breaking changes (e.g., narrowing decimal precision) before they hit production.
 * **🕸️ Graph-Native Lineage**: Exports contracts as Property Graphs (Paths Over Joins), enabling cross-domain impact analysis in Neo4j.
+
+## 🤝 ContractHub vs. Unity Catalog (Why both?)
+If you are already using Databricks Unity Catalog (UC), you might wonder why you need Data Contracts or ContractHub. Unity Catalog is a world-class technical catalog and governance engine for your active data platform, but ContractHub complements it by **shifting governance left**:
+
+1. **Catch Breaks Before Production (GitOps)**: UC manages state *after* code is deployed. ContractHub acts in your Git CI/CD pipeline. If a developer drops a column, ContractHub's policy engine catches it in the Pull Request and blocks the merge, preventing the breakage from ever reaching UC.
+2. **Platform Agnostic Semantic Layer**: UC is specific to Databricks. ContractHub uses the Open Data Contract Standard (ODCS) which can export not just to UC, but simultaneously to Great Expectations (quality), Neo4j (lineage), Snowflake, and Kafka. This breaks vendor lock-in and allows multi-platform data sharing.
+3. **Business Semantics over Technical Metadata**: While UC knows your tables and columns, ContractHub bounds multiple tables into a logical "Data Product". It captures SLAs, data granularity, rich business descriptions, and semantic multi-table relationships that go beyond physical constraints.
+4. **Strict Lifecycle Versioning**: ContractHub enforces a strict state machine (`Draft` -> `Active` -> `Deprecated`). A v1.0.0 contract in UC cannot be gracefully deprecated with a timeline without external tooling—ContractHub orchestrates this lifecycle natively.
 
 ## 🚀 Quick Start (Local Sandbox)
 Experience ContractHub locally without any cloud credentials. We use a local folder of SQL DDLs to simulate a Data Product.
@@ -160,7 +168,7 @@ ContractHub provides pure Python, Spark-free importers that register into the `d
 
 * **Delta Importers (`delta-table`)**: Parses Delta tables. You can import multiple Delta tables into a single data contract using the `--tables` parameter containing a comma-separated list of paths.
 * **SQL Importers (`sql-folder` / `delta-ddl`)**: Parses Spark/Databricks-style Delta DDL statically to import structure and foreign key relationships from DDL constraints.
-* **Unity Catalog Importer (`unity`)**: Imports from Databricks Unity Catalog, including a best-effort relationship enrichment step to read Unity table metadata for foreign key constraints (single and multi-column).
+* **Unity Catalog Importer (`unity`)**: Imports from Databricks Unity Catalog. Securely fetches credentials (e.g. `workspace_url`, `token`, or `profile`) from `.contracthub.yaml`. Includes a best-effort relationship enrichment step to read Unity table metadata for foreign key constraints.
 
 #### 2. Validation & Quality Exports
 
@@ -224,8 +232,61 @@ llm:
   model_name: gpt-4-turbo
   api_key: ""
   base_url: ""
+databricks:
+  profile: "default"
+  # workspace_url: "https://adb-xxx.azuredatabricks.net"
+  # token: "dapi..."
 ```
-This configuration is automatically picked up by the CLI and the TUI.
+This configuration is automatically picked up by the CLI and the SDK. 
+
+**Using the SDK (Overriding Configuration)**
+If you are building your own tools or CLI on top of ContractHub, you don't have to rely on the `.contracthub.yaml` file. You can dynamically inject or override configuration using the `ConfigManager` singleton:
+
+```python
+from contracthub.core.config import config_manager
+from contracthub.core.loader import ContractLoader
+
+# 1. Inject configuration via a Python Dictionary (Overrides YAML)
+config_manager.update_config({
+    "azure": {
+        "auth_method": "managed_identity"
+    },
+    "databricks": {
+        "workspace_url": "https://adb-1234.azuredatabricks.net",
+        "token": "dapi..."
+    }
+})
+
+# 2. Or load from a custom path if your tool uses a different config file
+# config_manager.load_from_path("/etc/my-custom-tool/config.yaml")
+
+# Now any ContractHub operations will use your injected config
+loader = ContractLoader()
+```
+
+**Reusing the Textual TUI (`contracthub tui`)**
+The ContractHub TUI is designed to dynamically render forms based on python's standard `argparse.ArgumentParser`. If you are building a custom CLI that extends ContractHub, you can get a free graphical interface for your commands.
+
+The TUI automatically:
+- Recursively flattens deeply nested sub-commands into a clean sidebar.
+- Renders `argparse._ArgumentGroup`s into elegant `Collapsible` panels, hiding irrelevant arguments (e.g. keeping `--workspace-url` hidden unless expanding Unity Catalog options).
+
+Simply pass your custom parser into the `ContractHubTUI` class:
+
+```python
+import argparse
+from contracthub.tui.app import ContractHubTUI
+
+# 1. Define your custom CLI
+my_parser = argparse.ArgumentParser(prog="my_custom_tool")
+subparsers = my_parser.add_subparsers(dest="command")
+sync_cmd = subparsers.add_parser("sync-remote")
+sync_cmd.add_argument("--force", action="store_true")
+
+# 2. Launch the TUI dynamically generated from your parser!
+app = ContractHubTUI(cli_parser=my_parser, excluded_commands=["hidden_cmd"])
+app.run()
+```
 
 **Importing Data Contracts**
 ```bash
@@ -236,16 +297,15 @@ contracthub import --format delta-ddl --source ./sql/orders --output ./contracts
 contracthub import --format sql-folder --source ./ddl/orders.sql --output ./contracts/orders.yaml
 
 # Import multiple Delta Tables from ADLS
-# Includes `--azure-auth` to automatically fetch ADLS OAuth token via azure-identity DefaultAzureCredential
+# Automatically fetches ADLS OAuth token via azure.auth_method (e.g. managed_identity or cli) in config
 contracthub import --format delta-table \
   --source abfss://container@acct.dfs.core.windows.net/orders \
   --tables abfss://container@acct.dfs.core.windows.net/payments \
-  --azure-auth \
   --output ./contracts/finance.yaml
 
 # Import from Unity Catalog
+# Automatically uses databricks.profile or token from .contracthub.yaml
 contracthub import --format unity --source main.silver.orders \
-  --workspace-url https://adb.example --token $DATABRICKS_TOKEN \
   --output ./contracts/orders.yaml
 ```
 
@@ -255,7 +315,7 @@ contracthub import --format unity --source main.silver.orders \
 contracthub merge --base ./generated.yaml --business ./contracts/orders.yaml --output ./contracts/orders.merged.yaml
 
 # Run dry run plan of changes
-contracthub plan --source ./generated.yaml --base ./contracts/orders.yaml
+contracthub plan --type unity --source main.silver.orders --base ./contracts/orders.yaml
 
 # Note: LLM credentials (model_name, api_key, base_url) should be configured in your .contracthub.yaml file
 
@@ -276,8 +336,8 @@ datacontract export --format graph --export-args '{"format": "json"}' ./contract
 
 **CI/CD & DevOps (PRs & Releases)**
 ```bash
-# Single Contract PR Creation
-contracthub create-pr --organization org --project proj --repository-id repo --pat-token $ADO_PAT \
+# Single Contract PR Creation (reads org/project/repo from config)
+contracthub create-pr --pat-token $ADO_PAT \
   --repo-path . --source-branch contracthub/update-orders --target-branch main \
   --commit-message "Update orders contract" --title "Update orders contract" --description "Automated update"
 
@@ -288,11 +348,11 @@ contracthub release classify --base ./contracts/orders.main.yaml --candidate ./c
 contracthub release prepare --base ./contracts/orders.main.yaml --candidate ./contracts/orders.release.yaml \
   --release-tag orders/v1.2.0 --output ./artifacts/orders.promoted.yaml
 
-# Open a PR for a promoted release candidate
+# Open a PR for a promoted release candidate (reads org/project/repo from config)
 contracthub release create-pr --base ./contracts/orders.main.yaml --candidate ./contracts/orders.release.yaml \
   --release-tag orders/v1.2.0 --repo-path . --contract-path contracts/orders.yaml \
   --source-branch release/orders-v1.2.0 --target-branch release \
-  --organization org --project proj --repository-id repo --pat-token $ADO_PAT --push
+  --pat-token $ADO_PAT --push
 
 # Multi-Contract (Repo-level) Release Management
 contracthub release classify-repo --base-root ./contracts-main --candidate-root ./contracts-feature

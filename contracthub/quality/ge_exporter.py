@@ -117,7 +117,7 @@ def generate_expectation_suite(
         exported = exporter.export(
             data_contract=contract,
             schema_name=schema_name,
-            server=None,
+            server="",
             sql_server_type="auto",
             export_args={"engine": engine, "suite_name": suite_name},
         )
@@ -259,7 +259,8 @@ def _create_expectation_object(
     """Create a runtime expectation object when the installed GE version expects it."""
     try:
         expectation_impl = get_expectation_impl(expectation_type)
-    except Exception:
+    except (ImportError, AttributeError, KeyError) as e:
+        LOGGER.debug(f"Could not load GE expectation impl {expectation_type}: {e}")
         return None
 
     if not callable(expectation_impl):
@@ -282,7 +283,8 @@ def _create_expectation_object(
 
     try:
         return expectation_impl(**init_kwargs)
-    except Exception:
+    except Exception as e:
+        LOGGER.debug(f"Failed to instantiate GE expectation {expectation_type}: {e}")
         return None
 
 
@@ -291,12 +293,12 @@ def _add_expectation(expectation_suite: Any, config: Any) -> None:
         try:
             expectation_suite.add_expectation(expectation_configuration=config)
             return
-        except Exception:
+        except Exception as e1:
             try:
                 expectation_suite.add_expectation(config)
                 return
-            except Exception:
-                pass
+            except Exception as e2:
+                LOGGER.debug(f"Failed both add_expectation signatures: {e1} / {e2}")
 
     expectations = getattr(expectation_suite, "expectations", None)
     if isinstance(expectations, list):
@@ -310,7 +312,7 @@ def _load_ge_suite_classes() -> tuple[Any, Any]:
         from great_expectations.core import ExpectationConfiguration, ExpectationSuite
 
         return ExpectationSuite, ExpectationConfiguration
-    except Exception as first_exc:
+    except ImportError as first_exc:
         try:
             from great_expectations.core.expectation_configuration import (
                 ExpectationConfiguration,
@@ -318,7 +320,7 @@ def _load_ge_suite_classes() -> tuple[Any, Any]:
             from great_expectations.core.expectation_suite import ExpectationSuite
 
             return ExpectationSuite, ExpectationConfiguration
-        except Exception as second_exc:
+        except ImportError as second_exc:
             try:
                 from great_expectations.expectations.expectation_configuration import (
                     ExpectationConfiguration,
@@ -326,7 +328,7 @@ def _load_ge_suite_classes() -> tuple[Any, Any]:
                 from great_expectations.core.expectation_suite import ExpectationSuite
 
                 return ExpectationSuite, ExpectationConfiguration
-            except Exception as third_exc:
+            except ImportError as third_exc:
                 LOGGER.error(
                     "Great Expectations import failed: %s ; %s ; %s",
                     first_exc,
@@ -344,7 +346,7 @@ def _load_ge_expectation_registry() -> Any:
         from great_expectations.expectations.registry import get_expectation_impl
 
         return get_expectation_impl
-    except Exception as exc:
+    except (ImportError, AttributeError) as exc:
         from contracthub.exceptions import LifecycleError
 
         raise LifecycleError(

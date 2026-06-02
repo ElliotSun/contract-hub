@@ -1,6 +1,5 @@
 import os
 from unittest import mock
-from pathlib import Path
 import pytest
 import yaml
 from contracthub.core.config import ConfigManager

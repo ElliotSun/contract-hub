@@ -72,6 +72,11 @@ def load_contract(
     payload = yaml.safe_load(contract_text)
     if not isinstance(payload, dict):
         raise ValueError("Contract YAML must deserialize into a mapping object")
+        
+    spec_version = payload.get("dataContractSpecification", "")
+    if not str(spec_version).startswith("3."):
+        raise ValueError(f"ContractHub requires ODCS version 3.x, found: {spec_version}")
+        
     return OpenDataContractStandard.model_validate(payload)
 
 
