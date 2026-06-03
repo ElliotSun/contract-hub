@@ -4,9 +4,9 @@
 [![Python versions](https://img.shields.io/pypi/pyversions/contract-hub.svg)](https://pypi.org/project/contract-hub/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Production-grade Lifecycle Governance for Open Data Contracts (ODCS v3.0+).
+**Data Contract Management & Governance for the Modern Data Stack (ODCS v3.0+)**
 
-Stop managing isolated YAML files. ContractHub elevates data contracts from mere format validators to enterprise-grade, lifecycle-aware infrastructure. Designed for Data Mesh and Modern Data Stack environments, it enforces deterministic merges, graph-native lineage, and CI/CD promotion for entire Data Products. All powered by a dynamic configuration system that eliminates hardcoded CLI credentials.
+Stop managing isolated YAML files. ContractHub elevates **data contracts** from mere format validators to enterprise-grade, lifecycle-aware infrastructure. Designed for **Data Mesh** architectures, **Data Engineering** teams, and **Data Product** owners, it provides a seamless **GitOps** pipeline. By enforcing deterministic schema merges, semantic breaking-change policies, and **graph-native data lineage**, ContractHub ensures reliable data integration across platforms like Databricks Unity Catalog, Snowflake, and Great Expectations. All powered by a dynamic configuration system that eliminates hardcoded CLI credentials.
 
 ```mermaid
 graph LR
