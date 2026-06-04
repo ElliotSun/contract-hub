@@ -229,6 +229,61 @@ def test_cli_import_uc_runs_unity_enrichment(
     assert captured["enrich_kwargs"]["token"] == "token"
 
 
+def test_cli_import_uc_uses_config_fallback(
+    sample_unity_contract_model, tmp_path, monkeypatch
+):
+    captured: dict[str, Any] = {}
+
+    def _fake_import_from_source(**kwargs):
+        captured["import_kwargs"] = kwargs
+        return sample_unity_contract_model.model_copy(deep=True)
+
+    def _fake_enrich(contract, **kwargs):  # noqa: ANN001
+        captured["enrich_kwargs"] = kwargs
+        return contract
+
+    monkeypatch.setattr(
+        "contracthub.importers.unity_importer.DataContract.import_from_source",
+        _fake_import_from_source,
+    )
+    monkeypatch.setattr(
+        "contracthub.importers.unity_importer.enrich_unity_contract_relationships",
+        _fake_enrich,
+    )
+
+    # Mock the config manager
+    config_vals = {
+        "databricks.workspace_url": "https://fallback.example",
+        "databricks.token": "fallback-token",
+    }
+    monkeypatch.setattr(
+        "contracthub.core.config.config_manager.get",
+        lambda key, *args, **kwargs: config_vals.get(key, kwargs.get("default")),
+    )
+
+    output_path = tmp_path / "out.yaml"
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "contracthub",
+            "import",
+            "--format",
+            "uc",
+            "--source",
+            "main.silver.orders",
+            "--output",
+            str(output_path),
+        ],
+    )
+
+    exit_code = cli.main()
+
+    assert exit_code == 0
+    assert captured["enrich_kwargs"]["workspace_url"] == "https://fallback.example"
+    assert captured["enrich_kwargs"]["token"] == "fallback-token"
+
+
+
 def test_cli_release_classify_outputs_per_contract_required_bump(
     sample_odcs_model, tmp_path, capsys, monkeypatch
 ):
@@ -421,6 +476,91 @@ def test_cli_release_create_prs_outputs_batch_payload(
     assert exit_code == 0
     assert payload["results"][0]["pullRequest"]["pullRequestId"] == 88
     assert payload["tasks"][0]["release_tag"] == "orders/v1.1.1"
+
+
+def test_cli_release_create_prs_uses_config_fallback(
+    sample_odcs_model, tmp_path, capsys, monkeypatch
+):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+    base_contract = sample_odcs_model.model_copy(deep=True)
+    candidate_contract = sample_odcs_model.model_copy(deep=True)
+    assert candidate_contract.description is not None
+    candidate_contract.description.usage = "Updated descriptive text only"
+
+    base_path = dump_yaml(base_contract, tmp_path / "base.yaml")
+    candidate_path = dump_yaml(candidate_contract, tmp_path / "candidate.yaml")
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            [
+                {
+                    "base": str(base_path),
+                    "candidate": str(candidate_path),
+                    "contract_path": "contracts/orders.yaml",
+                    "release_tag": "orders/v1.1.1",
+                    "source_branch": "release/orders-v1.1.1",
+                    "target_branch": "release",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    captured_kwargs: dict[str, Any] = {}
+
+    def _fake_create_prs_from_manifest(**kwargs):
+        captured_kwargs.update(kwargs)
+        return [
+            {
+                "promotion": {
+                    "contractId": str(base_contract.id),
+                    "targetVersion": "1.1.1",
+                },
+                "pullRequest": {"pullRequestId": 88},
+            }
+        ]
+
+    monkeypatch.setattr(
+        "contracthub.devops.release_workflow.create_release_pull_requests_from_manifest",
+        _fake_create_prs_from_manifest,
+    )
+
+    # Mock the config manager
+    config_vals = {
+        "git.provider": "github",
+        "git.github_owner": "fallback-owner",
+        "git.github_repo": "fallback-repo",
+        "git.github_token": "fallback-token",
+    }
+    monkeypatch.setattr(
+        "contracthub.core.config.config_manager.get",
+        lambda key, *args, **kwargs: config_vals.get(key, kwargs.get("default")),
+    )
+
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "contracthub",
+            "release",
+            "create-prs",
+            "--manifest",
+            str(manifest_path),
+            "--repo-path",
+            str(repo_path),
+            # Notice we are omitting --organization, --project, --github-owner, etc.
+        ],
+    )
+
+    exit_code = cli.main()
+    json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert type(captured_kwargs["config"]).__name__ == "GitHubConfig"
+    assert captured_kwargs["config"].owner == "fallback-owner"
+    assert captured_kwargs["config"].repo == "fallback-repo"
+    assert captured_kwargs["config"].token == "fallback-token"
+
 
 
 def test_cli_release_build_manifest_writes_json_array_and_summary(
