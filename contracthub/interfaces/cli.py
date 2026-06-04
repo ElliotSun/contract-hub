@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import logging
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
@@ -610,6 +611,16 @@ def _run_import(args: argparse.Namespace) -> Path:
     if args.format in {"delta", "delta-table"}:
         oauth_token = _resolve_adls_oauth_token_from_config()
         table_uris = _parse_table_uris(args.tables)
+        
+        # If no explicit tables are provided, use StorageAdapter to discover them
+        if not table_uris:
+            from contracthub.utils.storage_adapter import StorageAdapterFactory
+            adapter = StorageAdapterFactory.get_adapter(args.source)
+            try:
+                table_uris = adapter.discover_delta_tables(args.source, credential=oauth_token)
+            except Exception as e:
+                logging.getLogger("contracthub").warning(f"Failed to auto-discover delta tables: {e}")
+                
         contract = DataContract.import_from_source(
             format="delta",
             source=args.source,
@@ -653,26 +664,30 @@ def _run_import(args: argparse.Namespace) -> Path:
 
 def _resolve_adls_oauth_token_from_config() -> str | None:
     from contracthub.core.config import config_manager
-    auth_method = config_manager.get("azure.auth_method", default="cli")
+    auth_method = config_manager.get("azure.auth_method", "CONTRACTHUB_AZURE_AUTH_METHOD", "default").lower().strip()
     scope = config_manager.get("azure.scope", default=DEFAULT_AZURE_STORAGE_SCOPE)
 
-    if auth_method == "managed_identity":
-        try:
-            from azure.identity import ManagedIdentityCredential
-            credential = ManagedIdentityCredential()
-            return credential.get_token(scope).token
-        except ImportError as exc:
-            from contracthub.exceptions import LifecycleError
-            raise LifecycleError("azure-identity is required for managed_identity auth.") from exc
-    elif auth_method in ("cli", "azure_identity"):
-        try:
-            from azure.identity import DefaultAzureCredential
-            credential = DefaultAzureCredential()
-            return credential.get_token(scope).token
-        except ImportError as exc:
-            from contracthub.exceptions import LifecycleError
-            raise LifecycleError("azure-identity is required for DefaultAzureCredential auth.") from exc
-    return None
+    try:
+        from azure.identity import (
+            ManagedIdentityCredential, 
+            AzureCliCredential, 
+            DefaultAzureCredential,
+            EnvironmentCredential
+        )
+    except ImportError as exc:
+        from contracthub.exceptions import LifecycleError
+        raise LifecycleError("azure-identity is required for ADLS OAuth auth.") from exc
+
+    if auth_method in ("managedidentity", "msi", "managed_identity"):
+        credential = ManagedIdentityCredential()
+    elif auth_method in ("azurecli", "cli"):
+        credential = AzureCliCredential()
+    elif auth_method in ("environment", "env"):
+        credential = EnvironmentCredential()
+    else:
+        credential = DefaultAzureCredential()
+        
+    return credential.get_token(scope).token
 
 
 def _parse_table_uris(value: str | None) -> list[str] | None:
