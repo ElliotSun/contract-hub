@@ -2,6 +2,35 @@
 
 <!-- version list -->
 
+## v0.7.0 (2026-06-04)
+
+### Bug Fixes
+
+- Map azure.auth_method=cli directly to AzureCliCredential in CLI
+  ([`66aaf5b`](https://github.com/ElliotSun/contract-hub/commit/66aaf5b686f064b3641ccb3c404dc72af7d78619))
+
+### Documentation
+
+- Enrich README with Data Engineering and Data Contract SEO keywords
+  ([`4819764`](https://github.com/ElliotSun/contract-hub/commit/481976416d47be14a6c6dc2d96bbd6ecb983aae0))
+
+### Features
+
+- Add s3 extra dependencies and bump contracthub version to 0.6.0
+  ([`d557ced`](https://github.com/ElliotSun/contract-hub/commit/d557ced8704bd1919671fcf197dde9e17ca10cfb))
+
+- Implement StorageAdapterFactory for delta table discovery and add azure auth unit tests
+  ([`11a82c5`](https://github.com/ElliotSun/contract-hub/commit/11a82c548bce4c2f3729582d616d3293fb572608))
+
+### Testing
+
+- Add config manager fallback unit tests for Unity Catalog and GitOps workflows
+  ([`4d3a556`](https://github.com/ElliotSun/contract-hub/commit/4d3a55661938abcff737b73c19c8a90304d1531b))
+
+- Add config override verification to CLI arguments
+  ([`93513b3`](https://github.com/ElliotSun/contract-hub/commit/93513b3206f53353bdb9efc0d84bad8dfbdfee91))
+
+
 ## v0.6.0 (2026-06-02)
 
 ### Documentation
