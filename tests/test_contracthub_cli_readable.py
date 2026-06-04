@@ -9,6 +9,104 @@ from contracthub.interfaces import cli
 from contracthub.utils.yaml_utils import dump_yaml, load_yaml
 
 
+def test_cli_azure_auth_method_mapping(monkeypatch):
+    """Verify that different azure.auth_method values map to the correct Identity Credential classes."""
+    from contracthub.interfaces.cli import _resolve_adls_oauth_token_from_config
+    
+    # Mock config
+    config_vals = {"azure.auth_method": "default", "azure.scope": "test-scope"}
+    monkeypatch.setattr("contracthub.core.config.config_manager.get", 
+                        lambda key, *args, **kwargs: config_vals.get(key, kwargs.get("default")))
+    
+    class FakeCredential:
+        def get_token(self, scope):
+            class Token:
+                token = f"fake-token-for-{scope}-{self.__class__.__name__}"
+            return Token()
+
+    class FakeDefault(FakeCredential): pass
+    class FakeCli(FakeCredential): pass
+    class FakeMsi(FakeCredential): pass
+    class FakeEnv(FakeCredential): pass
+
+    monkeypatch.setattr("azure.identity.DefaultAzureCredential", FakeDefault)
+    monkeypatch.setattr("azure.identity.AzureCliCredential", FakeCli)
+    monkeypatch.setattr("azure.identity.ManagedIdentityCredential", FakeMsi)
+    monkeypatch.setattr("azure.identity.EnvironmentCredential", FakeEnv)
+
+    # Test Default
+    config_vals["azure.auth_method"] = "default"
+    assert "FakeDefault" in _resolve_adls_oauth_token_from_config()
+
+    # Test CLI
+    config_vals["azure.auth_method"] = "cli"
+    assert "FakeCli" in _resolve_adls_oauth_token_from_config()
+
+    # Test MSI
+    config_vals["azure.auth_method"] = "managedidentity"
+    assert "FakeMsi" in _resolve_adls_oauth_token_from_config()
+
+    # Test Env
+    config_vals["azure.auth_method"] = "environment"
+    assert "FakeEnv" in _resolve_adls_oauth_token_from_config()
+
+
+def test_cli_discover_delta_tables_local(sample_odcs_model, tmp_path, monkeypatch):
+    """Verify that --format delta-table auto-discovers _delta_log directories locally."""
+    captured: dict[str, Any] = {}
+
+    def _fake_import_from_source(**kwargs):
+        captured.update(kwargs)
+        return sample_odcs_model.model_copy(deep=True)
+
+    monkeypatch.setattr(
+        "datacontract.data_contract.DataContract.import_from_source",
+        _fake_import_from_source,
+    )
+    monkeypatch.setattr(
+        "contracthub.interfaces.cli._resolve_adls_oauth_token_from_config",
+        lambda: "fake-token",
+    )
+    
+    # Setup a fake directory structure
+    # tmp_path
+    # ├── table1
+    # │   └── _delta_log
+    # ├── table2
+    # │   └── _delta_log
+    # └── not_a_table
+    
+    (tmp_path / "table1" / "_delta_log").mkdir(parents=True)
+    (tmp_path / "table2" / "_delta_log").mkdir(parents=True)
+    (tmp_path / "not_a_table").mkdir()
+
+    output_path = tmp_path / "out.yaml"
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "contracthub",
+            "import",
+            "--format",
+            "delta-table",
+            "--source",
+            str(tmp_path),
+            "--output",
+            str(output_path),
+        ],
+    )
+
+    exit_code = cli.main()
+
+    assert exit_code == 0
+    assert captured["format"] == "delta"
+    
+    # It should have discovered table1 and table2
+    assert len(captured["table_uris"]) == 2
+    assert any("table1" in uri for uri in captured["table_uris"])
+    assert any("table2" in uri for uri in captured["table_uris"])
+    assert not any("not_a_table" in uri for uri in captured["table_uris"])
+
+
 def test_cli_import_supports_delta_table_alias(
     sample_odcs_model, tmp_path, monkeypatch
 ):
@@ -36,6 +134,8 @@ def test_cli_import_supports_delta_table_alias(
             "delta-table",
             "--source",
             "abfss://container@acct.dfs.core.windows.net/table_path",
+            "--tables",
+            "dummy_table",
             "--output",
             str(output_path),
         ],

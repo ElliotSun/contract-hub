@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import logging
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
@@ -610,6 +611,16 @@ def _run_import(args: argparse.Namespace) -> Path:
     if args.format in {"delta", "delta-table"}:
         oauth_token = _resolve_adls_oauth_token_from_config()
         table_uris = _parse_table_uris(args.tables)
+        
+        # If no explicit tables are provided, use StorageAdapter to discover them
+        if not table_uris:
+            from contracthub.utils.storage_adapter import StorageAdapterFactory
+            adapter = StorageAdapterFactory.get_adapter(args.source)
+            try:
+                table_uris = adapter.discover_delta_tables(args.source, credential=oauth_token)
+            except Exception as e:
+                logging.getLogger("contracthub").warning(f"Failed to auto-discover delta tables: {e}")
+                
         contract = DataContract.import_from_source(
             format="delta",
             source=args.source,

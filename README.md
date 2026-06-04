@@ -158,6 +158,7 @@ ContractHub is designed to be lightweight by default. Core functionality (like b
 | **`sql`** | Required for SQL dialect parsing and `sql-folder` imports. | `SQLAlchemy`, `sqlglot` |
 | **`databricks`**| Required for Unity Catalog integration. | `databricks-sql-connector`, `pyspark` |
 | **`azure`** | Required for ADLS2 (`abfss://`) native storage access. | `azure-identity`, `azure-storage-file-datalake` |
+| **`s3`** | Required for Amazon S3 (`s3://`) native storage access. | `boto3`, `s3fs` |
 | **`quality`** | Required for exporting Great Expectations (`export-ge`). | `great_expectations`, `pandas` |
 | **`llm`** | Required for LLM Semantic Enrichment (`enrich`). | `openai`, `litellm` |
 | **`graph`** | Required for Neo4j/Cypher Graph exports. | `networkx` |
