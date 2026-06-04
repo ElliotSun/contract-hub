@@ -200,6 +200,17 @@ def test_cli_import_uc_runs_unity_enrichment(
         "contracthub.importers.unity_importer.enrich_unity_contract_relationships",
         _fake_enrich,
     )
+
+    # Mock the config manager with fallback values that should be overridden
+    config_vals = {
+        "databricks.workspace_url": "https://fallback.example",
+        "databricks.token": "fallback-token",
+    }
+    monkeypatch.setattr(
+        "contracthub.core.config.config_manager.get",
+        lambda key, *args, **kwargs: config_vals.get(key, kwargs.get("default")),
+    )
+
     output_path = tmp_path / "out.yaml"
     monkeypatch.setattr(
         "sys.argv",
@@ -436,9 +447,11 @@ def test_cli_release_create_prs_outputs_batch_payload(
         encoding="utf-8",
     )
 
-    monkeypatch.setattr(
-        "contracthub.devops.release_workflow.create_release_pull_requests_from_manifest",
-        lambda **kwargs: [
+    captured_kwargs: dict[str, Any] = {}
+
+    def _fake_create_prs_from_manifest(**kwargs):
+        captured_kwargs.update(kwargs)
+        return [
             {
                 "promotion": {
                     "contractId": str(base_contract.id),
@@ -446,7 +459,24 @@ def test_cli_release_create_prs_outputs_batch_payload(
                 },
                 "pullRequest": {"pullRequestId": 88},
             }
-        ],
+        ]
+
+    monkeypatch.setattr(
+        "contracthub.devops.release_workflow.create_release_pull_requests_from_manifest",
+        _fake_create_prs_from_manifest,
+    )
+
+    # Mock the config manager with fallback values that should be overridden
+    config_vals = {
+        "git.provider": "github",
+        "git.organization": "fallback-org",
+        "git.project": "fallback-proj",
+        "git.repository_id": "fallback-repo",
+        "git.pat_token": "fallback-token",
+    }
+    monkeypatch.setattr(
+        "contracthub.core.config.config_manager.get",
+        lambda key, *args, **kwargs: config_vals.get(key, kwargs.get("default")),
     )
 
     monkeypatch.setattr(
@@ -459,6 +489,8 @@ def test_cli_release_create_prs_outputs_batch_payload(
             str(manifest_path),
             "--repo-path",
             str(repo_path),
+            "--git-provider",
+            "azure",
             "--organization",
             "org",
             "--project",
@@ -476,6 +508,13 @@ def test_cli_release_create_prs_outputs_batch_payload(
     assert exit_code == 0
     assert payload["results"][0]["pullRequest"]["pullRequestId"] == 88
     assert payload["tasks"][0]["release_tag"] == "orders/v1.1.1"
+
+    # Verify that CLI arguments overrode the config fallbacks
+    assert type(captured_kwargs["config"]).__name__ == "AzureDevOpsConfig"
+    assert captured_kwargs["config"].organization == "org"
+    assert captured_kwargs["config"].project == "proj"
+    assert captured_kwargs["config"].repository_id == "repo"
+    assert captured_kwargs["config"].pat_token == "token"
 
 
 def test_cli_release_create_prs_uses_config_fallback(
