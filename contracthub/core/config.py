@@ -17,9 +17,13 @@ class ConfigManager:
 
     def __init__(self):
         self.config_data: Dict[str, Any] = {}
+        self._last_cwd: Optional[Path] = None
+        self._overlays: List[Dict[str, Any]] = []
+        self._overlay_names: List[str] = []
         self._load_configs()
 
     def _load_configs(self):
+        self._last_cwd = Path.cwd()
         # Load global first
         global_config_path = Path.home() / ".config" / "contracthub" / "config.yaml"
         if global_config_path.exists():
@@ -57,6 +61,22 @@ class ConfigManager:
         """Inject a dictionary of configurations directly into the manager."""
         self._update_nested(self.config_data, config_dict)
 
+    def push_overlay(self, name: str, overlay: Dict[str, Any]) -> None:
+        """Push a temporary configuration overlay. Higher precedence than base configs."""
+        if name in self._overlay_names:
+            self.pop_overlay(name)
+        self._overlay_names.append(name)
+        self._overlays.append(overlay)
+
+    def pop_overlay(self, name: str) -> None:
+        """Remove a specific configuration overlay by name."""
+        try:
+            idx = self._overlay_names.index(name)
+            self._overlay_names.pop(idx)
+            self._overlays.pop(idx)
+        except ValueError:
+            LOGGER.warning(f"Overlay '{name}' not found.")
+
     def _update_nested(self, d: Dict[str, Any], u: Dict[str, Any]) -> Dict[str, Any]:
         for k, v in u.items():
             if isinstance(v, dict):
@@ -75,11 +95,27 @@ class ConfigManager:
         """
         if env_var and env_var in os.environ:
             return os.environ[env_var]
+            
+        if self._last_cwd != Path.cwd():
+            self.config_data = {}
+            self._load_configs()
         
         if not key_path:
             return default
 
         keys = key_path.split(".")
+        
+        # 1. Try resolving from active overlays (last pushed has highest precedence)
+        for overlay in reversed(self._overlays):
+            try:
+                current = overlay
+                for key in keys:
+                    current = current[key]
+                return current
+            except (KeyError, TypeError):
+                continue
+                
+        # 2. Try resolving from base config_data
         current = self.config_data
         try:
             for key in keys:

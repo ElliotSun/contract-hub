@@ -25,9 +25,11 @@ class CloudStorageAdapter(abc.ABC):
 
 class LocalStorageAdapter(CloudStorageAdapter):
     def discover_delta_tables(self, source_uri: str, credential: Any = None) -> List[str]:
-        # Remove file:// prefix if present
         if source_uri.startswith("file://"):
-            source_uri = source_uri[7:]
+            import urllib.request
+            import urllib.parse
+            parsed = urllib.parse.urlparse(source_uri)
+            source_uri = urllib.request.url2pathname(parsed.path)
 
         root_path = Path(source_uri)
         if not root_path.exists():
@@ -83,7 +85,9 @@ class AzureADLSAdapter(CloudStorageAdapter):
             
             for tbl_path in delta_table_paths:
                 # Reconstruct full abfss:// URI
-                uri = f"abfss://{parsed['filesystem']}@{parsed['account_url'].split('://')[-1]}/{tbl_path}"
+                import urllib.parse
+                host = urllib.parse.urlparse(parsed['account_url']).hostname
+                uri = f"abfss://{parsed['filesystem']}@{host}/{tbl_path}"
                 table_uris.append(uri)
                 
             return sorted(table_uris)
@@ -106,7 +110,10 @@ class S3Adapter(CloudStorageAdapter):
 
         # Initialize s3fs
         # In a real environment, credential could be a boto3 session or credentials dictionary.
-        fs = s3fs.S3FileSystem()
+        kwargs = {}
+        if isinstance(credential, dict):
+            kwargs.update(credential)
+        fs = s3fs.S3FileSystem(**kwargs)
         
         # Remove s3:// prefix for fsspec operations
         s3_path = source_uri

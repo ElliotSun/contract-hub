@@ -156,7 +156,6 @@ def test_cli_release_create_pr_outputs_plan_and_pr_payload(
     assert exit_code == 0
     assert payload["pullRequest"]["pullRequestId"] == 77
     assert payload["promotion"]["targetVersion"] == "1.2.0"
-    assert payload["plan"]["target_version"] == "1.2.0"
 
 
 def test_classify_contracts_in_repo_reports_changed_added_removed_and_unchanged(

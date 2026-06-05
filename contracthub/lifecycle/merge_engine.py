@@ -119,7 +119,7 @@ class ContractMergeEngine:
         target_model = _to_odcs_model(business_contract)
         analysis = self.analyze(source_model, target_model)
         if fail_on_conflict and analysis.conflicts:
-            rules = ", ".join({c.rule for c in analysis.conflicts})
+            rules = ", ".join({c.rule for c in analysis.conflicts if c.rule})
             from contracthub.exceptions import MergeConflictError
 
             raise MergeConflictError(f"Merge conflicts detected: {rules}")
@@ -540,7 +540,7 @@ def _deprecate_property_model(entity: SchemaProperty) -> SchemaProperty:
 
 
 def _copy_if_provided(target: Any, source: Any, field_name: str) -> None:
-    source_fields = getattr(source, "model_fields_set", set())
+    source_fields: set[str] = getattr(source, "model_fields_set", set())
     source_value = getattr(source, field_name, None)
     if field_name in source_fields or source_value is not None:
         setattr(target, field_name, deepcopy(source_value))

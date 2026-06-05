@@ -14,10 +14,11 @@ import requests
 LOGGER = logging.getLogger(__name__)
 
 
-def _get_git_config(repo_path: str, key: str) -> str | None:
+def _get_git_config(repo_path: str | None, key: str) -> str | None:
     try:
+        actual_repo_path = repo_path or str(Path.cwd())
         result = subprocess.run(
-            ["git", "-C", repo_path, "config", "--local", "--get", key],
+            ["git", "-C", actual_repo_path, "config", "--local", "--get", key],
             capture_output=True,
             text=True,
             check=False,
@@ -29,10 +30,11 @@ def _get_git_config(repo_path: str, key: str) -> str | None:
     return None
 
 
-def _set_git_config(repo_path: str, key: str, value: str) -> None:
+def _set_git_config(repo_path: str | None, key: str, value: str) -> None:
     try:
+        actual_repo_path = repo_path or str(Path.cwd())
         subprocess.run(
-            ["git", "-C", repo_path, "config", "--local", key, value], check=True
+            ["git", "-C", actual_repo_path, "config", "--local", key, value], check=True
         )
     except Exception as e:
         LOGGER.debug(f"Failed to set git config {key}: {e}")
@@ -131,6 +133,8 @@ class AzureDevOpsProvider:
                 )
             except Exception as e:
                 LOGGER.debug(f"Cached CLI method failed: {e}")
+                if repo_path:
+                    _set_git_config(repo_path, cache_key, "")
 
         if cached_method == "api":
             try:
@@ -143,6 +147,8 @@ class AzureDevOpsProvider:
                 )
             except Exception as e:
                 LOGGER.debug(f"Cached API method failed: {e}")
+                if repo_path:
+                    _set_git_config(repo_path, cache_key, "")
 
         # 1. Native CLI
         try:
@@ -202,6 +208,9 @@ class AzureDevOpsProvider:
     ) -> dict[str, Any]:
         if not repo_path:
             raise RuntimeError("repo_path is required for CLI PR creation")
+
+        if source_branch.startswith("-") or target_branch.startswith("-"):
+            raise ValueError(f"Invalid branch name: {source_branch} or {target_branch}. Branch names cannot start with a hyphen.")
 
         cmd = [
             "az",
@@ -493,12 +502,13 @@ class GitHubProvider:
             if pr_number:
                 reviewers_url = f"{url}/{pr_number}/requested_reviewers"
                 reviewers_payload = {"reviewers": reviewers}
-                requests.post(
+                rev_resp = requests.post(
                     reviewers_url,
                     headers=self._headers(),
                     data=json.dumps(reviewers_payload),
                     timeout=30,
                 )
+                rev_resp.raise_for_status()
 
         return pr_data
 
@@ -595,7 +605,7 @@ class PullRequestCreator:
 
         if push:
             repo = Path(repo_path).expanduser().resolve()
-            self._git(repo, ["push", "origin", source_branch])
+            self._git(repo, ["push", "--set-upstream", "origin", source_branch])
 
         return self.create_pull_request(
             source_branch=source_branch,
@@ -623,27 +633,7 @@ class PullRequestCreator:
             ) from exc
 
     def _ensure_branch(self, repo: Path, source_branch: str) -> None:
-        current_branch = self._git(
-            repo, ["rev-parse", "--abbrev-ref", "HEAD"], capture_output=True
-        ).stdout.strip()
-        if current_branch == source_branch:
-            return
-
         try:
-            branch_check = subprocess.run(
-                ["git", "-C", str(repo), "rev-parse", "--verify", source_branch],
-                check=False,
-                text=True,
-                capture_output=True,
-                timeout=300,
-            )
-        except subprocess.TimeoutExpired as exc:
-            raise RuntimeError(
-                f"Git command timed out after 300 seconds: {' '.join(exc.cmd)}"
-            ) from exc
-
-        if branch_check.returncode == 0:
-            self._git(repo, ["checkout", source_branch])
-            return
-
-        self._git(repo, ["checkout", "-b", source_branch])
+            self._git(repo, ["checkout", source_branch], capture_output=True)
+        except subprocess.CalledProcessError:
+            self._git(repo, ["checkout", "-b", source_branch], capture_output=True)

@@ -385,7 +385,7 @@ class GraphExporter(Exporter):
         if export_args and "format" in export_args:
             actual_format = export_args["format"]
 
-        if actual_format == "cypher":
+        if actual_format in ("cypher", "graph"):
             return CypherSerializer().serialize(nodes, edges)
         elif actual_format == "json":
             return JsonSerializer().serialize(nodes, edges)
