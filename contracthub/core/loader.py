@@ -374,7 +374,11 @@ def normalize_uc_volume_local_path(path: str) -> str:
 
 def is_local_path(path: str) -> bool:
     parsed = urlparse(path)
-    return parsed.scheme in {"", "file"}
+    if parsed.scheme in {"", "file"}:
+        return True
+    if len(parsed.scheme) == 1 and parsed.scheme.isalpha():
+        return True
+    return False
 
 
 def _is_http_path(contract_path: str) -> bool:

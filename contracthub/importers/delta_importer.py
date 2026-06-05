@@ -386,7 +386,7 @@ def _schema_property_from_delta_field(
         if comment:
             description = str(comment)
 
-    logical_type_options = _extract_logical_type_options(type_value, physical_type)
+    logical_opts, physical_opts = _extract_type_options(type_value, physical_type)
     nested_properties = _extract_nested_properties(type_value)
     items = _extract_items(type_value)
     partition_key_position = partition_positions.get(name.lower())
@@ -397,7 +397,7 @@ def _schema_property_from_delta_field(
         physicalName=name,
         logicalType=_map_delta_type_to_odcs(physical_type),
         physicalType=physical_type,
-        logicalTypeOptions=logical_type_options,
+        logicalTypeOptions=logical_opts,
         required=not nullable,
         description=description,
         partitioned=partition_key_position is not None,
@@ -407,45 +407,48 @@ def _schema_property_from_delta_field(
     )
 
 
-def _extract_logical_type_options(
+def _extract_type_options(
     type_value: Any, physical_type: str
-) -> Optional[Dict[str, Any]]:
-    options: Dict[str, Any] = {}
+) -> tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+    logical: Dict[str, Any] = {}
+    physical: Dict[str, Any] = {}
 
     decimal_match = re.match(r"decimal\((\d+),\s*(\d+)\)", physical_type.lower())
     if decimal_match:
-        options["precision"] = int(decimal_match.group(1))
-        options["scale"] = int(decimal_match.group(2))
+        physical["precision"] = int(decimal_match.group(1))
+        physical["scale"] = int(decimal_match.group(2))
 
     if isinstance(type_value, dict) and str(type_value.get("type")).lower() == "map":
         key_type = type_value.get("keyType")
         if key_type is not None:
-            options["keyType"] = _delta_type_to_string(key_type)
+            logical["keyType"] = _delta_type_to_string(key_type)
 
     parsed_data_type = _parse_sql_data_type(physical_type)
     if parsed_data_type is not None:
-        sql_options = _extract_logical_type_options_from_data_type(parsed_data_type)
-        options.update({k: v for k, v in sql_options.items() if k not in options})
+        p_sql, l_sql = _extract_type_options_from_data_type(parsed_data_type)
+        physical.update({k: v for k, v in p_sql.items() if k not in physical})
+        logical.update({k: v for k, v in l_sql.items() if k not in logical})
 
-    return options or None
+    return logical or None, physical or None
 
 
-def _extract_logical_type_options_from_data_type(
+def _extract_type_options_from_data_type(
     data_type: exp.DataType,
-) -> Dict[str, Any]:
-    options: Dict[str, Any] = {}
+) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    logical: Dict[str, Any] = {}
+    physical: Dict[str, Any] = {}
     type_name = _data_type_name(data_type)
     if type_name == "DECIMAL":
         params = [
             p.this for p in data_type.expressions if isinstance(p, exp.DataTypeParam)
         ]
         if len(params) >= 1 and isinstance(params[0], exp.Literal):
-            options["precision"] = int(str(params[0]))
+            physical["precision"] = int(str(params[0]))
         if len(params) >= 2 and isinstance(params[1], exp.Literal):
-            options["scale"] = int(str(params[1]))
+            physical["scale"] = int(str(params[1]))
     if type_name == "MAP" and data_type.expressions:
-        options["keyType"] = data_type.expressions[0].sql(dialect="spark")
-    return options
+        logical["keyType"] = data_type.expressions[0].sql(dialect="spark")
+    return physical, logical
 
 
 def _extract_nested_properties(type_value: Any) -> Optional[List[SchemaProperty]]:
@@ -575,7 +578,7 @@ def _schema_property_from_sql_data_type(
         physicalName=name,
         logicalType=_map_delta_type_to_odcs(physical_type),
         physicalType=physical_type,
-        logicalTypeOptions=_extract_logical_type_options_from_data_type(data_type)
+        logicalTypeOptions=_extract_type_options_from_data_type(data_type)[1]
         if data_type is not None
         else None,
         required=required,

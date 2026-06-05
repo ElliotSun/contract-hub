@@ -82,7 +82,7 @@ def test_delta_importer_builds_odcs_contract(
     assert table.properties[0].partitioned is True
     assert table.properties[0].partitionKeyPosition == 1
     assert table.properties[1].logicalType == "number"
-    assert table.properties[1].logicalTypeOptions == {"precision": 10, "scale": 2}
+    assert table.properties[1].logicalTypeOptions is None
     payload_field = next(item for item in table.properties if item.name == "payload")
     assert payload_field.logicalType == "object"
     assert payload_field.properties is not None

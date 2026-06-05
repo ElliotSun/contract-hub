@@ -539,13 +539,33 @@ def _run_plan(args: argparse.Namespace) -> None:
     print(f"\n🔍 Contract Analysis: {args.base}")
 
     try:
+        import_args: dict[str, Any] = {}
+        if args.type in {"delta", "delta-table"}:
+            oauth_token = _resolve_adls_oauth_token_from_config()
+            table_uris = _parse_table_uris(args.tables)
+            if not table_uris:
+                from contracthub.utils.storage_adapter import StorageAdapterFactory
+                adapter = StorageAdapterFactory.get_adapter(args.source)
+                try:
+                    table_uris = adapter.discover_delta_tables(args.source, credential=oauth_token)
+                except Exception as e:
+                    import logging
+                    logging.getLogger("contracthub").warning(f"Failed to auto-discover delta tables: {e}")
+                    table_uris = []
+            
+            import_args["oauth_bearer_token"] = oauth_token
+            if table_uris:
+                import_args["table_uris"] = table_uris
+        elif args.tables:
+            import_args["tables"] = args.tables
+
         # Import temporary contract from source
         imported = pipeline.import_schema(
             source_type=args.type,
             source=args.source,
             uc_workspace_url=args.workspace_url,
             uc_token=args.token,
-            import_args={"tables": args.tables} if args.tables else None,
+            import_args=import_args if import_args else None,
         )
 
         # Load base contract
