@@ -288,6 +288,12 @@ def _resolve_adls2_credential(
     ContractHub does not support SAS-based ADLS2 authentication.
     """
     if credential is not None:
+        if isinstance(credential, str):
+            sdk = _import_azure_datalake_sdk()
+            return _StaticBearerTokenCredential(
+                token=credential,
+                AccessToken=sdk["AccessToken"],
+            )
         return credential
 
     sdk = _import_azure_datalake_sdk()

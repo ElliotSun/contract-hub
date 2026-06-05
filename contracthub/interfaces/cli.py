@@ -620,6 +620,7 @@ def _run_import(args: argparse.Namespace) -> Path:
                 table_uris = adapter.discover_delta_tables(args.source, credential=oauth_token)
             except Exception as e:
                 logging.getLogger("contracthub").warning(f"Failed to auto-discover delta tables: {e}")
+                table_uris = []
                 
         contract = DataContract.import_from_source(
             format="delta",
