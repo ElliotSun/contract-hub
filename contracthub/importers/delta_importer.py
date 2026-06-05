@@ -105,9 +105,6 @@ def _build_imported_contract(
                 customProperties=[
                     CustomProperty(property="contracthub.delta.uri", value=table_uri),
                     CustomProperty(
-                        property="contracthub.delta.version", value=delta_version
-                    ),
-                    CustomProperty(
                         property="contracthub.delta.partitionColumns",
                         value=[
                             col

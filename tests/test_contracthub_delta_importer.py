@@ -33,7 +33,7 @@ def test_delta_importer_builds_odcs_contract_from_real_local_delta_table(tmp_pat
 
     table_cp = {item.property: item.value for item in table.customProperties or []}
     assert table_cp["contracthub.delta.uri"] == str(table_path)
-    assert table_cp["contracthub.delta.version"] == "0"
+    assert "contracthub.delta.version" not in table_cp
 
 
 def test_delta_importer_builds_odcs_contract(
@@ -102,7 +102,7 @@ def test_delta_importer_builds_odcs_contract(
 
     table_cp = {item.property: item.value for item in table.customProperties or []}
     assert table_cp["contracthub.delta.uri"] == "s3://lake/silver/finance_transactions"
-    assert table_cp["contracthub.delta.version"] == "12"
+    assert "contracthub.delta.version" not in table_cp
     assert table_cp["contracthub.delta.partitionColumns"] == ["id"]
 
 
