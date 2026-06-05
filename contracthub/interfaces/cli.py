@@ -455,9 +455,13 @@ contract_check:
     - uv venv && uv pip install contracthub
     - contracthub release classify-repo --base-root contracts-main/contracts --candidate-root contracts-feature/contracts
 """
-            with open(".gitlab/ci/contract-check.yml", "w") as f:
-                f.write(gitlab_ci)
-            print("📝 Created .gitlab/ci/contract-check.yml")
+            gitlab_ci_path = ".gitlab/ci/contract-check.yml"
+            if not os.path.exists(gitlab_ci_path):
+                with open(gitlab_ci_path, "w") as f:
+                    f.write(gitlab_ci)
+                print(f"📝 Created {gitlab_ci_path}")
+            else:
+                print(f"⏭️ Skipped existing GitLab CI workflow: {gitlab_ci_path}")
             
         elif provider == "azure":
             azure_pipeline = """trigger: none
@@ -489,9 +493,13 @@ steps:
         --candidate-root $(Agent.BuildDirectory)/contracts-feature/contracts
     displayName: Classify per-contract required bumps
 """
-            with open("azure-pipelines.yml", "w") as f:
-                f.write(azure_pipeline)
-            print("📝 Created azure-pipelines.yml")
+            azure_path = "azure-pipelines.yml"
+            if not os.path.exists(azure_path):
+                with open(azure_path, "w") as f:
+                    f.write(azure_pipeline)
+                print(f"📝 Created {azure_path}")
+            else:
+                print(f"⏭️ Skipped existing Azure Pipeline: {azure_path}")
 
     # Try to initialize a default contract using datacontract-cli
     try:
@@ -746,14 +754,23 @@ def _run_export(args: argparse.Namespace) -> str:
         except json.JSONDecodeError as exc:
             raise ValueError(f"Failed to parse --export-args as JSON: {exc}")
 
+    # Common validation: schema name must exist if provided
+    from contracthub.utils.schema_utils import contract_to_model
+    contract_model = contract_to_model(args.location)
+    if args.schema_name and args.schema_name != "all":
+        valid_schemas = [s.name for s in contract_model.schema_ or [] if s.name]
+        if args.schema_name not in valid_schemas:
+            raise ValueError(
+                f"Schema '{args.schema_name}' not found in contract. "
+                f"Available schemas: {', '.join(valid_schemas) if valid_schemas else 'none'}"
+            )
+
     # Pre-parse using contracthub's more robust loader if it's our graph exporter
     # because DataContract SDK doesn't consistently attach the payload schema_
     # to the `m` object for unregistered legacy or custom ODCS schemas out-of-the-box in the same way.
     if args.format == "graph":
-        from contracthub.utils.schema_utils import contract_to_model
         from contracthub.exporters.graph_exporter import GraphExporter
 
-        contract_model = contract_to_model(args.location)
         exporter = GraphExporter(export_format="graph")
         result = exporter.export(
             data_contract=contract_model,
@@ -764,15 +781,23 @@ def _run_export(args: argparse.Namespace) -> str:
         )
     else:
         contract = DataContract(data_contract_file=args.location)
-        # We call the datacontract sdk export method which handles stdout printing
-        # and file writing according to the output arg, while dynamically using registered exporters
-        result = contract.export(
-            export_format=args.format,
-            server=args.server,
-            schema_name=args.schema_name,
-            sql_server_type=args.sql_server_type,
-            export_args=export_args_dict,
-        )
+        try:
+            # We call the datacontract sdk export method which handles stdout printing
+            # and file writing according to the output arg, while dynamically using registered exporters
+            result = contract.export(
+                export_format=args.format,
+                server=args.server,
+                schema_name=args.schema_name,
+                sql_server_type=args.sql_server_type,
+                export_args=export_args_dict,
+            )
+        except ValueError as exc:
+            if "format is not supported" in str(exc):
+                raise ValueError(
+                    f"The '{args.format}' format requires a datacontract-cli plugin. "
+                    f"Please ensure you have installed the necessary package (e.g., pip install \"datacontract-cli[{args.format}]\")."
+                ) from exc
+            raise
 
     if args.output:
         # data contract sdk `export` method already writes to file if `export()` handles output,
@@ -780,7 +805,9 @@ def _run_export(args: argparse.Namespace) -> str:
         # SDK usually returns the exported string.
         if result is not None:
             output_data = result[0] if isinstance(result, tuple) else result
-            Path(args.output).write_text(str(output_data), encoding="utf-8")
+            output_path = Path(args.output)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(str(output_data), encoding="utf-8")
             return f"Exported to {args.output}"
         return f"Exported to {args.output}"
 
@@ -790,7 +817,16 @@ def _run_export(args: argparse.Namespace) -> str:
 
 def _run_export_ge(args: argparse.Namespace) -> Path:
     import sys
-    from contracthub.quality.ge_exporter import GreatExpectationsExporter
+
+    try:
+        from contracthub.quality.ge_exporter import GreatExpectationsExporter
+    except ImportError as exc:
+        if "great_expectations" in str(exc) or "great-expectations" in str(exc):
+            sys.exit(
+                "Error: The 'great_expectations' library is required to export GE suites.\n"
+                "Please install it using: pip install \"contracthub[quality]\" or pip install great_expectations"
+            )
+        raise
 
     try:
         return GreatExpectationsExporter().export_to_path(

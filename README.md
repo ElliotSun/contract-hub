@@ -162,6 +162,7 @@ ContractHub is designed to be lightweight by default. Core functionality (like b
 | **`quality`** | Required for exporting Great Expectations (`export-ge`). | `great_expectations`, `pandas` |
 | **`llm`** | Required for LLM Semantic Enrichment (`enrich`). | `openai`, `litellm` |
 | **`graph`** | Required for Neo4j/Cypher Graph exports. | `networkx` |
+| **`dbt`** | Required for exporting dbt models. | `datacontract-cli[dbt]` |
 | **`tui`** | Required to launch the interactive graphical interface. | `textual` |
 | **`all`** | Installs all of the above for a complete environment. | *All optional dependencies* |
 

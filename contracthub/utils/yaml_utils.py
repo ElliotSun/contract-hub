@@ -122,7 +122,9 @@ def _list_local_yaml_documents(root: str | Path) -> list[str]:
 def _resolve_local_path(path: str | Path) -> Path:
     parsed = urlparse(str(path))
     if parsed.scheme == "file":
-        return Path(parsed.path).expanduser().resolve()
+        from urllib.request import url2pathname
+
+        return Path(url2pathname(parsed.path)).expanduser().resolve()
     return Path(path).expanduser().resolve()
 
 
