@@ -238,7 +238,7 @@ def _extract_account_name_from_uri(table_uri: str) -> Optional[str]:
 
 
 def _to_contract_id(dataset_name: str) -> str:
-    cleaned = re.sub(r"[^a-zA-Z0-9._-]+", "-", dataset_name).strip("-")
+    cleaned = re.sub(r"[^a-zA-Z0-9_-]+", "-", dataset_name).strip("-")
     return cleaned.lower() or "delta-dataset"
 
 
@@ -632,7 +632,7 @@ def _map_delta_type_to_odcs(delta_type: str) -> str:
     if normalized.startswith(("timestamp", "datetime")):
         return "timestamp"
     if normalized.startswith(("binary", "varbinary", "bytes")):
-        return "binary"
+        return "string"
     if normalized.startswith("array"):
         return "array"
     if normalized.startswith(("map", "struct", "{")):
