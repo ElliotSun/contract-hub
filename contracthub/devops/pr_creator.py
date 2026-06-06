@@ -6,10 +6,10 @@ import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 import logging
-import requests
+import requests  # type: ignore[import-untyped]
 
 LOGGER = logging.getLogger(__name__)
 
@@ -209,8 +209,12 @@ class AzureDevOpsProvider:
         if not repo_path:
             raise RuntimeError("repo_path is required for CLI PR creation")
 
+        import re
+        if not re.match(r"^[a-zA-Z0-9_./-]+$", source_branch) or not re.match(r"^[a-zA-Z0-9_./-]+$", target_branch):
+            raise ValueError(f"Invalid branch name: {source_branch} or {target_branch}. Branch names can only contain alphanumeric characters, _, ., /, and -")
         if source_branch.startswith("-") or target_branch.startswith("-"):
             raise ValueError(f"Invalid branch name: {source_branch} or {target_branch}. Branch names cannot start with a hyphen.")
+
 
         cmd = [
             "az",
@@ -476,6 +480,10 @@ class GitHubProvider:
         reviewers: list[str] | None = None,
     ) -> dict[str, Any]:
         """Create a GitHub pull request via REST API."""
+        import re
+        if not re.match(r"^[a-zA-Z0-9_./-]+$", source_branch) or not re.match(r"^[a-zA-Z0-9_./-]+$", target_branch):
+            raise ValueError(f"Invalid branch name: {source_branch} or {target_branch}. Branch names can only contain alphanumeric characters, _, ., /, and -")
+
         url = (
             f"https://api.github.com/repos/{self.config.owner}/{self.config.repo}/pulls"
         )
@@ -509,6 +517,12 @@ class GitHubProvider:
                     timeout=30,
                 )
                 rev_resp.raise_for_status()
+                
+                rev_data = rev_resp.json()
+                added_reviewers = [r.get("login") for r in rev_data.get("requested_reviewers", [])]
+                missing = set(reviewers) - set(added_reviewers)
+                if missing:
+                    LOGGER.warning(f"Could not add reviewers to GitHub PR: {missing}. They may not exist or lack permissions.")
 
         return pr_data
 
@@ -533,7 +547,7 @@ class PullRequestCreator:
         elif isinstance(config, GitHubConfig):
             self.provider = GitHubProvider(config)
         else:
-            self.provider = config
+            self.provider = cast(GitProvider, config)
 
     def commit_updated_contracts(
         self,

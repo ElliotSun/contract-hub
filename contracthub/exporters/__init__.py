@@ -7,7 +7,7 @@ from contracthub.exporters.sql_exporter import (
 )
 from contracthub.exporters.graph_exporter import GraphExporter
 
-exporter_factory.register_exporter("graph", GraphExporter)
+exporter_factory.register_exporter("graph", GraphExporter)  # type: ignore[arg-type]
 
 __all__ = [
     "SparkSqlContractExporter",

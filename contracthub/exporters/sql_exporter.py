@@ -104,13 +104,13 @@ class SparkSqlContractExporter:
             export_args=export_args,
         )
         if sql_server_type != "databricks":
-            return ddl
+            return str(ddl)
 
         table_prefix = (
             f"{unity_catalog}.{unity_schema}." if unity_catalog and unity_schema else ""
         )
         return _append_databricks_quality_constraints(
-            ddl, prepared_contract, table_prefix=table_prefix
+            str(ddl), prepared_contract, table_prefix=table_prefix
         )
 
 
@@ -191,12 +191,10 @@ def _upsert_unity_server(
 ) -> None:
     servers = list(contract.servers or [])
     replacement = Server(
-        **{
-            "server": server_name,
-            "type": "databricks",
-            "catalog": catalog,
-            "schema": schema_name,
-        }
+        server=server_name,
+        type="databricks",
+        catalog=catalog,
+        schema=schema_name,  # Notice schema_ is the alias for schema in ODCS, but the kwargs in python expects schema
     )
 
     replaced = False
@@ -280,7 +278,7 @@ def _property_quality_constraints_sql(
 
         if isinstance(valid_values, list) and valid_values:
             constraint_name = _constraint_name(
-                schema_obj.name, prop.name, "valid_values"
+                str(schema_obj.name or "table"), str(prop.name or "col"), "valid_values"
             )
             values_sql = ", ".join(_sql_literal(value) for value in valid_values)
             statements.append(
@@ -290,7 +288,7 @@ def _property_quality_constraints_sql(
             continue
 
         if isinstance(pattern, str) and pattern.strip():
-            constraint_name = _constraint_name(schema_obj.name, prop.name, "pattern")
+            constraint_name = _constraint_name(str(schema_obj.name or "table"), str(prop.name or "col"), "pattern")
             statements.append(
                 f"ALTER TABLE {table_name}\n"
                 f"  ADD CONSTRAINT {constraint_name} CHECK ({prop.name} RLIKE {_sql_literal(pattern)});"

@@ -16,7 +16,7 @@ class GraphNode:
     type: str = "Table"
     properties: Dict[str, Any] | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.properties is None:
             self.properties = {}
         if not self.id:
@@ -32,7 +32,7 @@ class GraphEdge:
     type: str = ""
     properties: Dict[str, Any] | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.properties is None:
             self.properties = {}
         if not self.type:
@@ -92,7 +92,7 @@ class CypherSerializer(BaseSerializer):
             if not source_alias or not target_alias:
                 continue
 
-            props_str = self._format_properties(edge.properties)
+            props_str = self._format_properties(edge.properties or {})
             statements.append(
                 f"CREATE ({source_alias})-[:{edge.type}{props_str}]->({target_alias})"
             )
@@ -236,7 +236,7 @@ class GraphExporter(Exporter):
                 # Determine logicalType
                 logical_type = prop.logicalType
 
-                col_props = {
+                col_props: Dict[str, Any] = {
                     "name": prop.name,
                     "logicalType": logical_type,
                     "is_pii": is_pii,
@@ -336,7 +336,7 @@ class GraphExporter(Exporter):
                         return json.dumps([val.split(".")[-1]])
                     return json.dumps([])
 
-                edge_props = {}
+                edge_props: Dict[str, Any] = {}
                 if inferred_from:
                     edge_props["source_columns"] = strip_prefix_to_json_array(
                         inferred_from

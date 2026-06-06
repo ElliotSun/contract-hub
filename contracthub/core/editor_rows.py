@@ -82,7 +82,7 @@ def optional_int(value: Any) -> int | None:
     if isinstance(value, str) and not value.strip():
         return None
     try:
-        import pandas as pd
+        import pandas as pd  # type: ignore[import-untyped]
 
         if pd.isna(value):
             return None

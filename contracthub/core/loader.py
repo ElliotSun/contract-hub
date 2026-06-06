@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 if TYPE_CHECKING:
     from azure.core.credentials import TokenCredential
 
-import requests
+import requests  # type: ignore[import-untyped]
 import yaml
 from open_data_contract_standard.model import OpenDataContractStandard
 

@@ -356,26 +356,26 @@ def main() -> int:
 
         if args.command == "import":
             from contracthub.interfaces.commands.import_cmd import run_import
-            output = run_import(args)
-            print(output)
+            import_output = run_import(args)
+            print(import_output)
             return 0
 
         if args.command == "export":
             from contracthub.interfaces.commands.export_cmd import run_export
-            output = run_export(args)
-            print(output)
+            export_output = run_export(args)
+            print(export_output)
             return 0
 
         if args.command == "merge":
             from contracthub.interfaces.commands.merge_cmd import run_merge
-            output = run_merge(args)
-            print(output)
+            merge_output = run_merge(args)
+            print(merge_output)
             return 0
 
         if args.command == "export-ge":
             from contracthub.interfaces.commands.export_cmd import run_export_ge
-            output = run_export_ge(args)
-            print(output)
+            ge_output = run_export_ge(args)
+            print(ge_output)
             return 0
 
         if args.command == "create-pr":

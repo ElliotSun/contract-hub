@@ -14,7 +14,7 @@ class BaseLLMProvider(ABC):
 
 
 class OpenAILLMProvider(BaseLLMProvider):
-    def __init__(self):
+    def __init__(self) -> None:
         # Only import litellm when instantiated so we don't hard fail if missing
         from contracthub.core.config import config_manager
 
@@ -61,3 +61,4 @@ class OpenAILLMProvider(BaseLLMProvider):
                     raise e
                 time.sleep(delay)
                 delay *= 2
+        return {}

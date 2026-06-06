@@ -30,8 +30,8 @@ def run_export(args: argparse.Namespace) -> str:
         result = exporter.export(
             data_contract=contract_model,
             schema_name=args.schema_name,
-            server=getattr(args, "server", None),
-            sql_server_type=getattr(args, "sql_server_type", "auto"),
+            server=str(getattr(args, "server", None) or ""),
+            sql_server_type=str(getattr(args, "sql_server_type", "auto") or "auto"),
             export_args=export_args_dict,
         )
     else:

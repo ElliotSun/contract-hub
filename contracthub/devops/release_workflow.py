@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, List, Dict, Optional, Literal, cast
 
 from contracthub.core.release import (
     PromotionResult,
@@ -200,6 +200,7 @@ def classify_contracts_in_repo(
         candidate_path = candidate_index.get(relative_path)
 
         if base_path is None:
+            assert candidate_path is not None
             candidate_model = contract_to_model(load_yaml(candidate_path))
             results.append(
                 RepositoryContractChange(
@@ -333,7 +334,7 @@ def build_batch_release_manifest(
         contract_key = _contract_release_key(change)
         next_version = change.suggested_release_version or suggest_release_version(
             str(change.current_version or "0.0.0"),
-            str(change.required_bump or "none"),
+            cast(Literal["none", "minor", "major"], str(change.required_bump or "none")),
         )
         release_tag = f"{contract_key}/v{next_version}"
         source_branch = (

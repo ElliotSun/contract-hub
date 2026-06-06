@@ -74,7 +74,7 @@ class ContractValidator:
                     issues.append(
                         ValidationIssue(
                             path="datacontract-cli",
-                            message=check.reason or getattr(check, "name", "Validation failed"),
+                            message=str(check.reason or getattr(check, "name", "Validation failed")),
                             severity="error",
                         )
                     )

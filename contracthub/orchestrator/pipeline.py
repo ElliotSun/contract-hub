@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from open_data_contract_standard.model import OpenDataContractStandard
 
@@ -63,7 +63,7 @@ class ContractPipeline:
       the service layer and governance adapters.
     """
 
-    runtime_context: str = "auto"
+    runtime_context: Literal["auto", "synapse", "fabric"] = "auto"
     loader: ContractLoader = field(init=False)
     validator: ContractValidator = field(init=False)
     merge_engine: ContractMergeEngine = field(init=False)

@@ -129,7 +129,10 @@ def generate_expectation_suite(
                 "datacontract-cli Great Expectations export with engine='spark' requires pyspark to be installed"
             ) from exc
         raise
-    suite_dict = cast(ExpectationSuiteDict, json.loads(exported))
+    if isinstance(exported, str):
+        suite_dict = cast(ExpectationSuiteDict, json.loads(exported))
+    else:
+        suite_dict = cast(ExpectationSuiteDict, exported)
     _validate_ge_suite_dict(suite_dict)
     return _suite_dict_to_expectation_suite(suite_dict)
 
@@ -254,7 +257,7 @@ def _create_expectation_object(
     expectation_type: str,
     kwargs: dict[str, Any],
     meta: dict[str, Any],
-    raw_expectation: dict[str, Any],
+    raw_expectation: ExpectationConfigDict | dict[str, Any],
 ) -> Any | None:
     """Create a runtime expectation object when the installed GE version expects it."""
     try:
@@ -278,8 +281,9 @@ def _create_expectation_object(
         "id",
         "rendered_content",
     ):
-        if key in raw_expectation:
-            init_kwargs[key] = raw_expectation[key]
+        raw_dict = cast(dict, raw_expectation)
+        if key in raw_dict:
+            init_kwargs[key] = raw_dict[key]
 
     try:
         return expectation_impl(**init_kwargs)
@@ -309,15 +313,15 @@ def _add_expectation(expectation_suite: Any, config: Any) -> None:
 
 def _load_ge_suite_classes() -> tuple[Any, Any]:
     try:
-        from great_expectations.core import ExpectationConfiguration, ExpectationSuite
+        from great_expectations.core import ExpectationConfiguration, ExpectationSuite  # type: ignore[attr-defined,import-not-found,import-untyped]
 
         return ExpectationSuite, ExpectationConfiguration
     except ImportError as first_exc:
         try:
-            from great_expectations.core.expectation_configuration import (
+            from great_expectations.core.expectation_configuration import (  # type: ignore[import-not-found,import-untyped]
                 ExpectationConfiguration,
             )
-            from great_expectations.core.expectation_suite import ExpectationSuite
+            from great_expectations.core.expectation_suite import ExpectationSuite  # type: ignore[import-not-found,import-untyped]
 
             return ExpectationSuite, ExpectationConfiguration
         except ImportError as second_exc:

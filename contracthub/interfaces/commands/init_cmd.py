@@ -41,23 +41,25 @@ def run_init(args: argparse.Namespace) -> None:
         
         print(f"✅ Successfully generated default configuration at {config_path}")
         
-        gitignore_path = Path(".gitignore")
-        gitignore_entry = ".contracthub.yaml"
-        if gitignore_path.exists():
-            content = gitignore_path.read_text(encoding="utf-8")
-            if gitignore_entry not in content:
-                with open(gitignore_path, "a", encoding="utf-8") as f:
-                    f.write(f"\n{gitignore_entry}\n")
-                print(f"📝 Appended {gitignore_entry} to .gitignore")
-        else:
-            gitignore_path.write_text(f"{gitignore_entry}\n", encoding="utf-8")
-            print(f"📝 Created .gitignore with {gitignore_entry}")
-
         print("   💡 Default git.provider is set to 'azure'. Edit this file to use 'github' or 'gitlab' instead.")
         if not getattr(args, "scaffold", False):
             print("   💡 Run `contracthub init --scaffold` to bootstrap a repository with CI/CD pipelines based on this configuration.")
     else:
         print(f"✅ Configuration file already exists at {config_path}")
+
+    # Always ensure .gitignore excludes .contracthub.yaml if scaffolding or init is run
+    gitignore_path = Path(".gitignore")
+    gitignore_entry = ".contracthub.yaml"
+    if gitignore_path.exists():
+        content = gitignore_path.read_text(encoding="utf-8")
+        if gitignore_entry not in content:
+            with open(gitignore_path, "a", encoding="utf-8") as f:
+                f.write(f"\n{gitignore_entry}\n")
+            print(f"📝 Appended {gitignore_entry} to .gitignore")
+    else:
+        gitignore_path.write_text(f"{gitignore_entry}\n", encoding="utf-8")
+        print(f"📝 Created .gitignore with {gitignore_entry}")
+
 
     if getattr(args, "scaffold", False):
         from contracthub.core.config import config_manager

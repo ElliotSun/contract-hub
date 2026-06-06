@@ -32,7 +32,9 @@ def test_config_manager_hierarchy(temp_config_dir):
                 pass
                 
 def test_config_manager_precedence():
+    from pathlib import Path
     cm = ConfigManager()
+    cm._last_cwd = Path.cwd()
     cm.config_data = {
         "azure": {
             "auth_method": "cli"

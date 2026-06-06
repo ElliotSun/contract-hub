@@ -1,7 +1,7 @@
 import os
 import yaml
 from pathlib import Path
-from typing import Any, Optional, Dict
+from typing import Any, Optional, Dict, List
 import logging
 
 LOGGER = logging.getLogger(__name__)
@@ -15,14 +15,15 @@ class ConfigManager:
     3. Global configuration file (~/.config/contracthub/config.yaml)
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.config_data: Dict[str, Any] = {}
         self._last_cwd: Optional[Path] = None
         self._overlays: List[Dict[str, Any]] = []
         self._overlay_names: List[str] = []
-        self._load_configs()
+        # Lazy resolution: Do not load CWD-dependent configs at import time
 
-    def _load_configs(self):
+
+    def _load_configs(self) -> None:
         self._last_cwd = Path.cwd()
         # Load global first
         global_config_path = Path.home() / ".config" / "contracthub" / "config.yaml"
@@ -96,8 +97,9 @@ class ConfigManager:
         if env_var and env_var in os.environ:
             return os.environ[env_var]
             
-        if self._last_cwd != Path.cwd():
+        if self._last_cwd is None or self._last_cwd != Path.cwd():
             self.config_data = {}
+
             self._load_configs()
         
         if not key_path:

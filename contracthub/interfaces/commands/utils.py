@@ -1,5 +1,6 @@
 import argparse
 import os
+from typing import Any
 
 def _resolve_adls_oauth_token_from_config() -> str | None:
     from contracthub.core.config import config_manager
@@ -17,6 +18,7 @@ def _resolve_adls_oauth_token_from_config() -> str | None:
         from contracthub.exceptions import LifecycleError
         raise LifecycleError("azure-identity is required for ADLS OAuth auth.") from exc
 
+    credential: Any
     if auth_method in ("managedidentity", "msi", "managed_identity"):
         credential = ManagedIdentityCredential()
     elif auth_method in ("azurecli", "cli"):

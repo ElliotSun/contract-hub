@@ -469,7 +469,7 @@ def _extract_nested_properties(type_value: Any) -> Optional[List[SchemaProperty]
     if parsed_data_type is None or _data_type_name(parsed_data_type) != "STRUCT":
         return None
 
-    properties: List[SchemaProperty] = []
+    parsed_properties: List[SchemaProperty] = []
     for child in parsed_data_type.expressions or []:
         if not isinstance(child, exp.ColumnDef):
             continue
@@ -478,7 +478,7 @@ def _extract_nested_properties(type_value: Any) -> Optional[List[SchemaProperty]
             continue
         child_kind = child.args.get("kind")
         child_required = not _column_def_nullable(child)
-        properties.append(
+        parsed_properties.append(
             _schema_property_from_sql_data_type(
                 name=child_name,
                 data_type=child_kind if isinstance(child_kind, exp.DataType) else None,
@@ -486,7 +486,7 @@ def _extract_nested_properties(type_value: Any) -> Optional[List[SchemaProperty]
                 description=None,
             )
         )
-    return properties or None
+    return parsed_properties or None
 
 
 def _extract_items(type_value: Any) -> Optional[SchemaProperty]:

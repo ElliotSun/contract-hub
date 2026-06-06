@@ -10,7 +10,7 @@ class InMemoryGraphBuilder:
             )
         self.data_contract = data_contract
         try:
-            import networkx as nx
+            import networkx as nx  # type: ignore[import-untyped]
 
             self.nx = nx
         except ImportError:
@@ -164,7 +164,7 @@ class InMemoryGraphBuilder:
                                     and prop.__pydantic_extra__
                                 ):
                                     prop_type = prop.__pydantic_extra__.get("type")
-                                edge_props[prop.name] = prop_type
+                                edge_props[str(prop.name or "prop")] = prop_type
 
                         graph.add_edge(
                             source_table,

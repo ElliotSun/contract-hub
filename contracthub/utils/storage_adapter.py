@@ -100,8 +100,8 @@ class AzureADLSAdapter(CloudStorageAdapter):
 class S3Adapter(CloudStorageAdapter):
     def discover_delta_tables(self, source_uri: str, credential: Any = None) -> List[str]:
         try:
-            import boto3
-            import s3fs
+            import boto3  # type: ignore[import-untyped]
+            import s3fs  # type: ignore[import-not-found,import-untyped]
         except ImportError as exc:
             raise RuntimeError(
                 "S3 storage adapter requires boto3 and s3fs. "

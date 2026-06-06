@@ -188,7 +188,9 @@ def _load_runtime_batch_request() -> Any:
 
 def _assert_ge_spark_runtime_classes() -> None:
     try:
-        from great_expectations.datasource.data_connector import RuntimeDataConnector
+        from great_expectations.datasource.data_connector import (  # type: ignore[import-not-found,import-untyped]
+            RuntimeDataConnector,
+        )
         from great_expectations.execution_engine import SparkDFExecutionEngine
 
         _ = RuntimeDataConnector, SparkDFExecutionEngine

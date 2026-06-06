@@ -1,8 +1,7 @@
 import argparse
 import sys
 import io
-from typing import List, Dict, Any
-
+from typing import List, Dict, Any, Optional
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical, Container
 from textual.widget import Widget
@@ -62,11 +61,7 @@ class DynamicForm(Container):
         self.command_help = command_help
         self.fields: Dict[str, Any] = {}
 
-    def compose(self) -> ComposeResult:
-        yield Label(f"Command: {self.command_name}", classes="form-title")
-        if self.command_help:
-            yield Label(self.command_help, classes="form-description")
-        yield Static("Fill in the arguments below:", classes="form-subtitle")
+
 
     def _create_widget_for_action(self, action: argparse.Action) -> Widget:
         field_id = f"field_{action.dest}"
@@ -109,7 +104,7 @@ class DynamicForm(Container):
                     yield Label(label_text)
                     yield self._create_widget_for_action(action)
             else:
-                widgets = []
+                widgets: List[Widget] = []
                 for action in actions:
                     label_text = f"{action.dest}"
                     if action.required:
@@ -117,7 +112,7 @@ class DynamicForm(Container):
                     widgets.append(Label(label_text))
                     widgets.append(self._create_widget_for_action(action))
                 
-                yield Collapsible(*widgets, title=group.title, collapsed=True)
+                yield Collapsible(*widgets, title=str(group.title or "Group"), collapsed=True)
 
         yield Button("Execute", id="execute-btn", variant="primary")
 
@@ -132,7 +127,7 @@ class DynamicForm(Container):
             if isinstance(widget, Input):
                 value = widget.value
             elif isinstance(widget, Select):
-                value = widget.value
+                value = str(widget.value) if widget.value != Select.NULL else None
 
             if value and value != Select.NULL:
                 if isinstance(action, argparse._StoreTrueAction):
@@ -207,7 +202,7 @@ class ContractHubTUI(App):
         Binding("ctrl+c", "quit", "Quit"),
     ]
 
-    def __init__(self, cli_parser: argparse.ArgumentParser = None, excluded_commands: List[str] = None):
+    def __init__(self, cli_parser: Optional[argparse.ArgumentParser] = None, excluded_commands: Optional[List[str]] = None) -> None:
         super().__init__()
         if cli_parser is None:
             self.cli_parser = _build_parser()
@@ -264,7 +259,7 @@ class ContractHubTUI(App):
                 yield Static(banner_text, id="banner")
                 
                 # Group commands for visual clarity
-                groups = {"GLOBAL": []}
+                groups: Dict[str, List[str]] = {"GLOBAL": []}
                 for cmd in self.commands:
                     parts = cmd.split()
                     if len(parts) == 1:
@@ -275,7 +270,7 @@ class ContractHubTUI(App):
                             groups[group_name] = []
                         groups[group_name].append(cmd)
                 
-                options = []
+                options: List[Option] = []
                 for group_name, cmds in groups.items():
                     if not cmds: 
                         continue
@@ -301,11 +296,11 @@ class ContractHubTUI(App):
     def on_mount(self) -> None:
         from contracthub.core.config import config_manager
         
-        def handle_init(result: bool) -> None:
+        def handle_init(result: Optional[bool]) -> None:
             if result:
                 import argparse
-                from contracthub.interfaces.cli import _run_init
-                _run_init(argparse.Namespace())
+                from contracthub.interfaces.commands.init_cmd import run_init
+                run_init(argparse.Namespace())
                 config_manager._load_configs()
                 
             if self.commands:
@@ -319,7 +314,8 @@ class ContractHubTUI(App):
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
         command_name = event.option.id
-        self.load_command_form(command_name)
+        if command_name:
+            self.load_command_form(str(command_name))
 
     def load_command_form(self, command_name: str) -> None:
         content_area = self.query_one("#content-area")
