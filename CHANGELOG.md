@@ -2,6 +2,33 @@
 
 <!-- version list -->
 
+## v0.7.1 (2026-06-06)
+
+### Bug Fixes
+
+- Address various ux and data integrity issues (#5-12)
+  ([`73063b1`](https://github.com/ElliotSun/contract-hub/commit/73063b12d74e66b0532dbc3e6b14d416f621fbe5))
+
+- Ensure generated odcs contract complies with v3.1.0 schema (fix invalid binary type and illegal
+  chars in stableid)
+  ([`0da6265`](https://github.com/ElliotSun/contract-hub/commit/0da6265a18d093ec5cf9053c93da32d1bcc5f5f9))
+
+- Remove redundant delta version from importer customProperties to prevent false positive schema
+  drifts
+  ([`7f7d58b`](https://github.com/ElliotSun/contract-hub/commit/7f7d58b3806111974e97e9b8c502b56c8d14aee1))
+
+- Resolve raw string credentials and discovery fallback bugs
+  ([`4372e3f`](https://github.com/ElliotSun/contract-hub/commit/4372e3f9ddcd8427712b8facdeb2e8007425708c))
+
+- Resolve Windows path parsing, missing OAuth in plan, and logicalTypeOptions schema mapping
+  ([`4feaa58`](https://github.com/ElliotSun/contract-hub/commit/4feaa5862e210bea1443eb5cbd199f88bef98f8d))
+
+### Refactoring
+
+- Modularize CLI, implement config layering and plugin registry, fix legacy typing errors
+  ([`fe6bd2c`](https://github.com/ElliotSun/contract-hub/commit/fe6bd2cdb39e7842f8a167ec0be14477581c023c))
+
+
 ## v0.7.0 (2026-06-04)
 
 ### Bug Fixes
