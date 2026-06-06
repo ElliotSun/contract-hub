@@ -11,7 +11,7 @@ from contracthub.utils.yaml_utils import dump_yaml, load_yaml
 
 def test_cli_azure_auth_method_mapping(monkeypatch):
     """Verify that different azure.auth_method values map to the correct Identity Credential classes."""
-    from contracthub.interfaces.cli import _resolve_adls_oauth_token_from_config
+    from contracthub.interfaces.commands.utils import _resolve_adls_oauth_token_from_config
     
     # Mock config
     config_vals = {"azure.auth_method": "default", "azure.scope": "test-scope"}
@@ -64,7 +64,7 @@ def test_cli_discover_delta_tables_local(sample_odcs_model, tmp_path, monkeypatc
         _fake_import_from_source,
     )
     monkeypatch.setattr(
-        "contracthub.interfaces.cli._resolve_adls_oauth_token_from_config",
+        "contracthub.interfaces.commands.import_cmd._resolve_adls_oauth_token_from_config",
         lambda: "fake-token",
     )
     
@@ -121,7 +121,7 @@ def test_cli_import_supports_delta_table_alias(
         _fake_import_from_source,
     )
     monkeypatch.setattr(
-        "contracthub.interfaces.cli._resolve_adls_oauth_token_from_config",
+        "contracthub.interfaces.commands.import_cmd._resolve_adls_oauth_token_from_config",
         lambda: "fake-token",
     )
     output_path = tmp_path / "out.yaml"

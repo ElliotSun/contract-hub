@@ -218,7 +218,7 @@ def test_create_update_pr_pushes_branch_before_creating_pr(monkeypatch, tmp_path
     )
 
     assert payload["pullRequestId"] == 99
-    assert ["push", "origin", "feature/contracts"] in calls
+    assert ["push", "--set-upstream", "origin", "feature/contracts"] in calls
 
 
 def test_ensure_branch_checks_out_existing_branch(monkeypatch, tmp_path):
@@ -248,15 +248,11 @@ def test_ensure_branch_creates_new_branch_when_missing(monkeypatch, tmp_path):
 
     def fake_git(repo, args, capture_output=False):  # noqa: ANN001
         git_calls.append(args)
-        if args == ["rev-parse", "--abbrev-ref", "HEAD"]:
-            return subprocess.CompletedProcess(args, 0, stdout="main\n", stderr="")
+        if args == ["checkout", "feature/new-branch"]:
+            raise subprocess.CalledProcessError(1, args)
         return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
 
     monkeypatch.setattr(PullRequestCreator, "_git", staticmethod(fake_git))
-    monkeypatch.setattr(
-        "contracthub.devops.pr_creator.subprocess.run",
-        lambda *a, **k: SimpleNamespace(returncode=1),
-    )
 
     creator._ensure_branch(tmp_path, "feature/new-branch")  # noqa: SLF001
 

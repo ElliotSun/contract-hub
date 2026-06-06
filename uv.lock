@@ -559,7 +559,7 @@ wheels = [
 
 [[package]]
 name = "contracthub"
-version = "0.6.0"
+version = "0.7.0"
 source = { editable = "." }
 dependencies = [
     { name = "datacontract-cli" },
@@ -594,6 +594,9 @@ azure = [
 databricks = [
     { name = "databricks-sql-connector" },
     { name = "pyspark" },
+]
+dbt = [
+    { name = "datacontract-cli" },
 ]
 delta = [
     { name = "deltalake" },
@@ -644,6 +647,7 @@ requires-dist = [
     { name = "databricks-sql-connector", marker = "extra == 'all'", specifier = ">=3.0.0" },
     { name = "databricks-sql-connector", marker = "extra == 'databricks'", specifier = ">=3.0.0" },
     { name = "datacontract-cli", specifier = ">=0.12.0" },
+    { name = "datacontract-cli", extras = ["dbt"], marker = "extra == 'dbt'", specifier = ">=0.12.0" },
     { name = "deltalake", marker = "extra == 'all'", specifier = ">=0.18.0" },
     { name = "deltalake", marker = "extra == 'delta'", specifier = ">=0.18.0" },
     { name = "great-expectations", marker = "extra == 'all'", specifier = ">=1.0.0" },
@@ -674,7 +678,7 @@ requires-dist = [
     { name = "textual", marker = "extra == 'all'", specifier = ">=8.2.7" },
     { name = "textual", marker = "extra == 'tui'", specifier = ">=8.2.7" },
 ]
-provides-extras = ["sql", "delta", "quality", "llm", "tui", "databricks", "azure", "graph", "s3", "all"]
+provides-extras = ["sql", "delta", "quality", "llm", "tui", "databricks", "azure", "graph", "s3", "dbt", "all"]
 
 [package.metadata.requires-dev]
 dev = [

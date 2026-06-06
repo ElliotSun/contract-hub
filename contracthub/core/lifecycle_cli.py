@@ -16,6 +16,9 @@ def apply_lifecycle(args: Any, is_promote: bool) -> dict[str, Any]:
 
     target_status = "active" if is_promote else "deprecated"
 
+    if getattr(args, "property", None) and not getattr(args, "schema", None):
+        raise ValueError("The '--schema' argument is required when '--property' is specified.")
+
     if getattr(args, "schema", None) and getattr(args, "property", None):
         _apply_property(contract, args.schema, args.property, target_status)
     elif getattr(args, "schema", None):

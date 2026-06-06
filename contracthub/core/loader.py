@@ -216,7 +216,7 @@ def _read_with_mssparkutils(contract_path: str) -> Optional[str]:
                 f"Failed to read contract via mssparkutils: {exc}"
             ) from exc
 
-        if isinstance(text, str) and text.strip():
+        if isinstance(text, str):
             LOGGER.debug(
                 "Loaded contract via mssparkutils.fs.head from %s", contract_path
             )
@@ -288,6 +288,12 @@ def _resolve_adls2_credential(
     ContractHub does not support SAS-based ADLS2 authentication.
     """
     if credential is not None:
+        if isinstance(credential, str):
+            sdk = _import_azure_datalake_sdk()
+            return _StaticBearerTokenCredential(
+                token=credential,
+                AccessToken=sdk["AccessToken"],
+            )
         return credential
 
     sdk = _import_azure_datalake_sdk()
@@ -368,7 +374,11 @@ def normalize_uc_volume_local_path(path: str) -> str:
 
 def is_local_path(path: str) -> bool:
     parsed = urlparse(path)
-    return parsed.scheme in {"", "file"}
+    if parsed.scheme in {"", "file"}:
+        return True
+    if len(parsed.scheme) == 1 and parsed.scheme.isalpha():
+        return True
+    return False
 
 
 def _is_http_path(contract_path: str) -> bool:
@@ -467,6 +477,19 @@ class _StaticBearerTokenCredential:
 
     def get_token(self, *scopes: str, **kwargs: Any) -> Any:  # noqa: ARG002
         import time
+        import base64
+        import json
 
         expires_on = int(time.time()) + self._DEFAULT_TTL_SECONDS
+        try:
+            parts = self._token.split(".")
+            if len(parts) == 3:
+                payload_part = parts[1]
+                payload_part += "=" * ((4 - len(payload_part) % 4) % 4)
+                payload_json = json.loads(base64.b64decode(payload_part))
+                if "exp" in payload_json:
+                    expires_on = int(payload_json["exp"])
+        except Exception:
+            pass
+            
         return self._access_token_cls(self._token, expires_on)

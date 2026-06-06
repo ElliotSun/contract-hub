@@ -33,7 +33,7 @@ def test_delta_importer_builds_odcs_contract_from_real_local_delta_table(tmp_pat
 
     table_cp = {item.property: item.value for item in table.customProperties or []}
     assert table_cp["contracthub.delta.uri"] == str(table_path)
-    assert table_cp["contracthub.delta.version"] == "0"
+    assert "contracthub.delta.version" not in table_cp
 
 
 def test_delta_importer_builds_odcs_contract(
@@ -82,7 +82,7 @@ def test_delta_importer_builds_odcs_contract(
     assert table.properties[0].partitioned is True
     assert table.properties[0].partitionKeyPosition == 1
     assert table.properties[1].logicalType == "number"
-    assert table.properties[1].logicalTypeOptions == {"precision": 10, "scale": 2}
+    assert table.properties[1].logicalTypeOptions is None
     payload_field = next(item for item in table.properties if item.name == "payload")
     assert payload_field.logicalType == "object"
     assert payload_field.properties is not None
@@ -102,7 +102,7 @@ def test_delta_importer_builds_odcs_contract(
 
     table_cp = {item.property: item.value for item in table.customProperties or []}
     assert table_cp["contracthub.delta.uri"] == "s3://lake/silver/finance_transactions"
-    assert table_cp["contracthub.delta.version"] == "12"
+    assert "contracthub.delta.version" not in table_cp
     assert table_cp["contracthub.delta.partitionColumns"] == ["id"]
 
 

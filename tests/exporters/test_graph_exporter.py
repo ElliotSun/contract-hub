@@ -13,7 +13,7 @@ def sample_graph_yaml() -> Path:
 
 
 def test_graph_exporter_nodes(sample_graph_yaml):
-    nodes, edges = GraphExporter.from_yaml(sample_graph_yaml)
+    nodes, edges = GraphExporter.from_yaml(sample_graph_yaml, export_args={"format": "raw"})
 
     # 10 tables + 21 columns = 31 nodes
     assert len(nodes) == 31
@@ -60,7 +60,7 @@ def test_graph_exporter_nodes(sample_graph_yaml):
 
 
 def test_graph_exporter_edges(sample_graph_yaml):
-    nodes, edges = GraphExporter.from_yaml(sample_graph_yaml)
+    nodes, edges = GraphExporter.from_yaml(sample_graph_yaml, export_args={"format": "raw"})
 
     # 9 table semantic edges + 21 HAS_COLUMN edges = 30 edges
     assert len(edges) == 30

@@ -44,8 +44,10 @@ class SQLFolderImporter(Importer):
             )
             statements = sqlglot.parse(sql_text, read=dialect)
             for statement in statements:
+                if statement is None:
+                    continue
                 schema_object = _create_schema_object_from_statement(
-                    statement, dialect=dialect
+                    statement, dialect=dialect  # type: ignore[arg-type]
                 )
                 if schema_object is not None:
                     schema_objects.append(schema_object)
@@ -399,7 +401,7 @@ def _extract_table_foreign_key_relationships(
             schema_relationships.append(
                 Relationship(
                     type="foreignKey",
-                    **{"from": source_columns},
+                    **{"from": source_columns},  # type: ignore[arg-type]
                     to=to_values,
                 )
             )

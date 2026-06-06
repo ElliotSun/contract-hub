@@ -1,7 +1,7 @@
 import argparse
 import os
 import pytest
-from contracthub.interfaces.cli import _get_repo_path
+from contracthub.interfaces.commands.utils import _get_repo_path
 from unittest.mock import patch
 
 def test_get_repo_path_from_args():
