@@ -32,16 +32,30 @@ DEPRECATED_LIFECYCLE_VALUE = "deprecated"
 
 # Technical fields that must be overwritten from imported source for matching properties.
 PROPERTY_OVERWRITE_FIELDS: tuple[str, ...] = (
+    "logicalType",
     "physicalType",
+    "physicalName",
     "partitioned",
     "partitionKeyPosition",
     "description",
+    "transformLogic",
+    "transformSourceObjects",
+    "transformDescription",
     "logicalTypeOptions",
     "required",
     "primaryKey",
     "primaryKeyPosition",
     "unique",
     "customProperties",
+)
+
+# Technical fields that must be overwritten from imported source for matching schemas.
+SCHEMA_OBJECT_OVERWRITE_FIELDS: tuple[str, ...] = (
+    "physicalType",
+    "physicalName",
+    "logicalType",
+    "dataGranularityDescription",
+    "description",
 )
 OdcModel = OpenDataContractStandard
 
@@ -386,15 +400,12 @@ def _merge_schema_object_models(
     merged_obj = existing_obj.model_copy(deep=True)
 
     # Schema-level lifecycle metadata is merged; schema identity is ODCS `name`.
-    _copy_if_provided(merged_obj, imported_obj, "physicalType")
-    _copy_if_provided(merged_obj, imported_obj, "physicalName")
-    _copy_if_provided(merged_obj, imported_obj, "logicalType")
-    _copy_if_provided(merged_obj, imported_obj, "dataGranularityDescription")
-    _copy_if_provided(merged_obj, imported_obj, "description")
-    merged_obj.relationships = (
-        deepcopy(imported_obj.relationships)
-        if getattr(imported_obj, "relationships", None) is not None
-        else None
+    for field_name in SCHEMA_OBJECT_OVERWRITE_FIELDS:
+        _copy_if_provided(merged_obj, imported_obj, field_name)
+        
+    merged_obj.relationships = _merge_relationships_models(
+        getattr(existing_obj, "relationships", None),
+        getattr(imported_obj, "relationships", None),
     )
     merged_obj.customProperties = _merge_custom_properties_models(
         existing_obj.customProperties,
@@ -487,16 +498,42 @@ def _merge_matching_property_models(
     # Matching-property updates overwrite technical fields from imported source.
     for field_name in PROPERTY_OVERWRITE_FIELDS:
         _copy_if_provided(merged_prop, imported_prop, field_name)
-    merged_prop.relationships = (
-        deepcopy(imported_prop.relationships)
-        if getattr(imported_prop, "relationships", None) is not None
-        else None
+    merged_prop.relationships = _merge_relationships_models(
+        getattr(existing_prop, "relationships", None),
+        getattr(imported_prop, "relationships", None),
     )
     merged_prop.quality = _combine_quality_rules_models(
         existing_prop.quality, imported_prop.quality
     )
     merged_prop.customProperties = _sort_custom_properties(merged_prop.customProperties)
     return merged_prop
+
+
+def _merge_relationships_models(existing: Any, imported: Any) -> list[Any] | None:
+    merged: list[Any] = []
+
+    if existing:
+        for rel in existing:
+            rel_type = str(getattr(rel, "type", "") or "").strip().upper()
+            if rel_type not in ("FOREIGN_KEY", "FOREIGNKEY"):
+                merged.append(rel.model_copy(deep=True))
+
+    if imported:
+        for rel in imported:
+            rel_type = str(getattr(rel, "type", "") or "").strip().upper()
+            if rel_type in ("FOREIGN_KEY", "FOREIGNKEY"):
+                merged.append(rel.model_copy(deep=True))
+
+    if not merged:
+        return None
+
+    merged.sort(
+        key=lambda r: (
+            str(getattr(r, "type", "") or ""),
+            str(getattr(r, "to", "") or ""),
+        )
+    )
+    return merged
 
 
 def _deprecate_schema_model(entity: SchemaObject) -> SchemaObject:
