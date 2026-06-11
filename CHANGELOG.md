@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.7.2 (2026-06-11)
+
+### Bug Fixes
+
+- **merge_engine**: Refine relationship merge logic and add missing OVERWRITE_FIELDS
+  ([`56f4d1f`](https://github.com/ElliotSun/contract-hub/commit/56f4d1ff65d92b27a4caf698008ba6dea0af7823))
+
+
 ## v0.7.1 (2026-06-06)
 
 ### Bug Fixes
