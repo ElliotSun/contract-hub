@@ -1,3 +1,5 @@
+import yaml
+
 import re
 
 import pytest
@@ -63,3 +65,30 @@ def test_export_contract_to_spark_sql_supports_nested_fixture(
     assert "payload STRUCT" in ddl
     assert "events ARRAY<STRUCT<event_id: STRING, event_ts: TIMESTAMP>>" in ddl
     assert "attributes MAP<STRING, ARRAY<STRUCT<k: STRING, v: STRING>>>" in ddl
+
+
+def test_export_contract_to_spark_sql_with_external_location():
+    with open("examples/sample_odcs.yaml", "r") as f:
+        contract = yaml.safe_load(f)
+
+    # Inject the custom property into the first schema object
+    if "schema" in contract and len(contract["schema"]) > 0:
+        contract["schema"][0]["customProperties"] = [
+            {"property": "contracthub.table.location", "value": "s3://my-bucket/path/"}
+        ]
+
+    # 1. databricks mode
+    ddl_databricks = export_contract_to_spark_sql(
+        contract, sql_server_type="databricks"
+    )
+    assert "LOCATION 's3://my-bucket/path/'" in ddl_databricks
+    assert "CREATE OR REPLACE TABLE tbl_1" in ddl_databricks
+
+    # 2. spark mode
+    ddl_spark = export_contract_to_spark_sql(contract, sql_server_type="spark")
+    assert "LOCATION 's3://my-bucket/path/'" in ddl_spark
+    assert "CREATE TABLE tbl_1" in ddl_spark
+
+    # 3. postgres mode (should not inject location)
+    ddl_postgres = export_contract_to_spark_sql(contract, sql_server_type="postgres")
+    assert "LOCATION 's3://my-bucket/path/'" not in ddl_postgres

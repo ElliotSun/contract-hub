@@ -46,7 +46,7 @@ PROPERTY_OVERWRITE_FIELDS: tuple[str, ...] = (
     "primaryKey",
     "primaryKeyPosition",
     "unique",
-    "customProperties",
+    "encryptedName",
 )
 
 # Technical fields that must be overwritten from imported source for matching schemas.
@@ -505,7 +505,27 @@ def _merge_matching_property_models(
     merged_prop.quality = _combine_quality_rules_models(
         existing_prop.quality, imported_prop.quality
     )
+    merged_prop.customProperties = _merge_custom_properties_models(
+        existing_prop.customProperties, imported_prop.customProperties
+    )
     merged_prop.customProperties = _sort_custom_properties(merged_prop.customProperties)
+
+    if existing_prop.properties or imported_prop.properties:
+        merged_prop.properties = _merge_properties_models(
+            existing_props=existing_prop.properties or [],
+            imported_props=imported_prop.properties or [],
+            deprecated_property_ids=set(),
+        )
+
+    if existing_prop.items or imported_prop.items:
+        if existing_prop.items and imported_prop.items:
+            merged_prop.items = _merge_matching_property_models(
+                existing_prop=existing_prop.items,
+                imported_prop=imported_prop.items,
+            )
+        elif imported_prop.items:
+            merged_prop.items = imported_prop.items.model_copy(deep=True)
+
     return merged_prop
 
 
