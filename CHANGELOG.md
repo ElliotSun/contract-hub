@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v0.8.0 (2026-06-26)
+
+### Bug Fixes
+
+- **merge_engine**: Handle missing nested schema properties and fix customProperties destruction bug
+  ([`bd1cb3a`](https://github.com/ElliotSun/contract-hub/commit/bd1cb3a130af5660d062f92e188b84a51141ddf4))
+
+### Features
+
+- **exporter**: Support spark external table via contracthub.table.location
+  ([`eade008`](https://github.com/ElliotSun/contract-hub/commit/eade0081beb9b7deda80ad8d7b798f7246a0c2ed))
+
+
 ## v0.7.2 (2026-06-11)
 
 ### Bug Fixes
