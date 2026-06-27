@@ -104,32 +104,8 @@ class SparkSqlContractExporter:
             export_args=export_args,
         )
 
-        if sql_server_type in ("databricks", "spark") and prepared_contract.schema_:
-            ddl_statements = [stmt for stmt in ddl.split(";\n") if stmt.strip()]
-            new_statements = []
-
-            for idx, schema_obj in enumerate(prepared_contract.schema_):
-                loc = next(
-                    (
-                        p.value
-                        for p in (schema_obj.customProperties or [])
-                        if p.property == "contracthub.table.location"
-                    ),
-                    None,
-                )
-                stmt = ddl_statements[idx] if idx < len(ddl_statements) else None
-                if stmt and loc:
-                    stmt = f"{stmt}\nLOCATION '{loc}'"
-
-                if stmt is not None:
-                    new_statements.append(stmt)
-
-            # Keep any trailing statements that might have been added
-            for stmt in ddl_statements[len(prepared_contract.schema_) :]:
-                new_statements.append(stmt)
-
-            if new_statements:
-                ddl = ";\n".join(new_statements) + ";\n"
+        if sql_server_type in ("databricks", "spark"):
+            ddl = _inject_spark_external_locations(ddl, prepared_contract)
 
         if sql_server_type != "databricks":
             return ddl
@@ -160,6 +136,42 @@ def export_contract_to_spark_sql(
         use_physical_names=use_physical_names,
         sql_server_type=sql_server_type,
     )
+
+
+def _inject_spark_external_locations(
+    ddl: str, contract: OpenDataContractStandard
+) -> str:
+    """Inject LOCATION clause into DDL for Spark external tables."""
+    if not contract.schema_:
+        return ddl
+
+    ddl_statements = [stmt for stmt in ddl.split(";\n") if stmt.strip()]
+    new_statements = []
+
+    for idx, schema_obj in enumerate(contract.schema_):
+        loc = next(
+            (
+                p.value
+                for p in (schema_obj.customProperties or [])
+                if p.property == "contracthub.table.location"
+            ),
+            None,
+        )
+        stmt = ddl_statements[idx] if idx < len(ddl_statements) else None
+        if stmt and loc:
+            stmt = f"{stmt}\nLOCATION '{loc}'"
+
+        if stmt is not None:
+            new_statements.append(stmt)
+
+    # Keep any trailing statements that might have been added
+    for stmt in ddl_statements[len(contract.schema_) :]:
+        new_statements.append(stmt)
+
+    if new_statements:
+        return ";\n".join(new_statements) + ";\n"
+
+    return ddl
 
 
 def _load_contract_model(contract: ContractInput) -> OpenDataContractStandard:
