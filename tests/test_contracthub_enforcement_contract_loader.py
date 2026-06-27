@@ -250,7 +250,7 @@ def test_adls2_uri_conversion_and_headers(monkeypatch):
         == "https://acct.dfs.core.windows.net/c/path.yaml"
     )  # noqa: E501, SLF001
 
-    with pytest.raises(Exception, match="Unsupported ADLS2 URI scheme"):
+    with pytest.raises(Exception, match="Unsupported ADLS2/OneLake URI scheme"):
         loader._adls2_to_https_url("s3://bucket/path.yaml")  # noqa: SLF001
     with pytest.raises(Exception, match="format abfss://"):
         loader._adls2_to_https_url("abfss://acct.dfs.core.windows.net/path.yaml")  # noqa: SLF001

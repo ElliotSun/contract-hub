@@ -296,11 +296,11 @@ def _adls2_to_https_url(contract_path: str) -> str:
         return contract_path
 
     if parsed.scheme not in {"abfs", "abfss"}:
-        raise ValueError(f"Unsupported ADLS2 URI scheme: {parsed.scheme}")
+        raise ValueError(f"Unsupported ADLS2/OneLake URI scheme: {parsed.scheme}")
 
     if "@" not in parsed.netloc:
         raise ValueError(
-            "ADLS2 URI must be in format abfss://<container>@<account>.dfs.core.windows.net/<path>"
+            "ADLS2/OneLake URI must be in format abfss://<container>@<account_host>/<path>"
         )
 
     container, account_host = parsed.netloc.split("@", 1)
