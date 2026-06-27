@@ -69,10 +69,10 @@ def import_unity_contract(
     Raises ``ValueError`` when required credentials are missing.
     """
     from contracthub.core.config import config_manager
-    workspace_url = workspace_url or config_manager.get("databricks.workspace_url")
+    workspace_url = workspace_url or config_manager.get("databricks.workspace_url", "DATACONTRACT_DATABRICKS_SERVER_HOSTNAME")
     token = token or config_manager.get("databricks.token")
-    sql_http_path = sql_http_path or config_manager.get("databricks.sql_http_path")
-    profile = config_manager.get("databricks.profile")
+    sql_http_path = sql_http_path or config_manager.get("databricks.sql_http_path", "DATABRICKS_HTTP_PATH")
+    profile = config_manager.get("databricks.profile", "DATABRICKS_CONFIG_PROFILE")
 
     if not profile and (not workspace_url or not token):
         raise ValueError(

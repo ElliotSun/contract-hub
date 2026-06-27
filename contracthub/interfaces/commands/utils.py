@@ -2,31 +2,19 @@ import argparse
 import os
 
 def _resolve_adls_oauth_token_from_config() -> str | None:
+    from contracthub.core.cloud_storage import AzureADLSCloudStorageAdapter
     from contracthub.core.config import config_manager
-    auth_method = config_manager.get("azure.auth_method", "CONTRACTHUB_AZURE_AUTH_METHOD", "default").lower().strip()
-    scope = config_manager.get("azure.scope", default="https://storage.azure.com/.default")
 
+    adapter = AzureADLSCloudStorageAdapter()
     try:
-        from azure.identity import (
-            ManagedIdentityCredential, 
-            AzureCliCredential, 
-            DefaultAzureCredential,
-            EnvironmentCredential
-        )
-    except ImportError as exc:
+        resolved_cred = adapter.resolve_credential()
+        if resolved_cred is not None:
+            scope = config_manager.get("azure.scope", default="https://storage.azure.com/.default")
+            return resolved_cred.get_token(scope).token
+    except Exception as exc:
         from contracthub.exceptions import LifecycleError
-        raise LifecycleError("azure-identity is required for ADLS OAuth auth.") from exc
-
-    if auth_method in ("managedidentity", "msi", "managed_identity"):
-        credential = ManagedIdentityCredential()
-    elif auth_method in ("azurecli", "cli"):
-        credential = AzureCliCredential()
-    elif auth_method in ("environment", "env"):
-        credential = EnvironmentCredential()
-    else:
-        credential = DefaultAzureCredential()
-        
-    return credential.get_token(scope).token
+        raise LifecycleError(f"Azure authentication failed: {exc}") from exc
+    return None
 
 
 def _parse_table_uris(value: str | None) -> list[str] | None:
@@ -57,6 +45,11 @@ def _get_repo_path(args: argparse.Namespace) -> str:
     if getattr(args, "repo_path", None):
         return args.repo_path
 
+    from contracthub.core.config import config_manager
+    repo_path_config = config_manager.get("git.repo_path", "CONTRACTHUB_REPO_PATH")
+    if repo_path_config:
+        return repo_path_config
+
     gh_workspace = os.environ.get("GITHUB_WORKSPACE")
     if gh_workspace:
         return gh_workspace
@@ -67,5 +60,5 @@ def _get_repo_path(args: argparse.Namespace) -> str:
 
     raise ValueError(
         "Could not determine repository path. Please provide --repo-path "
-        "or set GITHUB_WORKSPACE / BUILD_SOURCESDIRECTORY environment variables."
+        "or set git.repo_path in config or set GITHUB_WORKSPACE / BUILD_SOURCESDIRECTORY environment variables."
     )

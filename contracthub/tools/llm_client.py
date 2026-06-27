@@ -1,5 +1,8 @@
 import json
+import logging
 from abc import ABC, abstractmethod
+
+LOGGER = logging.getLogger(__name__)
 
 
 class BaseLLMProvider(ABC):
@@ -54,7 +57,8 @@ class OpenAILLMProvider(BaseLLMProvider):
                     return {}
                 try:
                     return json.loads(content)
-                except json.JSONDecodeError:
+                except json.JSONDecodeError as exc:
+                    LOGGER.warning("LLM response content is not valid JSON: %s. Error: %s", content, exc)
                     return {}
             except Exception as e:
                 if attempt == max_retries:

@@ -89,8 +89,20 @@ def test_yaml_utils_load_yaml_metadata_supports_adls2_file(monkeypatch):
         def download_file() -> FakeDownloader:
             return FakeDownloader()
 
+    from contracthub.core import cloud_storage
     monkeypatch.setattr(
-        contract_loader, "_create_adls2_file_client", lambda path: FakeFileClient()
+        cloud_storage.AzureADLSCloudStorageAdapter,
+        "_import_azure_datalake_sdk",
+        lambda self: {
+            "AccessToken": object,
+            "DataLakeFileClient": lambda account_url, file_system_name, file_path, credential: FakeFileClient(),
+            "DataLakeServiceClient": object,
+        },
+    )
+    monkeypatch.setattr(
+        cloud_storage.AzureADLSCloudStorageAdapter,
+        "resolve_credential",
+        lambda self, credential=None: "mock-cred",
     )
 
     metadata = yaml_utils.load_yaml_metadata(

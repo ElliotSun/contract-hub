@@ -311,16 +311,19 @@ Draft storage:
 
 ## Storage Support
 
+ContractHub uses an extensible `CloudStorageAdapter` registry to handle remote contract loading, credential resolution, and directory discovery.
+
 Current canonical contract roots support:
 
-- local filesystem paths
-- ADLS2 paths
+- Local filesystem paths
+- ADLS2 paths (supported natively via `AzureADLSCloudStorageAdapter`)
 - Databricks Unity Catalog mounted volume paths
+- AWS S3 paths (`s3://`, `s3a://`) (Placeholder `AwsS3CloudStorageAdapter`, raises `NotImplementedError` until test environment configured)
+- GCP GCS paths (`gs://`) (Placeholder `GcpCloudStorageAdapter`, raises `NotImplementedError` until test environment configured)
 
-ADLS2 authentication currently supports:
-
-- `CONTRACTHUB_ADLS_BEARER_TOKEN`
-- `azure.identity.DefaultAzureCredential`
+For Azure ADLS2:
+- Configured Azure Authentication Methods (e.g. azurecli, managedidentity, environment, default)
+- Explicit runtime parameter passing of token credentials or credential objects to the ContractLoader SDK.
 
 SAS URL authentication is intentionally not supported.
 
