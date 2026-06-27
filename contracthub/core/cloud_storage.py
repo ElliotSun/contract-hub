@@ -219,7 +219,7 @@ class AzureADLSCloudStorageAdapter(CloudStorageAdapter):
         if parsed.scheme in {"abfs", "abfss"}:
             if "@" not in parsed.netloc:
                 raise ValueError(
-                    "ADLS2 URI must be in format abfss://<container>@<account>.dfs.core.windows.net/<path>"
+                    "ADLS2/OneLake URI must be in format abfss://<container>@<account_host>/<path>"
                 )
             filesystem, account_host = parsed.netloc.split("@", 1)
             relative_path = parsed.path.lstrip("/")
