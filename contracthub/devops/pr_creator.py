@@ -95,8 +95,8 @@ class AzureDevOpsProvider:
         reviewers: list[str] | None = None,
         repo_path: str | None = None,
     ) -> dict[str, Any]:
-        """Create an Azure DevOps pull request, prioritizing CLI then falling back to REST API."""
-        method_override = os.environ.get("CONTRACTHUB_PR_METHOD")
+        from contracthub.core.config import config_manager
+        method_override = config_manager.get("git.pr_method", "CONTRACTHUB_PR_METHOD")
 
         if method_override == "api":
             return self._create_pull_request_api(
@@ -311,8 +311,8 @@ class GitHubProvider:
         reviewers: list[str] | None = None,
         repo_path: str | None = None,
     ) -> dict[str, Any]:
-        """Create a GitHub pull request, prioritizing CLI then falling back to REST API."""
-        method_override = os.environ.get("CONTRACTHUB_PR_METHOD")
+        from contracthub.core.config import config_manager
+        method_override = config_manager.get("git.pr_method", "CONTRACTHUB_PR_METHOD")
 
         if method_override == "api":
             return self._create_pull_request_api(

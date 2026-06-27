@@ -217,8 +217,10 @@ Contract catalog storage supports:
 * Local filesystem paths
 * ADLS2 paths (`abfs://`, `abfss://`, or `https://<account>.dfs.core.windows.net/...`)
 * Databricks Unity Catalog volume paths (`/Volumes/...`, `dbfs:/Volumes/...`)
+* AWS S3 paths (`s3://`, `s3a://`) (Placeholder, raises `NotImplementedError`)
+* GCP GCS paths (`gs://`) (Placeholder, raises `NotImplementedError`)
 
-*Note: ADLS2 access is SDK-based and uses `CONTRACTHUB_ADLS_BEARER_TOKEN` or `azure.identity.DefaultAzureCredential`. SAS URL authentication is not supported.*
+*Note: ADLS2 access is SDK-based and uses the selected `azure.auth_method` (e.g. `DefaultAzureCredential`), or you can programmatically pass a bearer token or credential object at runtime to the SDK. SAS URL authentication is not supported.*
 
 ### CLI Reference
 
@@ -391,22 +393,17 @@ contracthub release create-prs --manifest ./artifacts/release_manifest.json --re
 ContractHub functionality can be executed via its pure-Python API.
 
 ```python
-from datacontract.data_contract import DataContract
+from contracthub.core.loader import ContractLoader
 from contracthub.lifecycle import ContractMergeEngine
 from contracthub.quality import GreatExpectationsExporter
 from contracthub.importers.unity_importer import import_unity_contract
 from contracthub.tools.enricher import ContractEnricher
 from azure.identity import DefaultAzureCredential
-import os
 
-# 1. Import from a source
-# Setting Azure token natively for datacontract-cli ingestion via ADLS
-os.environ["CONTRACTHUB_ADLS_BEARER_TOKEN"] = DefaultAzureCredential().get_token("https://storage.azure.com/.default").token
-
-contract = DataContract.import_from_source(
-    format="delta-ddl",
-    source="./sql/orders"
-)
+# 1. Load a contract from ADLS using programmatically obtained token
+token = DefaultAzureCredential().get_token("https://storage.azure.com/.default").token
+loader = ContractLoader(credential=token)
+contract = loader.load("abfss://contracts@acct.dfs.core.windows.net/domain/orders.yaml")
 
 # 2. Merge with an existing governed contract
 merged = ContractMergeEngine().merge(

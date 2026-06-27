@@ -44,16 +44,21 @@ def test_load_contract_from_adls2_via_http(monkeypatch):
         def download_file() -> FakeDownloader:
             return FakeDownloader()
 
+    from contracthub.core import cloud_storage
     monkeypatch.setattr(
-        loader,
+        cloud_storage.AzureADLSCloudStorageAdapter,
         "_import_azure_datalake_sdk",
-        lambda: {
+        lambda self: {
             "AccessToken": object,
             "DataLakeFileClient": FakeFileClient,
             "DataLakeServiceClient": object,
         },
     )
-    monkeypatch.setattr(loader, "_resolve_adls2_credential", lambda _: "credential-1")
+    monkeypatch.setattr(
+        cloud_storage.AzureADLSCloudStorageAdapter,
+        "resolve_credential",
+        lambda self, credential=None: "credential-1",
+    )
 
     loaded = loader.load_contract(
         "abfss://contracts@acct.dfs.core.windows.net/domain/orders.yaml"
@@ -175,10 +180,10 @@ def test_uc_volume_auto_runtime_does_not_fallback_to_sparkutils(monkeypatch):
 
 def test_unknown_path_uses_sparkutils_only_in_notebook_runtime(monkeypatch):
     monkeypatch.setattr(loader, "_read_with_mssparkutils", lambda _: CONTRACT_YAML)
-    text = loader.read_contract_text("s3://bucket/contract.yaml", "synapse")
+    text = loader.read_contract_text("foo://bucket/contract.yaml", "synapse")
     assert "apiVersion" in text
     with pytest.raises(Exception, match="Unsupported contract path"):
-        loader.read_contract_text("s3://bucket/contract.yaml", "auto")
+        loader.read_contract_text("foo://bucket/contract.yaml", "auto")
 
 
 def test_read_with_mssparkutils_handles_missing_module_or_fs(monkeypatch):
@@ -296,51 +301,56 @@ def test_get_mssparkutils_returns_none_when_all_imports_fail(monkeypatch):
 
 
 def test_resolve_adls2_credential_uses_static_token_wrapper(monkeypatch):
+    from contracthub.core import cloud_storage
     class FakeAccessToken:
         def __init__(self, token, expires_on):  # noqa: ANN001
             self.token = token
             self.expires_on = expires_on
 
-    monkeypatch.setenv("CONTRACTHUB_ADLS_BEARER_TOKEN", "token-1")
     monkeypatch.setattr(
-        loader,
+        cloud_storage.AzureADLSCloudStorageAdapter,
         "_import_azure_datalake_sdk",
-        lambda: {
+        lambda self: {
             "AccessToken": FakeAccessToken,
             "DataLakeFileClient": object,
             "DataLakeServiceClient": object,
         },
     )
 
-    credential = loader._resolve_adls2_credential(
-        "abfss://c@acct.dfs.core.windows.net/path.yaml"
-    )  # noqa: SLF001
+    adapter = cloud_storage.AzureADLSCloudStorageAdapter()
+    credential = adapter.resolve_credential(credential="token-1")
     token = credential.get_token("https://storage.azure.com/.default")
 
     assert token.token == "token-1"
 
 
 def test_resolve_adls2_credential_uses_default_azure_credential(monkeypatch):
+    from contracthub.core import cloud_storage
+    class FakeAccessToken:
+        def __init__(self, token, expires_on=0):  # noqa: ANN001
+            self.token = token
+            self.expires_on = expires_on
+
     class FakeDefaultAzureCredential:
-        pass
+        def get_token(self, *args, **kwargs):
+            return FakeAccessToken("default-token")
 
     class FakeAzureIdentity:
         DefaultAzureCredential = FakeDefaultAzureCredential
 
-    monkeypatch.setattr(loader.config_manager, "get", lambda *args, **kwargs: "default")
+    monkeypatch.setattr(cloud_storage.config_manager, "get", lambda *args, **kwargs: "default")
 
-    monkeypatch.delenv("CONTRACTHUB_ADLS_BEARER_TOKEN", raising=False)
     monkeypatch.setattr(
-        loader,
+        cloud_storage.AzureADLSCloudStorageAdapter,
         "_import_azure_datalake_sdk",
-        lambda: {
-            "AccessToken": object,
+        lambda self: {
+            "AccessToken": FakeAccessToken,
             "DataLakeFileClient": object,
             "DataLakeServiceClient": object,
         },
     )
     monkeypatch.setattr(
-        loader.importlib,
+        cloud_storage.importlib,
         "import_module",
         lambda name: (
             FakeAzureIdentity
@@ -349,23 +359,50 @@ def test_resolve_adls2_credential_uses_default_azure_credential(monkeypatch):
         ),
     )
 
-    credential = loader._resolve_adls2_credential(
-        "abfss://c@acct.dfs.core.windows.net/path.yaml"
-    )  # noqa: SLF001
+    adapter = cloud_storage.AzureADLSCloudStorageAdapter()
+    credential = adapter.resolve_credential()
 
-    assert isinstance(credential, FakeDefaultAzureCredential)
+    assert isinstance(credential, cloud_storage._StaticBearerTokenCredential)
+    token = credential.get_token("https://storage.azure.com/.default")
+    assert token.token == "default-token"
 
 
-def test_resolve_adls2_credential_uses_custom_passed_credential():
+def test_resolve_adls2_credential_uses_custom_passed_credential(monkeypatch):
+    from contracthub.core import cloud_storage
+    class FakeAccessToken:
+        def __init__(self, token, expires_on=0):  # noqa: ANN001
+            self.token = token
+            self.expires_on = expires_on
+
+    monkeypatch.setattr(
+        cloud_storage.AzureADLSCloudStorageAdapter,
+        "_import_azure_datalake_sdk",
+        lambda self: {
+            "AccessToken": FakeAccessToken,
+            "DataLakeFileClient": object,
+            "DataLakeServiceClient": object,
+        },
+    )
+
+    adapter = cloud_storage.AzureADLSCloudStorageAdapter()
+
+    # 1. Without get_token (AttributeError fallback)
     custom_credential = object()
-    credential = loader._resolve_adls2_credential(
-        "abfss://c@acct.dfs.core.windows.net/path.yaml",
-        credential=custom_credential,
-    )  # noqa: SLF001
+    credential = adapter.resolve_credential(credential=custom_credential)
     assert credential is custom_credential
+
+    # 2. With get_token (should still be returned directly as-is without redundant wrapping)
+    class CustomWithToken:
+        def get_token(self, *args, **kwargs):
+            return FakeAccessToken("custom-token")
+    
+    custom_token_cred = CustomWithToken()
+    credential2 = adapter.resolve_credential(credential=custom_token_cred)
+    assert credential2 is custom_token_cred
 
 
 def test_load_contract_uses_custom_passed_credential(monkeypatch):
+    from contracthub.core import cloud_storage
     calls = {}
     custom_credential = object()
 
@@ -383,9 +420,9 @@ def test_load_contract_uses_custom_passed_credential(monkeypatch):
             return FakeDownloader()
 
     monkeypatch.setattr(
-        loader,
+        cloud_storage.AzureADLSCloudStorageAdapter,
         "_import_azure_datalake_sdk",
-        lambda: {
+        lambda self: {
             "AccessToken": object,
             "DataLakeFileClient": FakeFileClient,
             "DataLakeServiceClient": object,
@@ -417,10 +454,11 @@ def test_contract_loader_class_uses_custom_passed_credential(monkeypatch):
         def download_file() -> FakeDownloader:
             return FakeDownloader()
 
+    from contracthub.core import cloud_storage
     monkeypatch.setattr(
-        loader,
+        cloud_storage.AzureADLSCloudStorageAdapter,
         "_import_azure_datalake_sdk",
-        lambda: {
+        lambda self: {
             "AccessToken": object,
             "DataLakeFileClient": FakeFileClient,
             "DataLakeServiceClient": object,
@@ -434,17 +472,27 @@ def test_contract_loader_class_uses_custom_passed_credential(monkeypatch):
 
 
 def test_resolve_adls2_credential_respects_auth_method_env(monkeypatch):
+    from contracthub.core import cloud_storage
+    class FakeAccessToken:
+        def __init__(self, token, expires_on=0):  # noqa: ANN001
+            self.token = token
+            self.expires_on = expires_on
+
     class FakeAzureCliCredential:
-        pass
+        def get_token(self, *args, **kwargs):
+            return FakeAccessToken("cli-token")
 
     class FakeManagedIdentityCredential:
-        pass
+        def get_token(self, *args, **kwargs):
+            return FakeAccessToken("msi-token")
 
     class FakeEnvironmentCredential:
-        pass
+        def get_token(self, *args, **kwargs):
+            return FakeAccessToken("env-token")
 
     class FakeDefaultAzureCredential:
-        pass
+        def get_token(self, *args, **kwargs):
+            return FakeAccessToken("default-token")
 
     class FakeAzureIdentity:
         AzureCliCredential = FakeAzureCliCredential
@@ -452,18 +500,17 @@ def test_resolve_adls2_credential_respects_auth_method_env(monkeypatch):
         EnvironmentCredential = FakeEnvironmentCredential
         DefaultAzureCredential = FakeDefaultAzureCredential
 
-    monkeypatch.delenv("CONTRACTHUB_ADLS_BEARER_TOKEN", raising=False)
     monkeypatch.setattr(
-        loader,
+        cloud_storage.AzureADLSCloudStorageAdapter,
         "_import_azure_datalake_sdk",
-        lambda: {
-            "AccessToken": object,
+        lambda self: {
+            "AccessToken": FakeAccessToken,
             "DataLakeFileClient": object,
             "DataLakeServiceClient": object,
         },
     )
     monkeypatch.setattr(
-        loader.importlib,
+        cloud_storage.importlib,
         "import_module",
         lambda name: (
             FakeAzureIdentity
@@ -472,22 +519,85 @@ def test_resolve_adls2_credential_respects_auth_method_env(monkeypatch):
         ),
     )
 
+    adapter = cloud_storage.AzureADLSCloudStorageAdapter()
+
     # 1. Test "cli" / "azurecli"
     monkeypatch.setenv("CONTRACTHUB_AZURE_AUTH_METHOD", "cli")
-    credential = loader._resolve_adls2_credential("abfss://c@acct.dfs.core.windows.net/path.yaml")  # noqa: SLF001
-    assert isinstance(credential, FakeAzureCliCredential)
+    credential = adapter.resolve_credential()
+    assert isinstance(credential, cloud_storage._StaticBearerTokenCredential)
+    assert credential.get_token("https://storage.azure.com/.default").token == "cli-token"
 
     # 2. Test "msi" / "managedidentity"
     monkeypatch.setenv("CONTRACTHUB_AZURE_AUTH_METHOD", "managedidentity")
-    credential = loader._resolve_adls2_credential("abfss://c@acct.dfs.core.windows.net/path.yaml")  # noqa: SLF001
-    assert isinstance(credential, FakeManagedIdentityCredential)
+    credential = adapter.resolve_credential()
+    assert isinstance(credential, cloud_storage._StaticBearerTokenCredential)
+    assert credential.get_token("https://storage.azure.com/.default").token == "msi-token"
 
     # 3. Test "env" / "environment"
     monkeypatch.setenv("CONTRACTHUB_AZURE_AUTH_METHOD", "env")
-    credential = loader._resolve_adls2_credential("abfss://c@acct.dfs.core.windows.net/path.yaml")  # noqa: SLF001
-    assert isinstance(credential, FakeEnvironmentCredential)
+    credential = adapter.resolve_credential()
+    assert isinstance(credential, cloud_storage._StaticBearerTokenCredential)
+    assert credential.get_token("https://storage.azure.com/.default").token == "env-token"
 
     # 4. Test "default" / unset
     monkeypatch.setenv("CONTRACTHUB_AZURE_AUTH_METHOD", "default")
-    credential = loader._resolve_adls2_credential("abfss://c@acct.dfs.core.windows.net/path.yaml")  # noqa: SLF001
-    assert isinstance(credential, FakeDefaultAzureCredential)
+    credential = adapter.resolve_credential()
+    assert isinstance(credential, cloud_storage._StaticBearerTokenCredential)
+    assert credential.get_token("https://storage.azure.com/.default").token == "default-token"
+
+
+def test_cloud_storage_adapter_registry():
+    from contracthub.core.cloud_storage import cloud_storage_adapter_registry
+    
+    azure_adapter = cloud_storage_adapter_registry.get_adapter("abfss://my_container@my_account.dfs.core.windows.net/contract.yaml")
+    assert azure_adapter is not None
+    assert azure_adapter.can_handle("abfss://c@a.dfs.core.windows.net/")
+    assert azure_adapter.can_handle("https://onelake.dfs.fabric.microsoft.com/myworkspace/myitem/mycontract.yaml")
+    assert azure_adapter.can_handle("abfss://myworkspace@onelake.dfs.fabric.microsoft.com/myitem/mycontract.yaml")
+    
+    s3_adapter = cloud_storage_adapter_registry.get_adapter("s3://my_bucket/contract.yaml")
+    assert s3_adapter is not None
+    assert s3_adapter.can_handle("s3a://some-bucket")
+    
+    gcp_adapter = cloud_storage_adapter_registry.get_adapter("gs://my_bucket/contract.yaml")
+    assert gcp_adapter is not None
+    assert gcp_adapter.can_handle("gs://some-bucket")
+
+
+def test_aws_s3_cloud_storage_adapter():
+    from contracthub.core.cloud_storage import AwsS3CloudStorageAdapter
+
+    adapter = AwsS3CloudStorageAdapter()
+    
+    # Verify can_handle
+    assert adapter.can_handle("s3://bucket/key")
+    assert adapter.can_handle("s3a://bucket/key")
+    assert not adapter.can_handle("abfss://bucket/key")
+
+    with pytest.raises(NotImplementedError):
+        adapter.resolve_credential()
+
+    with pytest.raises(NotImplementedError):
+        adapter.read_text("s3://bucket/key.yaml")
+
+    with pytest.raises(NotImplementedError):
+        adapter.discover_delta_tables("s3://bucket/key")
+
+
+def test_gcp_cloud_storage_adapter():
+    from contracthub.core.cloud_storage import GcpCloudStorageAdapter
+
+    adapter = GcpCloudStorageAdapter()
+
+    # Verify can_handle
+    assert adapter.can_handle("gs://bucket/key")
+    assert not adapter.can_handle("s3://bucket/key")
+
+    with pytest.raises(NotImplementedError):
+        adapter.resolve_credential()
+
+    with pytest.raises(NotImplementedError):
+        adapter.read_text("gs://bucket/key.yaml")
+
+    with pytest.raises(NotImplementedError):
+        adapter.discover_delta_tables("gs://bucket/key")

@@ -16,6 +16,7 @@ import yaml
 from open_data_contract_standard.model import OpenDataContractStandard
 
 from contracthub.core.config import config_manager
+from contracthub.core.cloud_storage import cloud_storage_adapter_registry
 from contracthub.exceptions import StorageError
 
 LOGGER = logging.getLogger(__name__)
@@ -92,12 +93,14 @@ def read_contract_text(
     if is_local_path(contract_path):
         return _read_local_text(contract_path)
 
-    if is_adls2_path(contract_path):
-        if _notebook_runtime_enabled(runtime_context):
-            via_sparkutils = _read_with_mssparkutils(contract_path)
-            if via_sparkutils is not None:
-                return via_sparkutils
-        return _read_adls2_text(contract_path, credential=credential)
+    adapter = cloud_storage_adapter_registry.get_adapter(contract_path)
+    if adapter is not None:
+        if contract_path.startswith(("abfs://", "abfss://")) or ".dfs.core.windows.net" in contract_path:
+            if _notebook_runtime_enabled(runtime_context):
+                via_sparkutils = _read_with_mssparkutils(contract_path)
+                if via_sparkutils is not None:
+                    return via_sparkutils
+        return adapter.read_text(contract_path, credential=credential)
 
     if _is_http_path(contract_path):
         return _read_http_text(contract_path)
@@ -165,30 +168,14 @@ def _read_http_text(url: str, headers: Optional[dict[str, str]] = None) -> str:
     except requests.RequestException as exc:
         raise StorageError(f"Network error while fetching contract from {url}") from exc
 
-
 def list_adls2_paths(
     root_path: str, credential: TokenCredential | None = None
 ) -> list[str]:
     """List YAML documents under an ADLS2 root using the Azure SDK."""
-    parsed_root = _parse_adls2_path(root_path)
-    if _looks_like_yaml_path(parsed_root["relative_path"]):
-        return [root_path]
-
-    if credential is not None:
-        filesystem_client = _create_adls2_filesystem_client(root_path, credential)
-    else:
-        filesystem_client = _create_adls2_filesystem_client(root_path)
-    discovered: list[str] = []
-    for entry in filesystem_client.get_paths(
-        path=parsed_root["relative_path"] or None, recursive=True
-    ):
-        entry_name = str(getattr(entry, "name", "") or "")
-        if not entry_name or bool(getattr(entry, "is_directory", False)):
-            continue
-        if not _looks_like_yaml_path(entry_name):
-            continue
-        discovered.append(_adls2_document_path(parsed_root, entry_name))
-    return sorted(discovered, key=str.lower)
+    adapter = cloud_storage_adapter_registry.get_adapter(root_path)
+    if adapter is not None and hasattr(adapter, "list_paths"):
+        return adapter.list_paths(root_path, credential=credential)
+    return []
 
 
 def _read_with_mssparkutils(contract_path: str) -> Optional[str]:
@@ -245,107 +232,13 @@ def _get_mssparkutils() -> Any:
         return None
 
 
-def _create_adls2_file_client(
-    contract_path: str, credential: TokenCredential | None = None
-) -> Any:
-    """Create a `DataLakeFileClient` for a single ADLS2 file path."""
-    sdk = _import_azure_datalake_sdk()
-    parsed = _parse_adls2_path(contract_path)
-    if credential is not None:
-        resolved_credential = _resolve_adls2_credential(contract_path, credential)
-    else:
-        resolved_credential = _resolve_adls2_credential(contract_path)
-    return sdk["DataLakeFileClient"](
-        account_url=parsed["account_url"],
-        file_system_name=parsed["filesystem"],
-        file_path=parsed["relative_path"],
-        credential=resolved_credential,
-    )
-
-
-def _create_adls2_filesystem_client(
-    root_path: str, credential: TokenCredential | None = None
-) -> Any:
-    """Create a `DataLakeFileSystemClient` for ADLS2 directory listing."""
-    sdk = _import_azure_datalake_sdk()
-    parsed = _parse_adls2_path(root_path)
-    if credential is not None:
-        resolved_credential = _resolve_adls2_credential(root_path, credential)
-    else:
-        resolved_credential = _resolve_adls2_credential(root_path)
-    service_client = sdk["DataLakeServiceClient"](
-        account_url=parsed["account_url"],
-        credential=resolved_credential,
-    )
-    return service_client.get_file_system_client(file_system=parsed["filesystem"])
-
-
-def _resolve_adls2_credential(
-    contract_path: str, credential: TokenCredential | None = None
-) -> Any | None:
-    """Resolve Azure auth using bearer token, custom credential, or `DefaultAzureCredential`.
-
-    ContractHub does not support SAS-based ADLS2 authentication.
-    """
-    if credential is not None:
-        if isinstance(credential, str):
-            sdk = _import_azure_datalake_sdk()
-            return _StaticBearerTokenCredential(
-                token=credential,
-                AccessToken=sdk["AccessToken"],
-            )
-        return credential
-
-    sdk = _import_azure_datalake_sdk()
-    token = os.getenv("CONTRACTHUB_ADLS_BEARER_TOKEN")
-    if token:
-        return _StaticBearerTokenCredential(
-            token=token,
-            AccessToken=sdk["AccessToken"],
-        )
-
-    try:
-        azure_identity = importlib.import_module("azure.identity")
-    except ImportError as exc:
-        raise RuntimeError(
-            "ADLS2 access requires azure-identity or CONTRACTHUB_ADLS_BEARER_TOKEN. "
-            "Install with `pip install contracthub[azure]`."
-        ) from exc
-
-    auth_method = config_manager.get("azure.auth_method", "CONTRACTHUB_AZURE_AUTH_METHOD", "default").lower().strip()
-    if auth_method in {"azurecli", "cli"}:
-        return azure_identity.AzureCliCredential()
-    if auth_method in {"managedidentity", "msi"}:
-        return azure_identity.ManagedIdentityCredential()
-    if auth_method in {"environment", "env"}:
-        return azure_identity.EnvironmentCredential()
-
-    return azure_identity.DefaultAzureCredential()
-
-
-def _import_azure_datalake_sdk() -> dict[str, Any]:
-    """Import Azure SDK types lazily so local-only flows stay lightweight."""
-    try:
-        azure_core_credentials = importlib.import_module("azure.core.credentials")
-        azure_datalake = importlib.import_module("azure.storage.filedatalake")
-    except ImportError as exc:
-        raise RuntimeError(
-            "ADLS2 access requires azure-storage-file-datalake. "
-            "Install with `pip install contracthub[azure]`."
-        ) from exc
-
-    return {
-        "AccessToken": azure_core_credentials.AccessToken,
-        "DataLakeFileClient": azure_datalake.DataLakeFileClient,
-        "DataLakeServiceClient": azure_datalake.DataLakeServiceClient,
-    }
 
 
 def _resolve_runtime_context(
     runtime_context: RuntimeContext | str | None,
 ) -> RuntimeContext:
     """Normalize runtime_context for notebook-aware reads."""
-    candidate = runtime_context or os.getenv("CONTRACTHUB_RUNTIME_CONTEXT", "auto")
+    candidate = runtime_context or config_manager.get("core.runtime_context", "CONTRACTHUB_RUNTIME_CONTEXT", "auto")
     normalized = str(candidate).strip().lower()
     if normalized == "local":
         normalized = "auto"
@@ -416,80 +309,4 @@ def _adls2_to_https_url(contract_path: str) -> str:
     return f"https://{account_host}/{container}/{relative_path}{query}"
 
 
-def _parse_adls2_path(contract_path: str) -> dict[str, str]:
-    """Normalize ADLS2 paths for SDK-based access."""
-    parsed = urlparse(contract_path)
-    if parsed.scheme in {"abfs", "abfss"}:
-        if "@" not in parsed.netloc:
-            raise ValueError(
-                "ADLS2 URI must be in format abfss://<container>@<account>.dfs.core.windows.net/<path>"
-            )
-        filesystem, account_host = parsed.netloc.split("@", 1)
-        relative_path = parsed.path.lstrip("/")
-    elif parsed.scheme in {"http", "https"} and parsed.netloc.endswith(
-        ".dfs.core.windows.net"
-    ):
-        path_parts = parsed.path.lstrip("/").split("/", 1)
-        if not path_parts or not path_parts[0]:
-            raise ValueError("ADLS2 HTTPS URI must include the filesystem path segment")
-        filesystem = path_parts[0]
-        account_host = parsed.netloc
-        relative_path = path_parts[1] if len(path_parts) > 1 else ""
-    else:
-        raise ValueError(f"Unsupported ADLS2 URI: {contract_path}")
 
-    return {
-        "filesystem": filesystem,
-        "account_host": account_host,
-        "relative_path": relative_path.rstrip("/"),
-        "account_url": f"https://{account_host}",
-        "scheme": parsed.scheme,
-        "query": parsed.query,
-    }
-
-
-def _adls2_document_path(parsed_adls2_path: dict[str, str], relative_path: str) -> str:
-    query = f"?{parsed_adls2_path['query']}" if parsed_adls2_path["query"] else ""
-    if parsed_adls2_path["scheme"] in {"abfs", "abfss"}:
-        return (
-            f"{parsed_adls2_path['scheme']}://{parsed_adls2_path['filesystem']}"
-            f"@{parsed_adls2_path['account_host']}/{relative_path}{query}"
-        )
-    return (
-        f"https://{parsed_adls2_path['account_host']}/{parsed_adls2_path['filesystem']}"
-        f"/{relative_path}{query}"
-    )
-
-
-def _looks_like_yaml_path(path: str) -> bool:
-    lowered = str(path or "").lower()
-    return lowered.endswith(".yaml") or lowered.endswith(".yml")
-
-
-class _StaticBearerTokenCredential:
-    """Minimal TokenCredential wrapper around a pre-fetched bearer token."""
-
-    _DEFAULT_TTL_SECONDS = 3600  # 1-hour expiry window
-
-    def __init__(self, token: str, AccessToken: Any) -> None:  # noqa: N803
-        self._token = token
-        self._access_token_cls = AccessToken
-
-    def get_token(self, *scopes: str, **kwargs: Any) -> Any:  # noqa: ARG002
-        import time
-        import base64
-        import json
-
-        expires_on = int(time.time()) + self._DEFAULT_TTL_SECONDS
-        try:
-            parts = self._token.split(".")
-            if len(parts) == 3:
-                payload_part = parts[1]
-                payload_part += "=" * ((4 - len(payload_part) % 4) % 4)
-                payload_json = json.loads(base64.b64decode(payload_part))
-                if "exp" in payload_json:
-                    expires_on = int(payload_json["exp"])
-        except Exception:
-            pass
-            
-        return self._access_token_cls(self._token, expires_on)
