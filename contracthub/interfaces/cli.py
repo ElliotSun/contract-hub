@@ -57,35 +57,6 @@ def _build_parser() -> argparse.ArgumentParser:
         "--output", help="Output path (defaults to overwriting contract)"
     )
 
-    enrich_parser = subparsers.add_parser(
-        "enrich", 
-        help="Enrich data contract with semantic relationship labels via LLM. Note: This will not overwrite existing human-annotated data."
-    )
-    enrich_parser.add_argument(
-        "--contract", required=True, help="Path to the YAML contract"
-    )
-    enrich_parser.add_argument(
-        "--concurrency", type=int, default=1, help="Max parallel LLM API calls"
-    )
-    enrich_parser.add_argument(
-        "--mode",
-        choices=[
-            "label",
-            "infer_joins",
-            "describe_tables",
-            "describe_columns",
-            "suggest_quality",
-        ],
-        default="label",
-        help="Enrichment mode: 'label' for tagging existing relationships, 'infer_joins' for discovering new semantic relationships, 'describe_tables' for missing table descriptions, 'describe_columns' for missing column descriptions, 'suggest_quality' for generating DataQuality rules.",
-    )
-    enrich_parser.add_argument(
-        "--system-prompt", help="Override the system prompt template sent to the LLM"
-    )
-    enrich_parser.add_argument(
-        "--user-prompt", help="Override the user prompt template sent to the LLM"
-    )
-
     plan_parser = subparsers.add_parser(
         "plan", help="Dry run and summarize changes between source and base contract"
     )
@@ -342,12 +313,6 @@ def main() -> int:
                 payload = run_lifecycle_deprecate(args)
                 print(json.dumps(payload, indent=2, sort_keys=True))
                 return 0
-
-        if args.command == "enrich":
-            from contracthub.interfaces.commands.enrich_cmd import run_enrich
-            output = run_enrich(args)
-            print(output)
-            return 0
 
         if args.command == "plan":
             from contracthub.interfaces.commands.plan_cmd import run_plan

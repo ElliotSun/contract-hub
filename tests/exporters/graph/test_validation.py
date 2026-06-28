@@ -86,13 +86,13 @@ def test_sovereignty_interceptor_schema_format():
             name="users.id",
             id="users.id",
             type="Column",
-            properties={"is_pii": False, "example_value": "123"},
+            properties={"is_pii": False, "example_value": "123", "examples": ["123", "456"]},
         ),
         GraphNode(
             name="users.email",
             id="users.email",
             type="Column",
-            properties={"is_pii": True, "example_value": "test@example.com"},
+            properties={"is_pii": True, "example_value": "test@example.com", "examples": ["test@example.com", "other@example.com"]},
         ),
     ]
 
@@ -101,6 +101,8 @@ def test_sovereignty_interceptor_schema_format():
 
     # Check that ID was not redacted
     assert nodes[0].properties["example_value"] == "123"
+    assert nodes[0].properties["examples"] == ["123", "456"]
 
     # Check that Email WAS redacted
     assert nodes[1].properties["example_value"] == "[REDACTED_PII]"
+    assert nodes[1].properties["examples"] == ["[REDACTED_PII]"]

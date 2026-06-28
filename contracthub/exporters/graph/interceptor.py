@@ -18,3 +18,6 @@ class SovereigntyInterceptor:
                     # Only mutate if there's an example value to redact? No, we might want to proactively set it.
                     # Or at least if the property dictionary exists.
                     node.properties["example_value"] = "[REDACTED_PII]"
+                    if "examples" in node.properties:
+                        node.properties["examples"] = ["[REDACTED_PII]"]
+

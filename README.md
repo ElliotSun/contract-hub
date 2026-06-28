@@ -108,6 +108,8 @@ contracthub/
     sql_exporter.py
   orchestrator/
     pipeline.py
+  tools/
+    agent_toolkit.py     # Agent Tool SDK (framework-agnostic)
   interfaces/
     cli.py
     streamlit/
@@ -203,7 +205,6 @@ ContractHub provides pure Python, Spark-free importers that register into the `d
 #### 3. Graph Exports & Relationship Inferencing
 
 * **Graph Exporter**: Exports ODCS models to Directed Property Graphs (`cypher`, `json`). Enforces strict "Paths Over Joins" compliance. Junction tables (with exactly 2 foreign keys) are collapsed into single edges, and PII Sovereignty rules are automatically enforced.
-* **LLM Enrichment (`enrich`)**: Uses an LLM to automatically generate missing table descriptions, column descriptions, base Great Expectations quality rules, and infer semantic relationship edges. Powered by `litellm` under the hood, natively supporting over 100 model providers including OpenAI, Azure AI Foundry, Databricks, vLLM, and Ollama. Supported modes include `infer_joins`, `label`, `describe_tables`, `describe_columns`, and `suggest_quality`.
 
 #### 4. Merging & Lifecycle Governance
 
@@ -333,19 +334,13 @@ contracthub import --format unity --source main.silver.orders \
   --output ./contracts/orders.yaml
 ```
 
-**Merging & Enrichment**
+**Merging**
 ```bash
 # Merge a base contract with business modifications
 contracthub merge --base ./generated.yaml --business ./contracts/orders.yaml --output ./contracts/orders.merged.yaml
 
 # Run dry run plan of changes
 contracthub plan --type unity --source main.silver.orders --base ./contracts/orders.yaml
-
-# Note: LLM credentials (model_name, api_key, base_url) should be configured in your .contracthub.yaml file
-
-# Enrich contract metadata via LLM (e.g. generate missing descriptions)
-contracthub enrich --contract ./contracts/orders.yaml --mode describe_columns --concurrency 2
-contracthub enrich --contract ./contracts/orders.yaml --mode suggest_quality --concurrency 2
 ```
 
 **Exporting Artifacts**
@@ -427,12 +422,56 @@ unity_contract = import_unity_contract(
     workspace_url="https://adb.example",
     token="YOUR_TOKEN"
 )
-
-# 5. Enriching via LLM (supports modes 'label', 'infer_joins', 'describe_tables', 'describe_columns', 'suggest_quality')
-# Ensure litellm environment variables are set (LLM_MODEL_NAME, LLM_API_KEY)
-enricher = ContractEnricher()
-enricher.process(contract_path="./contracts/orders.yaml", max_workers=2, mode="suggest_quality")
 ```
+
+#### 6. Agent Toolkit (Tool SDK)
+
+ContractHub exposes a **framework-agnostic Tool SDK** (`contracthub.tools.agent_toolkit`) for use by AI agents (ContractHub-Agent, LangGraph, CrewAI, or any custom agent framework). All tools return a uniform `ToolResult` type — the caller never needs to handle ContractHub-specific exceptions.
+
+| Tool | Description |
+|------|-------------|
+| `load_contract(path)` | Load an ODCS contract and return it as a dict |
+| `validate_contract(path)` | Validate ODCS syntax + quality rules; returns `{valid, issues}` |
+| `analyze_changes(base_path, modified_path)` | Detect breaking changes, conflicts, and deprecations between two contract versions |
+| `export_sql(path, ...)` | Generate Spark / Databricks DDL |
+| `export_graph(path, format)` | Export a Cypher or JSON property graph |
+
+```python
+from contracthub.tools import (
+    load_contract,
+    validate_contract,
+    analyze_changes,
+    export_sql,
+    export_graph,
+)
+
+# Every tool returns ToolResult(success, data, error) — no exceptions to catch
+result = validate_contract("contracts/orders.yaml")
+if result.success and not result.data["valid"]:
+    for issue in result.data["issues"]:
+        print(f"[{issue['severity']}] {issue['path']}: {issue['message']}")
+
+# Compare existing contract vs proposed modification
+result = analyze_changes(
+    base_contract_path="contracts/orders.yaml",
+    modified_contract_path="drafts/alice/orders.yaml",
+)
+if result.success:
+    breaking = result.data["breaking_changes"]
+    # Surface breaking_changes in a HITL review proposal
+
+# Generate Databricks DDL
+result = export_sql(
+    "contracts/orders.yaml",
+    sql_server_type="databricks",
+    unity_catalog="prod",
+    unity_schema="sales",
+)
+if result.success:
+    print(result.data["ddl"])
+```
+
+> **Framework adapters**: The toolkit is intentionally plain Python. To use it with LangChain, wrap each function with `@tool`; for LangGraph or CrewAI, register the functions as tools in your agent's tool list. No ContractHub-side changes are needed.
 
 ### CI/CD Flow & Releases
 
