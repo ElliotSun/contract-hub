@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.8.1 (2026-07-01)
+
+### Bug Fixes
+
+- Fix SQL exporter/importer for databricks with consistant location custom property
+  ([`96f29d7`](https://github.com/ElliotSun/contract-hub/commit/96f29d74ecb401a72674c184827fce1fb04bf87f))
+
+
 ## v0.8.0 (2026-06-26)
 
 ### Bug Fixes
