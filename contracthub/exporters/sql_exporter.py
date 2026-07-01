@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+import re
 from typing import Any, Dict, Optional, Union
 
 from datacontract.export.exporter import ExportFormat
@@ -57,6 +58,9 @@ class SparkSqlContractExporter:
         unity_server_name: str = "contracthub_target",
         use_physical_names: bool = True,
         sql_server_type: str = "databricks",
+        schema_name: str = "all",
+        server: Optional[str] = None,
+        export_args: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Export deployment DDL and optionally append Databricks constraints.
 
@@ -81,8 +85,13 @@ class SparkSqlContractExporter:
             contract_model,
             use_physical_names=use_physical_names,
         )
+        if schema_name != "all":
+            prepared_contract.schema_ = [
+                s for s in (prepared_contract.schema_ or [])
+                if s.name == schema_name
+            ]
 
-        export_args: Dict[str, Any] = {}
+        local_export_args: Dict[str, Any] = dict(export_args or {})
         if unity_catalog and unity_schema:
             _upsert_unity_server(
                 prepared_contract,
@@ -90,7 +99,9 @@ class SparkSqlContractExporter:
                 catalog=unity_catalog,
                 schema_name=unity_schema,
             )
-            export_args["server"] = unity_server_name
+            local_export_args["server"] = unity_server_name
+        elif server:
+            local_export_args["server"] = server
         elif sql_server_type == "databricks":
             # Avoid inheriting non-databricks servers (e.g., postgres) for Spark/Databricks DDL generation.
             prepared_contract.servers = None
@@ -98,34 +109,75 @@ class SparkSqlContractExporter:
         exporter = exporter_factory.create(ExportFormat.sql)
         ddl = exporter.export(
             data_contract=prepared_contract,
-            schema_name="all",
-            server="",
+            schema_name=schema_name,
+            server=local_export_args.get("server", ""),
             sql_server_type=sql_server_type,
-            export_args=export_args,
+            export_args=local_export_args,
         )
 
         if sql_server_type in ("databricks", "spark") and prepared_contract.schema_:
-            ddl_statements = [stmt for stmt in ddl.split(";\n") if stmt.strip()]
+            ddl_statements = [stmt.strip().rstrip(";") for stmt in ddl.split(";\n") if stmt.strip()]
             new_statements = []
 
-            for idx, schema_obj in enumerate(prepared_contract.schema_):
-                loc = next(
-                    (
-                        p.value
-                        for p in (schema_obj.customProperties or [])
-                        if p.property == "contracthub.table.location"
-                    ),
-                    None,
-                )
-                stmt = ddl_statements[idx] if idx < len(ddl_statements) else None
-                if stmt and loc:
-                    stmt = f"{stmt}\nLOCATION '{loc}'"
+            # Filter schemas list to match schema_name if it is not "all"
+            target_schemas = [
+                s for s in prepared_contract.schema_
+                if schema_name == "all" or s.name == schema_name
+            ]
 
-                if stmt is not None:
+            for idx, schema_obj in enumerate(target_schemas):
+                stmt = ddl_statements[idx] if idx < len(ddl_statements) else None
+                if stmt:
+                    # Strip any trailing comment to re-append it at the end
+                    comment = None
+                    comment_match = re.search(r'\s+COMMENT\s+(".*?"|\'.*?\')\s*$', stmt, flags=re.DOTALL)
+                    if comment_match:
+                        comment = comment_match.group(1)
+                        stmt = stmt[:comment_match.start()]
+
+                    # Determine table format (defaulting to 'delta' if not specified)
+                    fmt = next(
+                        (
+                            p.value
+                            for p in (schema_obj.customProperties or [])
+                            if p.property == "contracthub.table.format"
+                        ),
+                        "delta",
+                    )
+                    stmt = f"{stmt}\nUSING {fmt}"
+
+                    # Append partitioning from standard partitioned / partitionKeyPosition fields
+                    partition_cols = []
+                    for prop in schema_obj.properties or []:
+                        if prop.partitioned:
+                            partition_cols.append(prop)
+
+                    if partition_cols:
+                        # Sort by partitionKeyPosition (treat None as infinity)
+                        partition_cols.sort(key=lambda p: (p.partitionKeyPosition is None, p.partitionKeyPosition))
+                        cols_str = ", ".join(p.physicalName or p.name for p in partition_cols)
+                        stmt = f"{stmt}\nPARTITIONED BY ({cols_str})"
+
+                    # Append location
+                    loc = next(
+                        (
+                            p.value
+                            for p in (schema_obj.customProperties or [])
+                            if p.property == "contracthub.table.location"
+                        ),
+                        None,
+                    )
+                    if loc:
+                        stmt = f"{stmt}\nLOCATION '{loc}'"
+
+                    # Re-append comment at the absolute end
+                    if comment:
+                        stmt = f"{stmt}\nCOMMENT {comment}"
+
                     new_statements.append(stmt)
 
             # Keep any trailing statements that might have been added
-            for stmt in ddl_statements[len(prepared_contract.schema_) :]:
+            for stmt in ddl_statements[len(target_schemas) :]:
                 new_statements.append(stmt)
 
             if new_statements:
@@ -138,7 +190,7 @@ class SparkSqlContractExporter:
             f"{unity_catalog}.{unity_schema}." if unity_catalog and unity_schema else ""
         )
         return _append_databricks_quality_constraints(
-            ddl, prepared_contract, table_prefix=table_prefix
+            ddl, prepared_contract, table_prefix=table_prefix, schema_name=schema_name
         )
 
 
@@ -150,6 +202,9 @@ def export_contract_to_spark_sql(
     unity_server_name: str = "contracthub_target",
     use_physical_names: bool = True,
     sql_server_type: str = "databricks",
+    schema_name: str = "all",
+    server: Optional[str] = None,
+    export_args: Optional[Dict[str, Any]] = None,
 ) -> str:
     exporter = SparkSqlContractExporter()
     return exporter.export_contract(
@@ -159,6 +214,9 @@ def export_contract_to_spark_sql(
         unity_server_name=unity_server_name,
         use_physical_names=use_physical_names,
         sql_server_type=sql_server_type,
+        schema_name=schema_name,
+        server=server,
+        export_args=export_args,
     )
 
 
@@ -244,10 +302,11 @@ def _append_databricks_quality_constraints(
     contract: OpenDataContractStandard,
     *,
     table_prefix: str,
+    schema_name: str = "all",
 ) -> str:
     """Append supported Databricks constraint statements to base DDL."""
     statements = _collect_databricks_quality_constraints(
-        contract, table_prefix=table_prefix
+        contract, table_prefix=table_prefix, schema_name=schema_name
     )
     if not statements:
         return ddl
@@ -259,12 +318,15 @@ def _collect_databricks_quality_constraints(
     contract: OpenDataContractStandard,
     *,
     table_prefix: str,
+    schema_name: str = "all",
 ) -> list[str]:
     """Collect deterministic Databricks constraint SQL from property-level ODCS quality rules."""
     statements: list[str] = []
     seen: set[str] = set()
 
     for schema_obj in contract.schema_ or []:
+        if schema_name != "all" and schema_obj.name != schema_name:
+            continue
         table_name = f"{table_prefix}{schema_obj.name}"
         for prop in schema_obj.properties or []:
             for statement in _property_quality_constraints_sql(

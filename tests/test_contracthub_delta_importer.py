@@ -32,7 +32,8 @@ def test_delta_importer_builds_odcs_contract_from_real_local_delta_table(tmp_pat
     assert fields["processed_at"].logicalType == "timestamp"
 
     table_cp = {item.property: item.value for item in table.customProperties or []}
-    assert table_cp["contracthub.delta.uri"] == str(table_path)
+    assert table_cp["contracthub.table.location"] == str(table_path)
+    assert "contracthub.delta.uri" not in table_cp
     assert "contracthub.delta.version" not in table_cp
 
 
@@ -101,9 +102,10 @@ def test_delta_importer_builds_odcs_contract(
     )
 
     table_cp = {item.property: item.value for item in table.customProperties or []}
-    assert table_cp["contracthub.delta.uri"] == "s3://lake/silver/finance_transactions"
+    assert table_cp["contracthub.table.location"] == "s3://lake/silver/finance_transactions"
+    assert "contracthub.delta.uri" not in table_cp
     assert "contracthub.delta.version" not in table_cp
-    assert table_cp["contracthub.delta.partitionColumns"] == ["id"]
+    assert "contracthub.delta.partitionColumns" not in table_cp
 
 
 def test_delta_importer_supports_multiple_tables(
@@ -150,3 +152,35 @@ def test_delta_importer_supports_multiple_tables(
     assert len(contract.schema_) == 2
     table_names = {item.name for item in contract.schema_}
     assert table_names == {"orders", "payments"}
+
+
+def test_delta_import_to_spark_sql_export_integration(tmp_path):
+    from pathlib import Path
+    from contracthub.exporters.sql_exporter import export_contract_to_spark_sql
+
+    table_path = tmp_path / "finance_transactions"
+    data = pd.DataFrame(
+        {
+            "id": pd.Series([1, 2], dtype="int64"),
+            "amount": pd.Series([10.5, 22.75], dtype="float64"),
+            "processed_date": ["2026-04-03", "2026-04-03"],
+        }
+    )
+    write_deltalake(str(table_path), data, mode="overwrite", partition_by=["processed_date"])
+
+    importer = delta_importer.DeltaTableImporter("delta")
+    contract = importer.import_source(str(table_path), {})
+
+    # Export using the custom SQL exporter
+    ddl = export_contract_to_spark_sql(contract, sql_server_type="databricks")
+
+    assert "CREATE OR REPLACE TABLE finance_transactions" in ddl
+    assert "id BIGINT" in ddl or "id LONG" in ddl or "id bigint" in ddl or "id long" in ddl
+    assert "amount DOUBLE" in ddl or "amount double" in ddl
+    assert "processed_date STRING" in ddl or "processed_date string" in ddl
+    assert "USING delta" in ddl
+    assert "PARTITIONED BY (processed_date)" in ddl
+
+    expected_path = Path(table_path).as_posix()
+    assert expected_path in ddl.replace("\\", "/")
+

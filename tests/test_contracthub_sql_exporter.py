@@ -83,12 +83,96 @@ def test_export_contract_to_spark_sql_with_external_location():
     )
     assert "LOCATION 's3://my-bucket/path/'" in ddl_databricks
     assert "CREATE OR REPLACE TABLE tbl_1" in ddl_databricks
+    assert "USING delta" in ddl_databricks
 
     # 2. spark mode
     ddl_spark = export_contract_to_spark_sql(contract, sql_server_type="spark")
     assert "LOCATION 's3://my-bucket/path/'" in ddl_spark
     assert "CREATE TABLE tbl_1" in ddl_spark
+    assert "USING delta" in ddl_spark
 
-    # 3. postgres mode (should not inject location)
+    # 3. postgres mode (should not inject location or format/partitioning)
     ddl_postgres = export_contract_to_spark_sql(contract, sql_server_type="postgres")
     assert "LOCATION 's3://my-bucket/path/'" not in ddl_postgres
+    assert "USING delta" not in ddl_postgres
+
+
+def test_export_contract_to_spark_sql_with_schema_name():
+    with open("examples/sample_odcs.yaml", "r") as f:
+        contract = yaml.safe_load(f)
+
+    # Inject locations to multiple tables
+    if "schema" in contract and len(contract["schema"]) > 1:
+        contract["schema"][0]["customProperties"] = [
+            {"property": "contracthub.table.location", "value": "s3://my-bucket/tbl_1/"}
+        ]
+        contract["schema"][1]["customProperties"] = [
+            {"property": "contracthub.table.location", "value": "s3://my-bucket/tbl_2/"}
+        ]
+
+    # Export only tbl_1
+    ddl = export_contract_to_spark_sql(
+        contract, sql_server_type="databricks", schema_name="tbl_1"
+    )
+    assert "CREATE OR REPLACE TABLE tbl_1" in ddl
+    assert "LOCATION 's3://my-bucket/tbl_1/'" in ddl
+    assert "CREATE OR REPLACE TABLE receivers_master" not in ddl
+    assert "LOCATION 's3://my-bucket/tbl_2/'" not in ddl
+
+
+def test_export_contract_to_spark_sql_with_partitioning_and_format():
+    contract = {
+        "apiVersion": "v3.1.0",
+        "kind": "DataContract",
+        "id": "my-contract",
+        "schema": [
+            {
+                "name": "my_table",
+                "description": "My table description",
+                "customProperties": [
+                    {"property": "contracthub.table.location", "value": "s3://my-bucket/my_table/"},
+                    {"property": "contracthub.table.format", "value": "parquet"}
+                ],
+                "properties": [
+                    {
+                        "name": "id",
+                        "type": "string",
+                        "partitioned": True,
+                        "partitionKeyPosition": 2
+                    },
+                    {
+                        "name": "dt",
+                        "type": "string",
+                        "partitioned": True,
+                        "partitionKeyPosition": 1
+                    },
+                    {
+                        "name": "val",
+                        "type": "integer"
+                    }
+                ]
+            }
+        ]
+    }
+
+    ddl = export_contract_to_spark_sql(contract, sql_server_type="databricks")
+    # Verify the DDL has the correct order of USING -> PARTITIONED BY -> LOCATION -> COMMENT
+    # The order must be:
+    # USING parquet
+    # PARTITIONED BY (dt, id)
+    # LOCATION 's3://my-bucket/my_table/'
+    # COMMENT "My table description"
+
+    assert "USING parquet" in ddl
+    assert "PARTITIONED BY (dt, id)" in ddl
+    assert "LOCATION 's3://my-bucket/my_table/'" in ddl
+    assert 'COMMENT "My table description"' in ddl
+
+    # Validate correct relative ordering
+    idx_using = ddl.index("USING parquet")
+    idx_partition = ddl.index("PARTITIONED BY (dt, id)")
+    idx_location = ddl.index("LOCATION 's3://my-bucket/my_table/'")
+    idx_comment = ddl.index('COMMENT "My table description"')
+
+    assert idx_using < idx_partition < idx_location < idx_comment
+

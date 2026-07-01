@@ -103,15 +103,8 @@ def _build_imported_contract(
                 properties=fields,
                 description=description,
                 customProperties=[
-                    CustomProperty(property="contracthub.delta.uri", value=table_uri),
                     CustomProperty(
-                        property="contracthub.delta.partitionColumns",
-                        value=[
-                            col
-                            for col, _ in sorted(
-                                partition_positions.items(), key=lambda item: item[1]
-                            )
-                        ],
+                        property="contracthub.table.location", value=table_uri
                     ),
                 ],
             )
